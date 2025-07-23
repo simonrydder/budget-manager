@@ -1,0 +1,17 @@
+[project]
+name = "budget-manager"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "simonrydder", email = "66967123+simonrydder@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+budget-manager = "budget_manager:main"
+
+[build-system]
+requires = ["uv_build>=0.8.1,<0.9.0"]
+build-backend = "uv_build"
