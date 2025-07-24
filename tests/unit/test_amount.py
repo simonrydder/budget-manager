@@ -53,3 +53,27 @@ def test_amount_subtraction():
 def test_amount_str_representation(value: int, expected: str):
     amt = Amount(value)
     assert str(amt) == expected, f"Expected '{expected}', got '{str(amt)}'"
+
+
+def test_amount_equality_requires_other_to_be_amount():
+    with pytest.raises(TypeError):
+        assert Amount(100) == 100
+
+
+def test_amount_equality():
+    amt1 = Amount(100)
+    amt2 = Amount.from_float(1.00)
+    amt3 = Amount(200)
+
+    assert amt1 == amt2, "Amounts should be equal"
+    assert amt1 != amt3, "Amounts should not be equal"
+
+
+def test_that_amount_can_compare_with_other_amounts():
+    amt1 = Amount(100)
+    amt2 = Amount(200)
+
+    assert amt1 < amt2, "Amount 100 should be less than 200"
+    assert amt2 > amt1, "Amount 200 should be greater than 100"
+    assert amt1 <= amt2, "Amount 100 should be less than or equal to 200"
+    assert amt2 >= amt1, "Amount 200 should be greater than or equal to 100"
