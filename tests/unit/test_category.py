@@ -92,20 +92,11 @@ def test_that_categoty_can_not_remove_child_when_no_children(house: Category, wi
         house.remove_child(wifi)
 
 
-def test_that_category_can_not_add_child_if_limit_is_exceeded(
-    house: Category, wifi: Category, other: Category
-):
-    house.limit = Amount(4000)
-
-    with pytest.raises(CategoryLimitExceededException):
-        house.add_child(Category(name="New Child", limit=Amount(5000)))
-
-
-def test_that_adding_child_exceeding_limit_raises_exception(house: Category):
+def test_that_adding_child_exceeding_limit_raises_exception(house: Category, wifi: Category):
     house.limit = Amount(1000)
-
+    wifi.limit = Amount(2000)
     with pytest.raises(CategoryLimitExceededException):
-        house.add_child(Category(name="Child", limit=Amount(1500)))
+        house.add_child(wifi)
 
 
 def test_that_category_limit_is_larger_than_sum_of_children_limits(

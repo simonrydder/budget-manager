@@ -13,10 +13,18 @@ class CategoryLimitExceededException(Exception):
 class Category:
     name: str
     children: list["Category"] | None = None
-    limit: Amount | None = None
+    _limit: Amount | None = None
     # TODO: Track parent category if any
-    # TODO: Make limit an property
     # TODO: Add limit setter that checks for valid limit (should not invalidate parent limit)
+
+    @property
+    def limit(self) -> Amount | None:
+        """Public read-only access to limit."""
+        return self._limit
+
+    @limit.setter
+    def limit(self, new_limit: Amount | None) -> None:
+        self._limit = new_limit
 
     def __contains__(self, child: "Category") -> bool:
         if self.children is None:
