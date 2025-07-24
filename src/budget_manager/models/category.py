@@ -15,7 +15,6 @@ class Category:
     children: list["Category"] | None = None
     _limit: Amount | None = None
     # TODO: Track parent category if any
-    # TODO: Add limit setter that checks for valid limit (should not invalidate parent limit)
 
     @property
     def limit(self) -> Amount | None:
@@ -24,6 +23,9 @@ class Category:
 
     @limit.setter
     def limit(self, new_limit: Amount | None) -> None:
+        # ?: Should this raise an exception if the new limit is less than the total of existing children?
+        # ?: Should this raise an exception if the new limit makes parent limit invalid?
+
         self._limit = new_limit
 
     def __contains__(self, child: "Category") -> bool:
