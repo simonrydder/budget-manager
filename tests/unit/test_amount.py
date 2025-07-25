@@ -77,3 +77,17 @@ def test_that_amount_can_compare_with_other_amounts():
     assert amt2 > amt1, "Amount 200 should be greater than 100"
     assert amt1 <= amt2, "Amount 100 should be less than or equal to 200"
     assert amt2 >= amt1, "Amount 200 should be greater than or equal to 100"
+
+
+def test_that_sum_operator_works_with_amounts():
+    amt1 = Amount(100)
+    amt2 = Amount(200)
+    result = sum([amt1, amt2])
+    assert isinstance(result, Amount), "Sum should return an Amount instance"
+    assert result.value == 300, "Sum of 100 and 200 should be 300"
+
+
+def test_that_sum_with_float_raises_type_error():
+    amt = Amount(100)
+    with pytest.raises(TypeError):
+        sum([50.0, amt])  # Should raise TypeError since 50.0 is not an Amount instance

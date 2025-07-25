@@ -12,8 +12,17 @@ class Amount:
     def to_float(self) -> float:
         return self.value / 100.0
 
-    def __add__(self, other: "Amount") -> "Amount":
+    def __add__(self, other: object) -> "Amount":
+        if not isinstance(other, (Amount, int)):
+            raise TypeError("Unsupported type for addition with Amount")
+
+        if isinstance(other, int):
+            return Amount(self.value + other)
+
         return Amount(self.value + other.value)
+
+    def __radd__(self, other: object) -> "Amount":
+        return self.__add__(other)
 
     def __sub__(self, other: "Amount") -> "Amount":
         return self.__add__(Amount(-other.value))
