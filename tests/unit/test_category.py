@@ -29,7 +29,8 @@ def test_that_category_can_be_renamed(house: Category):
 
 
 def test_that_category_has_no_children_by_default(house: Category):
-    assert house.children is None
+    assert isinstance(house.children, list)
+    assert len(house.children) == 0
 
 
 def test_that_category_can_add_child(house: Category, wifi: Category):

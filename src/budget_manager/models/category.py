@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from budget_manager.models.amount import Amount
 
@@ -12,7 +12,7 @@ class CategoryLimitExceededException(Exception):
 @dataclass
 class Category:
     name: str
-    children: list["Category"] | None = None
+    children: list["Category"] = field(default_factory=list["Category"])
     _limit: Amount | None = None
     # TODO: Track parent category if any
 
@@ -29,15 +29,10 @@ class Category:
         self._limit = new_limit
 
     def __contains__(self, child: "Category") -> bool:
-        if self.children is None:
-            return False
-
+        """Check if a child category is in this category's children."""
         return child in self.children
 
     def add_child(self, child: "Category") -> None:
-        if self.children is None:
-            self.children = []
-
         if not self._valid_limit(child):
             raise CategoryLimitExceededException(
                 f"Adding {child.name} exceeds category limit of {self.limit}"
@@ -47,9 +42,6 @@ class Category:
         self.children.append(child)
 
     def remove_child(self, child: "Category") -> None:
-        if self.children is None:
-            raise ValueError("No children to remove")
-
         self.children.remove(child)
 
     def _valid_limit(self, child: "Category") -> bool:
@@ -60,7 +52,7 @@ class Category:
             return True
 
         total_child_limit = child.limit
-        for existing_child in self.children or []:
+        for existing_child in self.children:
             total_child_limit += existing_child.limit or Amount(0)
 
         return total_child_limit < self.limit
