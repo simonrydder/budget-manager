@@ -14,7 +14,7 @@ class Category:
     name: str
     children: list["Category"] = field(default_factory=list["Category"])
     _limit: Amount | None = None
-    # TODO: Track parent category if any
+    parent: "Category | None" = None
 
     @property
     def limit(self) -> Amount | None:
@@ -38,8 +38,8 @@ class Category:
                 f"Adding {child.name} exceeds category limit of {self.limit}"
             )
 
-        # TODO: set self as parent of child
         self.children.append(child)
+        child.parent = self
 
     def remove_child(self, child: "Category") -> None:
         self.children.remove(child)

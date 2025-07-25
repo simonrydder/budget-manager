@@ -110,3 +110,8 @@ def test_that_category_limit_is_larger_than_sum_of_children_limits(
     house.add_child(wifi)
     with pytest.raises(CategoryLimitExceededException):
         house.add_child(other)
+
+
+def test_that_house_is_parent_of_wifi(house: Category, wifi: Category):
+    house.add_child(wifi)
+    assert wifi.parent == house, "WiFi should have House as parent"
