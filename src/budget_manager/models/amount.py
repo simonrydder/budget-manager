@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import ceil
 
 
 @dataclass(frozen=True, eq=False)
@@ -41,3 +42,8 @@ class Amount:
 
     def __le__(self, other: "Amount") -> bool:
         return self.value <= other.value
+
+    def __truediv__(self, other: "int | float | Amount") -> "Amount":
+        if isinstance(other, Amount):
+            other = other.value
+        return Amount(int((ceil(self.value / other))))

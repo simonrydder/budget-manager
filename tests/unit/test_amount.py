@@ -20,7 +20,9 @@ def test_that_amount_from_float_converts_float_to_integer(value: float):
     assert amt.value == (int(100 * value))
 
 
-@pytest.mark.parametrize("value, expected", [(100, 1.0), (0, 0.0), (-50, -0.5), (4242, 42.42)])
+@pytest.mark.parametrize(
+    "value, expected", [(100, 1.0), (0, 0.0), (-50, -0.5), (4242, 42.42)]
+)
 def test_that_amount_to_float_returns_correct_float(value: int, expected: float):
     amt = Amount(value)
     float_value = amt.to_float()
@@ -48,7 +50,8 @@ def test_amount_subtraction():
 
 
 @pytest.mark.parametrize(
-    "value, expected", [(1000, "10.00"), (12345, "123.45"), (-555555, "-5555.55"), (0, "0.00")]
+    "value, expected",
+    [(1000, "10.00"), (12345, "123.45"), (-555555, "-5555.55"), (0, "0.00")],
 )
 def test_amount_str_representation(value: int, expected: str):
     amt = Amount(value)
@@ -91,3 +94,23 @@ def test_that_sum_with_float_raises_type_error():
     amt = Amount(100)
     with pytest.raises(TypeError):
         sum([50.0, amt])  # Should raise TypeError since 50.0 is not an Amount instance
+
+
+def test_that_amount_can_be_divided_with_int():
+    amt = Amount(100)
+    assert amt / 10 == Amount(10)
+
+
+def test_that_amount_can_be_devided_with_float():
+    amt = Amount(100)
+    assert amt / 0.5 == Amount(200)
+
+
+def test_that_division_result_is_rounded_up():
+    amt = Amount(100)
+    res = amt / 3
+    assert res == Amount(34)
+
+
+def test_that_division_with_amount_are_allowed():
+    assert Amount(100) / Amount(2) == Amount(50)
