@@ -12,7 +12,6 @@ class ExpenseCategory:
     name: str
 
     goal: SavingGoal
-    # saving_strategy: ...
 
     expenses: list[Expense] = field(default_factory=list[Expense])
 
@@ -20,7 +19,16 @@ class ExpenseCategory:
     parent: "ExpenseCategory | None" = None
 
     def get_monthly_balance(self, month: Month, year: int) -> float:
-        return 0.0
+        current_date = Date(year, month, 1)
+        if current_date < self.goal.start_date:
+            return self.goal.start_amount
+
+        monthly_saving = self.get_monthly_saving(month, year)
+        monthly_expense = self.get_monthly_expense_total(month, year)
+        monthly_balance = monthly_saving - monthly_expense
+
+        last_month = current_date - Duration(months=1)
+        return monthly_balance + self.get_monthly_balance(last_month.month, last_month.year)
 
     def get_monthly_saving(self, month: Month, year: int) -> float:
         return self.goal.get_saving_amount(month, year)
