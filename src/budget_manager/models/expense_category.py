@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 
 from pendulum import Date, Duration, Interval
 
+from budget_manager.models.allocation_plan import AllocationPlan
 from budget_manager.models.expense import Expense
-from budget_manager.models.saving_goal import SavingGoal
 from budget_manager.types import Month
 
 
@@ -11,7 +11,7 @@ from budget_manager.types import Month
 class ExpenseCategory:
     name: str
 
-    goal: SavingGoal
+    goal: AllocationPlan
 
     expenses: list[Expense] = field(default_factory=list[Expense])
 
@@ -31,7 +31,7 @@ class ExpenseCategory:
         return monthly_balance + self.get_monthly_balance(last_month.month, last_month.year)
 
     def get_monthly_saving(self, month: Month, year: int) -> float:
-        return self.goal.get_saving_amount(month, year)
+        return self.goal.monthly_allocation(month, year)
 
     def get_monthly_expense_total(self, month: Month, year: int) -> float:
         start = Date(year, month, 1)

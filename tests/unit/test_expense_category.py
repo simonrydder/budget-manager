@@ -2,9 +2,9 @@ import pytest
 from freezegun import freeze_time
 from pendulum import Date, Duration
 
+from budget_manager.models.allocation_plan import AllocationPlan
 from budget_manager.models.expense import Expense
 from budget_manager.models.expense_category import ExpenseCategory
-from budget_manager.models.saving_goal import SavingGoal
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -22,8 +22,8 @@ def expenses() -> list[Expense]:
 
 
 @pytest.fixture
-def groceries_goal() -> SavingGoal:
-    return SavingGoal(
+def groceries_goal() -> AllocationPlan:
+    return AllocationPlan(
         target_amount=400,
         target_date=Date(2025, 2, 1),
         repetition=Duration(months=1),
@@ -31,7 +31,7 @@ def groceries_goal() -> SavingGoal:
 
 
 @pytest.fixture
-def groceries(groceries_goal: SavingGoal, expenses: list[Expense]) -> ExpenseCategory:
+def groceries(groceries_goal: AllocationPlan, expenses: list[Expense]) -> ExpenseCategory:
     return ExpenseCategory("Groceries", groceries_goal, expenses=expenses)
 
 
@@ -54,7 +54,7 @@ def test_that_balance_for_groceries_in_february_is_120(groceries: ExpenseCategor
 def test_that_balance_for_phone_in_february_is_45():
     phone = ExpenseCategory(
         "Phone",
-        SavingGoal(target_amount=200, target_date=Date(2025, 2, 1), repetition=None),
+        AllocationPlan(target_amount=200, target_date=Date(2025, 2, 1), repetition=None),
         expenses=[Expense("Phone Bill", 155, Date(2025, 2, 14))],
     )
 
@@ -68,7 +68,7 @@ def test_that_balance_for_groceries_in_march_is_210(groceries: ExpenseCategory):
 def test_that_balance_for_wifi_in_march_is_500():
     wifi = ExpenseCategory(
         "Wifi",
-        SavingGoal(
+        AllocationPlan(
             target_amount=600,
             target_date=Date(2025, 4, 1),
             repetition=Duration(months=3),

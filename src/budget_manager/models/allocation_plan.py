@@ -7,7 +7,7 @@ from budget_manager.utils.pendulum import next_first
 
 
 @dataclass
-class SavingGoal:
+class AllocationPlan:
     target_amount: float
     target_date: Date
     repetition: Duration | None
@@ -15,12 +15,12 @@ class SavingGoal:
     start_date: Date = field(default_factory=Date.today)
     end_date: Date | None = None
 
-    def get_saving_amount(self, month: Month, year: int) -> float:
+    def monthly_allocation(self, month: Month, year: int) -> float:
         requested_date = Date(year, month, 1)
 
         # Before or at the first target date
         if requested_date <= self.target_date:
-            return self._compute_initial_saving_amount()
+            return self._compute_initial_allocation()
 
         # No repetition defined → nothing to save
         if not self.repetition:
@@ -32,16 +32,16 @@ class SavingGoal:
             return 0.0
 
         # Within valid repetition timeframe
-        return self._compute_repeated_saving_amount()
+        return self._compute_repeated_allocation()
 
-    def _compute_initial_saving_amount(self) -> float:
+    def _compute_initial_allocation(self) -> float:
         """Distribute target amount evenly up to the first target date."""
 
         first_saving = next_first(self.start_date)
         number_of_savings = (self.target_date - first_saving).months + 1
         return (self.target_amount - self.start_amount) / number_of_savings
 
-    def _compute_repeated_saving_amount(self) -> float:
+    def _compute_repeated_allocation(self) -> float:
         """Distribute target amount across one repetition cycle."""
 
         assert self.repetition is not None
