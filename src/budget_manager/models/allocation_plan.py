@@ -18,18 +18,22 @@ class AllocationPlan:
     def monthly_allocation(self, month: Month, year: int) -> float:
         requested_date = Date(year, month, 1)
 
+        # Before the start date
+        if requested_date < next_first(self.start_date):
+            return 0
+
         # Before or at the first target date
         if requested_date <= self.target_date:
             return self._compute_initial_allocation()
 
         # No repetition defined → nothing to save
         if not self.repetition:
-            return 0.0
+            return 0
 
         # After the last valid saving date
         cutoff = self._last_repeated_target_date()
         if cutoff and requested_date > cutoff:
-            return 0.0
+            return 0
 
         # Within valid repetition timeframe
         return self._compute_repeated_allocation()

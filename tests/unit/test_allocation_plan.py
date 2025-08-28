@@ -95,3 +95,7 @@ def test_that_june_allocation_for_rent_is_0_after_changed_end_date(rent: Allocat
     assert rent.monthly_allocation(6, 2025) == 10000
     rent.end_date = Date(2025, 5, 1)
     assert rent.monthly_allocation(6, 2025) == 0
+
+
+def test_that_january_allocation_for_rent_is_0(rent: AllocationPlan):
+    assert rent.monthly_allocation(1, 2025) == 0
