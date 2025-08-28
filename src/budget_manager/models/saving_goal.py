@@ -15,8 +15,6 @@ class SavingGoal:
     start_date: Date = field(default_factory=Date.today)
     end_date: Date | None = None
 
-    _saving_amounts: dict[Date, float] = field(default_factory=dict[Date, float])
-
     def get_saving_amount(self, month: Month, year: int) -> float:
         requested_date = Date(year, month, 1)
 
