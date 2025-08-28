@@ -1,16 +1,62 @@
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
 
-from budget_manager.models.amount import Amount
-from budget_manager.models.category import Category
+from pendulum import Date, Duration
+
+from budget_manager.types import Month
+from budget_manager.utils.pendulum import next_first
 
 
 @dataclass
 class SavingGoal:
-    category: Category
-    target_amount: Amount
-    target_date: date
-    repetition: str | None
-    currnet_amount: Amount = Amount(0)
-    start_date: date = date.today()
-    end_date: date | None = None
+    target_amount: float
+    target_date: Date
+    repetition: Duration | None
+    start_amount: float = 0.0
+    start_date: Date = field(default_factory=Date.today)
+    end_date: Date | None = None
+
+    _saving_amounts: dict[Date, float] = field(default_factory=dict[Date, float])
+
+    def get_saving_amount(self, month: Month, year: int) -> float:
+        requested_date = Date(year, month, 1)
+
+        # Before or at the first target date
+        if requested_date <= self.target_date:
+            return self._compute_initial_saving_amount()
+
+        # No repetition defined → nothing to save
+        if not self.repetition:
+            return 0.0
+
+        # After the last valid saving date
+        cutoff = self._last_repeated_target_date()
+        if cutoff and requested_date > cutoff:
+            return 0.0
+
+        # Within valid repetition timeframe
+        return self._compute_repeated_saving_amount()
+
+    def _compute_initial_saving_amount(self) -> float:
+        """Distribute target amount evenly up to the first target date."""
+
+        first_saving = next_first(self.start_date)
+        number_of_savings = (self.target_date - first_saving).months + 1
+        return (self.target_amount - self.start_amount) / number_of_savings
+
+    def _compute_repeated_saving_amount(self) -> float:
+        """Distribute target amount across one repetition cycle."""
+
+        assert self.repetition is not None
+        number_of_savings = self.repetition.months
+        return self.target_amount / number_of_savings
+
+    def _last_repeated_target_date(self) -> Date | None:
+        """Return the last target date allowed by repetition and end_date, or None if unlimited."""
+
+        if not self.repetition or not self.end_date:
+            return None
+
+        last = self.target_date
+        while last + self.repetition < self.end_date:
+            last += self.repetition
+        return last
