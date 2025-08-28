@@ -1,14 +1,10 @@
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
 
-from budget_manager.models.amount import Amount
-from budget_manager.models.category import Category
+from pendulum import Date
 
 
-@dataclass(frozen=True)
+@dataclass
 class Expense:
-    category: Category | None
-    amount: Amount
-    date: date
-    name: str | None = None
-    repitition: str | None = None
+    name: str | None
+    amount: float
+    timestamp: Date = field(default_factory=Date.today)
