@@ -11,7 +11,7 @@ from budget_manager.types import Month
 class ExpenseCategory:
     name: str
 
-    goal: AllocationPlan
+    allocation: AllocationPlan
 
     expenses: list[Expense] = field(default_factory=list[Expense])
 
@@ -20,8 +20,8 @@ class ExpenseCategory:
 
     def get_monthly_balance(self, month: Month, year: int) -> float:
         current_date = Date(year, month, 1)
-        if current_date < self.goal.start_date:
-            return self.goal.start_amount
+        if current_date < self.allocation.start_date:
+            return self.allocation.start_amount
 
         monthly_saving = self.get_monthly_saving(month, year)
         monthly_expense = self.get_monthly_expense_total(month, year)
@@ -31,7 +31,7 @@ class ExpenseCategory:
         return monthly_balance + self.get_monthly_balance(last_month.month, last_month.year)
 
     def get_monthly_saving(self, month: Month, year: int) -> float:
-        return self.goal.monthly_allocation(month, year)
+        return self.allocation.monthly_allocation(month, year)
 
     def get_monthly_expense_total(self, month: Month, year: int) -> float:
         start = Date(year, month, 1)
