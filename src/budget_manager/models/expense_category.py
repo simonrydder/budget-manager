@@ -18,7 +18,7 @@ class ExpenseCategory:
     children: list["ExpenseCategory"] = field(default_factory=list["ExpenseCategory"])
     parent: "ExpenseCategory | None" = None
 
-    def get_monthly_balance(self, month: Month, year: int) -> float:
+    def monthly_balance(self, month: Month, year: int) -> float:
         current_date = Date(year, month, 1)
 
         if all(current_date < alloc.start_date for alloc in self.allocations):
@@ -29,7 +29,7 @@ class ExpenseCategory:
         monthly_balance = monthly_saving - monthly_expense
 
         last_month = current_date - Duration(months=1)
-        return monthly_balance + self.get_monthly_balance(last_month.month, last_month.year)
+        return monthly_balance + self.monthly_balance(last_month.month, last_month.year)
 
     def get_monthly_saving(self, month: Month, year: int) -> float:
         return sum(alloc.monthly_allocation(month, year) for alloc in self.allocations)

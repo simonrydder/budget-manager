@@ -48,7 +48,7 @@ def test_that_monthly_saving_for_groceries_in_february_is_400(groceries: Expense
 
 
 def test_that_balance_for_groceries_in_february_is_120(groceries: ExpenseCategory):
-    assert groceries.get_monthly_balance(2, 2025) == 120
+    assert groceries.monthly_balance(2, 2025) == 120
 
 
 def test_that_balance_for_phone_in_february_is_45():
@@ -58,11 +58,11 @@ def test_that_balance_for_phone_in_february_is_45():
         expenses=[Expense("Phone Bill", 155, Date(2025, 2, 14))],
     )
 
-    assert phone.get_monthly_balance(2, 2025) == 45
+    assert phone.monthly_balance(2, 2025) == 45
 
 
 def test_that_balance_for_groceries_in_march_is_210(groceries: ExpenseCategory):
-    assert groceries.get_monthly_balance(3, 2025) == 210  # 120 + 90 (february + march)
+    assert groceries.monthly_balance(3, 2025) == 210  # 120 + 90 (february + march)
 
 
 def test_that_balance_for_wifi_in_march_is_500():
@@ -80,7 +80,7 @@ def test_that_balance_for_wifi_in_march_is_500():
     )
 
     # 500 = 300 + 100 + 100 (starting_amount + 2 * monthly_saving)
-    assert wifi.get_monthly_balance(3, 2025) == 500
+    assert wifi.monthly_balance(3, 2025) == 500
 
 
 def test_that_saving_for_multiple_allocation_plans_in_may_is_500(groceries: ExpenseCategory):
