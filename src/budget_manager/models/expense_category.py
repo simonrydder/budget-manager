@@ -7,7 +7,7 @@ from budget_manager.models.expense import Expense
 from budget_manager.types import Month
 
 
-@dataclass(frozen=True)
+@dataclass
 class ExpenseCategory:
     name: str
 
