@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 from budget_manager.models.expense_category import ExpenseCategory
-from budget_manager.models.income import IncomeCategory
+from budget_manager.models.income_category import IncomeCategory
 
 
 @dataclass
