@@ -24,14 +24,14 @@ class ExpenseCategory:
         if all(current_date < alloc.start_date for alloc in self.allocations):
             return sum(alloc.start_amount for alloc in self.allocations)
 
-        monthly_saving = self.get_monthly_saving(month, year)
+        monthly_saving = self.monthly_saving(month, year)
         monthly_expense = self.get_monthly_expense_total(month, year)
         monthly_balance = monthly_saving - monthly_expense
 
         last_month = current_date - Duration(months=1)
         return monthly_balance + self.monthly_balance(last_month.month, last_month.year)
 
-    def get_monthly_saving(self, month: Month, year: int) -> float:
+    def monthly_saving(self, month: Month, year: int) -> float:
         return sum(alloc.monthly_allocation(month, year) for alloc in self.allocations)
 
     def get_monthly_expense_total(self, month: Month, year: int) -> float:

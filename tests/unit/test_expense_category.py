@@ -44,7 +44,7 @@ def test_that_total_expenses_for_groceries_in_march_is_310(groceries: ExpenseCat
 
 
 def test_that_monthly_saving_for_groceries_in_february_is_400(groceries: ExpenseCategory):
-    assert groceries.get_monthly_saving(2, 2025) == 400
+    assert groceries.monthly_saving(2, 2025) == 400
 
 
 def test_that_balance_for_groceries_in_february_is_120(groceries: ExpenseCategory):
@@ -92,7 +92,7 @@ def test_that_saving_for_multiple_allocation_plans_in_may_is_500(groceries: Expe
     )
     groceries.allocations.append(new_plan)
 
-    assert groceries.get_monthly_saving(5, 2025) == 500
+    assert groceries.monthly_saving(5, 2025) == 500
 
 
 def test_that_saving_for_multile_allocation_plans_in_february_is_400(groceries: ExpenseCategory):
@@ -104,4 +104,4 @@ def test_that_saving_for_multile_allocation_plans_in_february_is_400(groceries: 
     )
     groceries.allocations.append(new_plan)
 
-    assert groceries.get_monthly_saving(2, 2025) == 400
+    assert groceries.monthly_saving(2, 2025) == 400

@@ -1,12 +1,21 @@
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
 
-from budget_manager.models.amount import Amount
+from pendulum import Date
+
+from budget_manager.types import Month
 
 
 @dataclass
 class Income:
     name: str | None
-    amount: Amount
-    date: date
-    repitition: str | None = None
+    amount: float
+    timestamp: Date = field(default_factory=Date.today)
+
+
+@dataclass
+class IncomeCategory:
+    name: str
+    incomes: list[Income] = field(default_factory=list[Income])
+
+    def monthly_income(self, month: Month, year: int) -> float:
+        return 0
