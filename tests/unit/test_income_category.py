@@ -4,6 +4,7 @@ from pendulum import Date
 
 from budget_manager.models.income import Income
 from budget_manager.models.income_category import IncomeCategory
+from budget_manager.models.income_plan import HistoricalIncomePlan
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -14,7 +15,7 @@ def freeze_time_for_tests():
 
 @pytest.fixture
 def salary() -> IncomeCategory:
-    return IncomeCategory(name="Salary")
+    return IncomeCategory(name="Salary", income_plan=HistoricalIncomePlan())
 
 
 def test_that_income_is_1000(salary: IncomeCategory):
@@ -59,3 +60,15 @@ def test_that_income_in_may_is_500(salary: IncomeCategory):
     salary.incomes.append(second_income)
 
     assert salary.monthly_income(5, 2025) == 500
+
+
+def test_that_expected_income_in_may_is_1000(salary: IncomeCategory):
+    salary.incomes.append(Income(None, 1000, Date(2025, 3, 15)))
+
+    assert salary.monthly_expected_income(5, 2025) == 1000
+
+
+def test_that_expected_income_in_may_is_500(salary: IncomeCategory):
+    salary.incomes.append(Income(None, 500, Date(2025, 3, 31)))
+
+    assert salary.monthly_expected_income(5, 2025) == 500
