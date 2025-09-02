@@ -12,15 +12,17 @@ class IncomeCategory:
     incomes: list[Income] = field(default_factory=list[Income])
 
     def monthly_income(self, month: Month, year: int) -> float:
-        requested_date = Date(year, month, 1)
-
         total_income = 0
         for income in self.incomes:
-            total_income += (
-                income.amount
-                if income.timestamp < requested_date
-                and income.timestamp >= requested_date - Duration(months=1)
-                else 0
-            )
+            total_income += income.amount if self._within_previous_month(income, month, year) else 0
 
         return total_income
+
+    def _within_previous_month(self, income: Income, month: Month, year: int) -> bool:
+        date = Date(year, month, 1)
+        before_or_equal_first = income.timestamp <= date
+        after_previous_first = income.timestamp > date - Duration(months=1)
+
+        within_previous_month = before_or_equal_first and after_previous_first
+
+        return within_previous_month
