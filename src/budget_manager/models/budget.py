@@ -1,16 +1,38 @@
-from dataclasses import dataclass, field
-
+from budget_manager.models.account import Account
 from budget_manager.models.expense_category import ExpenseCategory
 from budget_manager.models.income_category import IncomeCategory
 
 
-@dataclass
 class Budget:
-    name: str
-    expenses: list[ExpenseCategory] = field(default_factory=list[ExpenseCategory])
-    incomes: list[IncomeCategory] = field(default_factory=list[IncomeCategory])
-    saving: float = 0
+    def __init__(self, name: str, saving: float = 0) -> None:
+        pass
 
-    def save_budget(self) -> None: ...
+    @property
+    def expenses(self) -> list[ExpenseCategory]:
+        return []
 
-    def load_budget(self) -> None: ...
+    @property
+    def incomes(self) -> list[IncomeCategory]:
+        return []
+
+    @property
+    def saving(self) -> float:
+        return 0
+
+    @property
+    def accounts(self) -> list[Account]:
+        return []
+
+    def add_expense_category(self, expense: ExpenseCategory) -> None: ...
+
+    def add_income_category(self, income: IncomeCategory) -> None: ...
+
+    def add_account(self, account: Account) -> None: ...
+
+    def link_expense_category_to_account(
+        self, expense: ExpenseCategory, account: Account
+    ) -> None: ...
+
+    def save(self) -> None: ...
+
+    def load(self, name: str) -> None: ...
