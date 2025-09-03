@@ -13,8 +13,8 @@ class ExpenseCategory:
     allocations: list[AllocationPlan] = field(default_factory=list[AllocationPlan])
     expenses: list[Expense] = field(default_factory=list[Expense])
 
-    children: list["ExpenseCategory"] = field(default_factory=list["ExpenseCategory"])
-    parent: "ExpenseCategory | None" = None
+    # children: list["ExpenseCategory"] = field(default_factory=list["ExpenseCategory"])
+    # parent: "ExpenseCategory | None" = None
 
     def monthly_balance(self, month: Month, year: int) -> float:
         current_date = Date(year, month, 1)
