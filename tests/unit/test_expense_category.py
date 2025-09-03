@@ -36,11 +36,11 @@ def groceries(groceries_goal: AllocationPlan, expenses: list[Expense]) -> Expens
 
 
 def test_that_total_expenses_for_groceries_in_february_is_280(groceries: ExpenseCategory):
-    assert groceries.monthly_expense_total(2, 2025) == 280
+    assert groceries.monthly_expense(2, 2025) == 280
 
 
 def test_that_total_expenses_for_groceries_in_march_is_310(groceries: ExpenseCategory):
-    assert groceries.monthly_expense_total(3, 2025) == 310
+    assert groceries.monthly_expense(3, 2025) == 310
 
 
 def test_that_monthly_saving_for_groceries_in_february_is_400(groceries: ExpenseCategory):
