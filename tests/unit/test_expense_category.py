@@ -105,3 +105,13 @@ def test_that_saving_for_multile_allocation_plans_in_february_is_400(groceries: 
     groceries.allocations.append(new_plan)
 
     assert groceries.monthly_saving(2, 2025) == 400
+
+
+def test_that_expected_expense_for_groceries_is_400_in_february(groceries: ExpenseCategory):
+    assert groceries.monthly_expected_expense(2, 2025) == 400
+
+
+def test_that_expected_expense_for_category_without_allocation_plan_is_0():
+    cat = ExpenseCategory("New Cat")
+
+    assert cat.monthly_expected_expense(2, 2025) == 0

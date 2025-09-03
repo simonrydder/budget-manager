@@ -39,4 +39,4 @@ class ExpenseCategory:
         return sum([e.amount for e in self.expenses if e.timestamp in month_interval])
 
     def monthly_expected_expense(self, month: Month, year: int) -> float:
-        return 0
+        return sum(alloc.monthly_expectation(month, year) for alloc in self.allocations)
