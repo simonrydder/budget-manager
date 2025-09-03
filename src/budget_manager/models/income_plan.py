@@ -59,7 +59,7 @@ class ScheduledIncomePlan(IncomePlan):
         if self.repetition is None:
             return (
                 self.amount
-                if self.start_date.year == year and self.start_date.month == month
+                if self._pay_date_within_request_date(self.start_date, request_date)
                 else 0.0
             )
 
@@ -69,8 +69,16 @@ class ScheduledIncomePlan(IncomePlan):
         count = 0
         current = self.start_date
         while current <= max_date:
-            if current.year == year and current.month == month:
+            if self._pay_date_within_request_date(current, request_date):
                 count += 1
             current += self.repetition
 
         return self.amount * count
+
+    def _pay_date_within_request_date(self, pay_date: Date, request_date: Date) -> bool:
+        compare_date = request_date - Duration(months=1)
+
+        same_year = pay_date.year == compare_date.year
+        same_month = pay_date.month == compare_date.month
+
+        return same_year and same_month
