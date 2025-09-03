@@ -10,7 +10,7 @@ from budget_manager.types import Month
 @dataclass
 class IncomeCategory:
     name: str
-    income_plan: IncomePlan
+    income_plans: list[IncomePlan] = field(default_factory=list[IncomePlan])
     incomes: list[Income] = field(default_factory=list[Income])
 
     def monthly_income(self, month: Month, year: int) -> float:
@@ -21,7 +21,7 @@ class IncomeCategory:
         return total_income
 
     def monthly_expected_income(self, month: Month, year: int) -> float:
-        return self.income_plan.monthly_expected_income(self, month, year)
+        return sum(plan.monthly_expected_income(self, month, year) for plan in self.income_plans)
 
     def _within_previous_month(self, income: Income, month: Month, year: int) -> bool:
         """Incomes paid in April are used in May and etc."""
