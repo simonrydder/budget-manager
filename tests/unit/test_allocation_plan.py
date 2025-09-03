@@ -99,3 +99,32 @@ def test_that_june_allocation_for_rent_is_0_after_changed_end_date(rent: Allocat
 
 def test_that_january_allocation_for_rent_is_0(rent: AllocationPlan):
     assert rent.monthly_allocation(1, 2025) == 0
+
+
+def test_that_april_expectation_for_rent_is_10000(rent: AllocationPlan):
+    assert rent.monthly_expectation(4, 2025) == 10000
+
+
+def test_that_april_expectation_for_car_is_2800(car: AllocationPlan):
+    assert car.monthly_expectation(5, 2025) == 2800
+
+
+def test_that_expectation_before_target_month_is_0(rent: AllocationPlan):
+    assert rent.monthly_expectation(3, 2025) == 0
+
+
+def test_that_no_repetition_has_expectation_in_same_month_as_target(phone: AllocationPlan):
+    assert phone.monthly_expectation(8, 2025) == 100
+
+
+def test_that_no_repetition_has_no_expectation_in_different_months_as_target(phone: AllocationPlan):
+    assert phone.monthly_expectation(7, 2025) == 0
+    assert phone.monthly_expectation(9, 2025) == 0
+
+
+def test_that_expectation_between_target_repetitions_is_0(wifi: AllocationPlan):
+    assert wifi.monthly_expectation(11, 2025) == 0
+
+
+def test_that_expectation_after_end_date_is_0(wifi: AllocationPlan):
+    assert wifi.monthly_expectation(1, 2026) == 0

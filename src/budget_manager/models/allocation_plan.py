@@ -38,6 +38,39 @@ class AllocationPlan:
         # Within valid repetition timeframe
         return self._compute_repeated_allocation()
 
+    def monthly_expectation(self, month: Month, year: int) -> float:
+        if self.repetition is None:
+            return self._single_occurrence_expectation(month, year)
+
+        return self._multiple_occurrences_expectation(month, year)
+
+    def _multiple_occurrences_expectation(self, month: Month, year: int) -> float:
+        assert self.repetition
+
+        request_date = Date(year, month, 1)
+        max_date = self.end_date or request_date.add(months=1)
+
+        count = 0
+        current = self.target_date
+        while current <= max_date:
+            if self._expense_date_within_request_date(current, request_date):
+                count += 1
+            current += self.repetition
+
+        return self.target_amount * count
+
+    def _single_occurrence_expectation(self, month: Month, year: int) -> float:
+        if self._expense_date_within_request_date(self.target_date, Date(year, month, 1)):
+            return self.target_amount
+
+        return 0
+
+    def _expense_date_within_request_date(self, expense: Date, request: Date) -> bool:
+        same_month = expense.month == request.month
+        same_year = expense.year == request.year
+
+        return same_month and same_year
+
     def _compute_initial_allocation(self) -> float:
         """Distribute target amount evenly up to the first target date."""
 
