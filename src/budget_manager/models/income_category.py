@@ -24,10 +24,11 @@ class IncomeCategory:
         return self.income_plan.monthly_expected_income(self, month, year)
 
     def _within_previous_month(self, income: Income, month: Month, year: int) -> bool:
+        """Incomes paid in April are used in May and etc."""
         date = Date(year, month, 1)
-        before_or_equal_first = income.timestamp <= date
-        after_previous_first = income.timestamp > date - Duration(months=1)
+        before_first = income.timestamp < date
+        after_or_equal_previous_first = income.timestamp >= date - Duration(months=1)
 
-        within_previous_month = before_or_equal_first and after_previous_first
+        within_previous_month = before_first and after_or_equal_previous_first
 
         return within_previous_month
