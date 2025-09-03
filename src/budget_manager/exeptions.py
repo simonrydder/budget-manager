@@ -1,0 +1,2 @@
+class DuplicateCategoryName(Exception):
+    pass
