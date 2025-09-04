@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from pendulum import Date, Duration
@@ -14,13 +14,11 @@ class IncomePlan(ABC):
     def __init__(self) -> None:
         super().__init__()
 
+    @abstractmethod
     def monthly_expected_income(
         self, income_category: "IncomeCategory", month: Month, year: int
     ) -> float:
         return 0
-
-    def adjust(self, **kwargs) -> None:
-        raise NotImplementedError("This plan does not support adjustable attributes.")
 
 
 class HistoricalIncomePlan(IncomePlan):
@@ -31,9 +29,6 @@ class HistoricalIncomePlan(IncomePlan):
         self, income_category: "IncomeCategory", month: Month, year: int
     ) -> float:
         return income_category.monthly_income(*month_shifter(month, year, -1))
-
-    def adjust(self, **kwargs) -> None:
-        return super().adjust(**kwargs)
 
 
 class ScheduledIncomePlan(IncomePlan):
