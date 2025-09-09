@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from pendulum import Date, Duration
 
 from budget_manager.exeptions import DuplicateCategoryName
@@ -9,7 +11,7 @@ from budget_manager.utils.pendulum import month_shifter, next_first
 
 class Budget:
     def __init__(self, name: str, start_saving: float = 0, start_date: Date | None = None) -> None:
-        self._expenses: list[ExpenseCategory] = []
+        self._expenses: dict[str | None, list[ExpenseCategory]] = defaultdict(list)
         self._incomes: list[IncomeCategory] = []
         self._accounts: list[str] = []
         self.start_saving: float = start_saving
@@ -17,15 +19,15 @@ class Budget:
 
     @property
     def expenses(self) -> list[ExpenseCategory]:
-        return self._expenses
+        return [exp for exps in self._expenses.values() for exp in exps]
 
     @property
     def incomes(self) -> list[IncomeCategory]:
         return self._incomes
 
     @property
-    def accounts(self) -> list[str]:
-        return self._accounts
+    def accounts(self) -> list[str | None]:
+        return list(self._expenses.keys())
 
     def saving(self, month: Month, year: int) -> float:
         request_date = Date(year, month, 1)
@@ -53,14 +55,21 @@ class Budget:
 
         return sum(incomes)
 
-    def expense(self, month: Month, year: int) -> float:
+    def expense(self, month: Month, year: int, account: str | None = None) -> float:
         current_month = next_first(Date.today()) - Duration(months=1)
         request_date = Date(year, month, 1)
 
+        all_expense_categories = self._expenses[account] if account else self.expenses
+
         expenses = []
-        for expense in self._expenses:
+        for expense in all_expense_categories:
             if current_month < request_date:
                 value = expense.monthly_expected_expense(month, year)
+            elif current_month == request_date:
+                value = max(
+                    expense.monthly_expense(month, year),
+                    expense.monthly_expected_expense(month, year),
+                )
             else:
                 value = expense.monthly_expense(month, year)
 
@@ -68,11 +77,13 @@ class Budget:
 
         return sum(expenses)
 
-    def add_expense_category(self, new_expense: ExpenseCategory) -> None:
-        if any(expense.name == new_expense.name for expense in self._expenses):
+    def add_expense_category(
+        self, new_expense: ExpenseCategory, account: str | None = None
+    ) -> None:
+        if any(expense.name == new_expense.name for expense in self.expenses):
             raise DuplicateCategoryName("Can not add expense category with identical name.")
 
-        self._expenses.append(new_expense)
+        self._expenses[account].append(new_expense)
 
     def add_income_category(self, new_income: IncomeCategory) -> None:
         if any(income.name == new_income.name for income in self._incomes):

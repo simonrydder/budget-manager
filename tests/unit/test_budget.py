@@ -108,7 +108,7 @@ def test_that_saving_include_acutal_expense(budget: Budget):
     budget.add_expense_category(expense)
 
     assert budget.saving(8, 2025) == 105  # 200 - 55 - 40
-    assert budget.saving(10, 2025) == 55
+    assert budget.saving(10, 2025) == 5  # 200 - 55 - 40 - 50 - 50
 
 
 def test_that_budget_has_income_function(budget: Budget):
@@ -134,4 +134,49 @@ def test_that_budget_has_expense_function(budget: Budget):
     budget.add_expense_category(expense)
 
     assert budget.expense(7, 2025) == 40
+    assert budget.expense(9, 2025) == 50
     assert budget.expense(10, 2025) == 50
+
+
+def test_that_expense_for_account_household_is_75(budget: Budget):
+    car = ExpenseCategory("Car", [AllocationPlan(65, Date(2025, 6, 1), Duration(months=1))])
+
+    rent = ExpenseCategory("Rent", [AllocationPlan(75, Date(2025, 6, 1), Duration(months=1))])
+
+    budget.add_expense_category(car)
+    budget.add_expense_category(rent, "Household")
+
+    assert budget.expense(10, 2025, "Household") == 75
+
+
+def test_that_expense_is_max_of_expected_and_actual_in_current_month(budget: Budget):
+    rent = ExpenseCategory(
+        "Rent",
+        [AllocationPlan(25, Date(2025, 6, 1), Duration(months=1))],
+        [Expense("First", 80, Date(2025, 9, 1))],
+    )
+    car = ExpenseCategory(
+        "Car",
+        [AllocationPlan(25, Date(2025, 6, 1), Duration(months=1))],
+        [Expense("First", 20, Date(2025, 9, 1))],
+    )
+
+    budget.add_expense_category(rent, "Household")
+    budget.add_expense_category(car, "Other")
+
+    assert budget.expense(9, 2025, "Household") == 80
+    assert budget.expense(9, 2025, "Other") == 25
+
+
+def test_that_budget_has_account_none(budget: Budget):
+    rent = ExpenseCategory("Rent")
+    budget.add_expense_category(rent)
+
+    assert None in budget.accounts
+
+
+def test_that_budget_has_account_household(budget: Budget):
+    rent = ExpenseCategory("Rent")
+    budget.add_expense_category(rent, "Household")
+
+    assert "Household" in budget.accounts
