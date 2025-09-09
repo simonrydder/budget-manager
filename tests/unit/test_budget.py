@@ -109,3 +109,29 @@ def test_that_saving_include_acutal_expense(budget: Budget):
 
     assert budget.saving(8, 2025) == 105  # 200 - 55 - 40
     assert budget.saving(10, 2025) == 55
+
+
+def test_that_budget_has_income_function(budget: Budget):
+    # Start date = 2025-04-16, Current date = 2025-09-0
+    income_cat = IncomeCategory(
+        "Salary",
+        [ScheduledIncomePlan(350, start_date=Date(2025, 5, 1))],
+        [Income("First", 300, Date(2025, 7, 31)), Income("Second", 349, Date(2025, 8, 29))],
+    )
+    budget.add_income_category(income_cat)
+
+    assert budget.income(8, 2025) == 300
+    assert budget.income(10, 2025) == 350
+
+
+def test_that_budget_has_expense_function(budget: Budget):
+    # Start date = 2025-04-16, Current date = 2025-09-03
+    expense = ExpenseCategory(
+        "Rent",
+        [AllocationPlan(50, Date(2025, 6, 1), Duration(months=1))],
+        [Expense("First", 55, Date(2025, 6, 1)), Expense("Second", 40, Date(2025, 7, 1))],
+    )
+    budget.add_expense_category(expense)
+
+    assert budget.expense(7, 2025) == 40
+    assert budget.expense(10, 2025) == 50
