@@ -10,14 +10,17 @@ class SavingCategory:
     name: str
     _records: list[Record] = field(default_factory=list[Record])
 
-    def deposits(self, month: Month, year: int | None = None) -> float:
+    def _sum_records(self, records: list[Record], month: Month, year: int | None = None) -> float:
         total = 0
-        deposit_records = [record for record in self._records if record.amount > 0]
-        for record in deposit_records:
+        for record in records:
             if is_date_in_month(record.timestamp, month, year):
                 total += record.amount
 
         return total
+
+    def deposits(self, month: Month, year: int | None = None) -> float:
+        deposit_records = [record for record in self._records if record.amount > 0]
+        return self._sum_records(deposit_records, month, year)
 
     def withdrawals(self, month: Month, year: int | None = None) -> float: ...
 
