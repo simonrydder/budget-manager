@@ -15,3 +15,13 @@ def month_shifter(month: Month, year: int, shift: int) -> tuple[Month, int]:
     date = pendulum.Date(year, month, 1) + pendulum.Duration(months=shift)
 
     return (date.month, date.year)
+
+
+def is_completed_month(month: Month, year: int) -> bool:
+    today = pendulum.Date.today()
+
+    first_in_month = today.subtract(days=today.day)
+
+    request_date = pendulum.Date(year, month, 1)
+
+    return request_date < first_in_month
