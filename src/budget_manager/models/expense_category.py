@@ -32,7 +32,7 @@ class ExpenseCategory:
             return self.actual_expense(month, year)
 
         if is_current_month(month, year):
-            return max(self.actual_expense(month, year), self.expected_expense(month, year))
+            return self.actual_expense(month, year)
 
         return self.expected_expense(month, year)
 
