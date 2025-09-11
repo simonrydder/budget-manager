@@ -86,6 +86,7 @@ def test_that_expected_income_in_may_is_500(salary: IncomeCategory):
 
 def test_that_expected_income_with_two_income_plans_sum(salary: IncomeCategory):
     salary.incomes.append(Record(500, Date(2025, 3, 31)))
+    salary.income_plans.append(HistoricalIncomePlan())
 
     assert salary.expected_income(5, 2025) == 1000
 
