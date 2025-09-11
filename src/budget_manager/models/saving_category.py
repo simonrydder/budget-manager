@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
 
-from pendulum import Date
-
 from budget_manager.models.record import Record
 from budget_manager.types import Month
+from budget_manager.utils.pendulum import is_date_in_month
 
 
 @dataclass
@@ -15,8 +14,7 @@ class SavingCategory:
         total = 0
         deposit_records = [record for record in self._records if record.amount > 0]
         for record in deposit_records:
-            ts = record.timestamp
-            if ts.month == month and ts.year == (year or Date.today().year):
+            if is_date_in_month(record.timestamp, month, year):
                 total += record.amount
 
         return total
