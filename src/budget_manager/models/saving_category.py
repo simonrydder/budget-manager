@@ -19,11 +19,11 @@ class SavingCategory:
 
         return total
 
-    def deposits(self, month: Month, year: int | None = None) -> float:
-        deposit_records = [record for record in self._records if record.amount > 0]
+    def deposits(self, month: Month, year: int) -> float:
+        deposit_records = [record for record in self.records if record.amount > 0]
         return self._sum_records(deposit_records, month, year)
 
-    def withdrawals(self, month: Month, year: int | None = None) -> float:
+    def withdrawals(self, month: Month, year: int) -> float:
         withdrawal_records = [record for record in self.records if record.amount < 0]
         total = self._sum_records(withdrawal_records, month, year)
         return abs(total)

@@ -43,26 +43,20 @@ def test_that_deposits_for_april_only_include_april_records(saving: SavingCatego
     assert saving.deposits(4, 2025) == 300
 
 
-def test_that_deposits_uses_current_year_as_default(saving: SavingCategory):
-    saving.records.append(Record(200, Date(2025, 3, 2)))
-
-    assert saving.deposits(3) == 200
-
-
 def test_that_deposits_only_uses_positive_record_amounts(saving: SavingCategory):
     saving.records.append(Record(-10, Date(2025, 9, 11)))
 
-    assert saving.deposits(9) == 0
+    assert saving.deposits(9, 2025) == 0
 
 
 def test_that_withdrawals_for_june_is_200(saving: SavingCategory):
     saving.records.append(Record(-200, Date(2025, 6, 7)))
 
-    assert saving.withdrawals(6) == 200
+    assert saving.withdrawals(6, 2025) == 200
 
 
 def test_that_withdrawals_only_uses_negative_values(saving: SavingCategory):
     saving.records.append(Record(-100, Date(2025, 5, 1)))
     saving.records.append(Record(500, Date(2025, 5, 2)))
 
-    assert saving.withdrawals(5) == 100
+    assert saving.withdrawals(5, 2025) == 100
