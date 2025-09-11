@@ -9,7 +9,7 @@ from budget_manager.models.record import Record
 
 @pytest.fixture(scope="module", autouse=True)
 def freeze_time_for_tests():
-    with freeze_time("2025-01-26"):
+    with freeze_time("2025-09-26"):
         yield
 
 
@@ -27,6 +27,7 @@ def groceries_goal() -> AllocationPlan:
         target_amount=400,
         target_date=Date(2025, 2, 1),
         repetition=Duration(months=1),
+        start_date=Date(2025, 1, 26),
     )
 
 
@@ -54,7 +55,14 @@ def test_that_balance_for_groceries_in_february_is_120(groceries: ExpenseCategor
 def test_that_balance_for_phone_in_february_is_45():
     phone = ExpenseCategory(
         "Phone",
-        [AllocationPlan(target_amount=200, target_date=Date(2025, 2, 1), repetition=None)],
+        [
+            AllocationPlan(
+                target_amount=200,
+                target_date=Date(2025, 2, 1),
+                repetition=None,
+                start_date=Date(2025, 1, 26),
+            )
+        ],
         expenses=[Record(name="Phone Bill", amount=155, timestamp=Date(2025, 2, 14))],
     )
 
@@ -74,6 +82,7 @@ def test_that_balance_for_wifi_in_march_is_500():
                 target_date=Date(2025, 4, 1),
                 repetition=Duration(months=3),
                 start_amount=300,
+                start_date=Date(2025, 1, 26),
             )
         ],
         expenses=[Record(name="Wifi bill", amount=600, timestamp=Date(2025, 4, 3))],
@@ -115,3 +124,8 @@ def test_that_expected_expense_for_category_without_allocation_plan_is_0():
     cat = ExpenseCategory("New Cat")
 
     assert cat.expected_expense(2, 2025) == 0
+
+
+def test_that_balance_used_expected_expense_in_future(groceries: ExpenseCategory):
+    with freeze_time("2025-04-04"):
+        assert groceries.balance(4, 2025) == 210
