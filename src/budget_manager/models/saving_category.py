@@ -8,7 +8,8 @@ from budget_manager.utils.pendulum import is_date_in_month
 @dataclass
 class SavingCategory:
     name: str
-    _records: list[Record] = field(default_factory=list[Record])
+    start_amount: float = 0.0
+    records: list[Record] = field(default_factory=list[Record])
 
     def _sum_records(self, records: list[Record], month: Month, year: int | None = None) -> float:
         total = 0
@@ -25,5 +26,3 @@ class SavingCategory:
     def withdrawals(self, month: Month, year: int | None = None) -> float: ...
 
     def balance(self, month: Month, year: int | None = None) -> float: ...
-
-    def add_record(self, record: Record) -> None: ...
