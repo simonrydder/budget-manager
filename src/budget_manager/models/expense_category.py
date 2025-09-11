@@ -14,16 +14,16 @@ class ExpenseCategory:
     expenses: list[Record] = field(default_factory=list[Record])
 
     def balance(self, month: Month, year: int) -> float:
-        current_date = Date(year, month, 1)
+        request_date = Date(year, month, 1)
 
-        if all(current_date < alloc.start_date for alloc in self.allocations):
+        if all(request_date < alloc.start_date for alloc in self.allocations):
             return sum(alloc.start_amount for alloc in self.allocations)
 
         monthly_saving = self.allocation(month, year)
         monthly_expense = self.actual_expense(month, year)
         monthly_balance = monthly_saving - monthly_expense
 
-        last_month = current_date - Duration(months=1)
+        last_month = request_date - Duration(months=1)
         return monthly_balance + self.balance(last_month.month, last_month.year)
 
     def allocation(self, month: Month, year: int) -> float:
