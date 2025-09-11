@@ -5,6 +5,7 @@ from pendulum import Date, Duration
 from budget_manager.models.income_plan import IncomePlan
 from budget_manager.models.record import Record
 from budget_manager.types import Month
+from budget_manager.utils.pendulum import is_completed_month, is_current_month
 
 
 @dataclass
@@ -12,6 +13,15 @@ class IncomeCategory:
     name: str
     income_plans: list[IncomePlan] = field(default_factory=list[IncomePlan])
     incomes: list[Record] = field(default_factory=list[Record])
+
+    def income(self, month: Month, year: int) -> float:
+        if is_completed_month(month, year):
+            return self.actual_income(month, year)
+
+        if is_current_month(month, year):
+            return self.actual_income(month, year)
+
+        return self.expected_income(month, year)
 
     def actual_income(self, month: Month, year: int) -> float:
         total_income = 0

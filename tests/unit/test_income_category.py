@@ -18,21 +18,21 @@ def salary() -> IncomeCategory:
     return IncomeCategory(name="Salary", income_plans=[HistoricalIncomePlan()])
 
 
-def test_that_income_is_1000(salary: IncomeCategory):
+def test_that_actual_income_is_1000(salary: IncomeCategory):
     new_income = Record(1000)
     salary.incomes.append(new_income)
 
     assert salary.actual_income(4, 2025) == 1000
 
 
-def test_that_income_is_2000(salary: IncomeCategory):
+def test_that_actual_income_is_2000(salary: IncomeCategory):
     new_income = Record(2000)
     salary.incomes.append(new_income)
 
     assert salary.actual_income(4, 2025) == 2000
 
 
-def test_that_income_is_1500(salary: IncomeCategory):
+def test_that_actual_income_is_1500(salary: IncomeCategory):
     first_income = Record(1000)
     second_income = Record(500)
 
@@ -42,7 +42,7 @@ def test_that_income_is_1500(salary: IncomeCategory):
     assert salary.actual_income(4, 2025) == 1500
 
 
-def test_that_income_in_april_is_1000(salary: IncomeCategory):
+def test_that_actual_income_in_april_is_1000(salary: IncomeCategory):
     first_income = Record(1000)
     salary.incomes.append(first_income)
 
@@ -52,7 +52,7 @@ def test_that_income_in_april_is_1000(salary: IncomeCategory):
     assert salary.actual_income(4, 2025) == 1000
 
 
-def test_that_income_in_may_is_500(salary: IncomeCategory):
+def test_that_actual_income_in_may_is_500(salary: IncomeCategory):
     first_income = Record(1000)
     salary.incomes.append(first_income)
 
@@ -62,7 +62,7 @@ def test_that_income_in_may_is_500(salary: IncomeCategory):
     assert salary.actual_income(5, 2025) == 500
 
 
-def test_that_income_in_may_is_1000_and_in_june_is_500(salary: IncomeCategory):
+def test_that_actual_income_in_may_is_1000_and_in_june_is_500(salary: IncomeCategory):
     first_income = Record(1000, Date(2025, 4, 1))
     second_income = Record(500, Date(2025, 5, 1))
     salary.incomes.append(first_income)
@@ -86,6 +86,24 @@ def test_that_expected_income_in_may_is_500(salary: IncomeCategory):
 
 def test_that_expected_income_with_two_income_plans_sum(salary: IncomeCategory):
     salary.incomes.append(Record(500, Date(2025, 3, 31)))
-    salary.income_plans.append(HistoricalIncomePlan())
 
     assert salary.expected_income(5, 2025) == 1000
+
+
+def test_that_income_is_equal_actual_income_in_current_month(salary: IncomeCategory):
+    salary.incomes.append(Record(500, Date(2025, 2, 28)))
+
+    assert salary.income(3, 2025) == 500
+
+
+def test_that_income_is_equal_actual_income_in_completed_month(salary: IncomeCategory):
+    salary.incomes.append(Record(450, Date(2025, 1, 28)))
+
+    assert salary.income(2, 2025) == 450
+
+
+def test_that_income_is_equal_expected_income_in_future_month(salary: IncomeCategory):
+    salary.incomes.append(Record(500, Date(2025, 2, 28)))
+
+    assert salary.income(4, 2025) == 500
+    assert salary.income(5, 2025) == 0
