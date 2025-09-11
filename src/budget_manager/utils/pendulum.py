@@ -25,3 +25,9 @@ def is_completed_month(month: Month, year: int) -> bool:
     request_date = pendulum.Date(year, month, 1)
 
     return request_date < first_in_month
+
+
+def is_current_month(month: Month, year: int) -> bool:
+    today = pendulum.Date.today()
+
+    return month == today.month and year == today.year
