@@ -126,6 +126,12 @@ def test_that_expected_expense_for_category_without_allocation_plan_is_0():
     assert cat.expected_expense(2, 2025) == 0
 
 
-def test_that_balance_used_expected_expense_in_future(groceries: ExpenseCategory):
+def test_that_balance_uses_expected_expense_in_future(groceries: ExpenseCategory):
     with freeze_time("2025-04-04"):
         assert groceries.balance(4, 2025) == 210
+
+
+def test_that_exense_uses_max_of_actual_and_expected_in_current_month(groceries: ExpenseCategory):
+    with freeze_time("2025-04-04"):
+        groceries.expenses.append(Record(1000))
+        assert groceries.expense(4, 2025) == 1300
