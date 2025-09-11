@@ -31,3 +31,8 @@ def is_current_month(month: Month, year: int) -> bool:
     today = pendulum.Date.today()
 
     return month == today.month and year == today.year
+
+
+def is_date_in_month(date: pendulum.Date, month: Month, year: int | None = None) -> bool:
+    year = year or pendulum.Date.today().year
+    return date.month == month and date.year == year
