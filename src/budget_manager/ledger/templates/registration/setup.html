@@ -1,0 +1,17 @@
+{% extends "ledger/base.html" %}
+{% block title %}Set up{% endblock %}
+{% block body %}
+<main class="auth">
+  <div class="card">
+    <div class="stack" style="gap:4px">
+      <h1>Welcome to Budget</h1>
+      <p class="muted">Create the first login. You can add more people afterwards. Everyone sees and edits the same budget.</p>
+    </div>
+    <form method="post" class="form">
+      {% csrf_token %}
+      {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+      <div class="form-actions"><button class="btn primary" type="submit">Create login</button></div>
+    </form>
+  </div>
+</main>
+{% endblock %}

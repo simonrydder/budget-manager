@@ -1,0 +1,10 @@
+{% extends "ledger/base.html" %}
+{% block title %}Rename {{ category.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Rename {{ category.name }}</h1></div></div>
+<form method="post" class="form card flat">
+  {% csrf_token %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions"><button class="btn primary">Save</button><a class="btn" href="{% url 'categories' %}">Cancel</a></div>
+</form>
+{% endblock %}

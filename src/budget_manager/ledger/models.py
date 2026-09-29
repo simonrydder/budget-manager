@@ -1,0 +1,344 @@
+"""Database tables. Amounts are whole numbers in hundredths (øre); months are stored as the
+first day of the month."""
+
+from __future__ import annotations
+
+from datetime import date
+
+from django.conf import settings
+from django.db import models
+from django.db.models import Q
+
+from budget_manager.engine import Kind, Role, YearMonth, frequency_label
+
+
+def next_month_start() -> date:
+    today = date.today()
+    return (YearMonth.of(today) + 1).first_day()
+
+
+class BudgetSettings(models.Model):
+    """One row with the budget-wide settings."""
+
+    start_month = models.DateField(
+        default=next_month_start,
+        help_text="The first month you budget for. Its transfers happen on the last day of the "
+        "month before.",
+    )
+    nemkonto_min = models.BigIntegerField(default=0)
+    nemkonto_max = models.BigIntegerField(default=0)
+    nemkonto_opening = models.BigIntegerField(default=0)
+    general_savings_opening = models.BigIntegerField(default=0)
+    forecast_months = models.PositiveSmallIntegerField(default=24)
+
+    class Meta:
+        verbose_name_plural = "budget settings"
+
+    @classmethod
+    def load(cls) -> BudgetSettings:
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def start(self) -> YearMonth:
+        return YearMonth.of(self.start_month)
+
+
+class Account(models.Model):
+    ROLE_CHOICES = [
+        (Role.NEMKONTO.value, "NemKonto"),
+        (Role.SAVINGS.value, "Savings (holds General Savings)"),
+        (Role.NORMAL.value, "Normal"),
+    ]
+
+    name = models.CharField(max_length=60, unique=True)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=Role.NORMAL.value)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["role"], condition=Q(role="nemkonto"), name="one_nemkonto"
+            ),
+            models.UniqueConstraint(
+                fields=["role"], condition=Q(role="savings"), name="one_savings_account"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def is_nemkonto(self) -> bool:
+        return self.role == Role.NEMKONTO
+
+    @property
+    def holds_general_savings(self) -> bool:
+        return self.role == Role.SAVINGS
+
+
+class Category(models.Model):
+    name = models.CharField(max_length=60, unique=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        verbose_name_plural = "categories"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Expense(models.Model):
+    KIND_CHOICES = [(Kind.FIXED.value, "Fixed"), (Kind.VARIABLE.value, "Variable")]
+
+    name = models.CharField(max_length=80)
+    category = models.ForeignKey(
+        Category, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses"
+    )
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="expenses")
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=Kind.FIXED.value)
+    amount = models.BigIntegerField()
+    interval_months = models.PositiveSmallIntegerField(default=1)
+    first_due = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    starting_balance = models.BigIntegerField(default=0)
+    start_month = models.DateField(
+        null=True, blank=True, help_text="First month with a contribution. Empty: from the start."
+    )
+    notes = models.TextField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def frequency(self) -> str:
+        return frequency_label(self.interval_months)
+
+    @property
+    def is_fixed(self) -> bool:
+        return self.kind == Kind.FIXED
+
+    def is_ended(self, on: date | None = None) -> bool:
+        return self.end_date is not None and self.end_date < (on or date.today())
+
+    @property
+    def monthly_equivalent(self) -> int:
+        """The amount spread over its interval, for comparing expenses."""
+        return self.amount // self.interval_months if self.interval_months else 0
+
+
+class IncomeSource(models.Model):
+    name = models.CharField(max_length=80, unique=True)
+    amount = models.BigIntegerField(help_text="Expected amount each time it arrives.")
+    interval_months = models.PositiveSmallIntegerField(default=1)
+    first_month = models.DateField(help_text="The first month this income is for.")
+    end_month = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def frequency(self) -> str:
+        return frequency_label(self.interval_months)
+
+
+class SpendingEntry(models.Model):
+    """What was actually spent on an expense in a calendar month."""
+
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name="spending")
+    month = models.DateField()
+    amount = models.BigIntegerField()
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["expense", "month"], name="one_spending_per_month")
+        ]
+
+
+class IncomeEntry(models.Model):
+    """What actually arrived on the NemKonto for a budget month."""
+
+    source = models.ForeignKey(IncomeSource, on_delete=models.CASCADE, related_name="entries")
+    month = models.DateField()
+    amount = models.BigIntegerField()
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["source", "month"], name="one_income_per_month")
+        ]
+
+
+class InterestEntry(models.Model):
+    """Interest that landed on an account during a calendar month (negative if paid)."""
+
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="interest")
+    month = models.DateField()
+    amount = models.BigIntegerField()
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["account", "month"], name="one_interest_per_month")
+        ]
+
+
+class BalanceCorrection(models.Model):
+    """A manual correction of the NemKonto or General Savings, e.g. a bank fee."""
+
+    class Target(models.TextChoices):
+        NEMKONTO = "nemkonto", "NemKonto"
+        GENERAL_SAVINGS = "general_savings", "General Savings"
+
+    target = models.CharField(max_length=20, choices=Target.choices)
+    month = models.DateField(help_text="Applies from the month-end after this month.")
+    amount = models.BigIntegerField()
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class MonthClose(models.Model):
+    """The month-end for a budget month: its transfers happen on the last day of the month before."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "In progress"
+        CLOSED = "closed", "Closed"
+
+    month = models.DateField(unique=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    step = models.PositiveSmallIntegerField(default=1)
+    done_accounts = models.JSONField(default=list, blank=True)
+
+    nemkonto_before = models.BigIntegerField(default=0)
+    income = models.BigIntegerField(default=0)
+    interest = models.BigIntegerField(default=0)
+    contributions = models.BigIntegerField(default=0)
+    nemkonto_after_transfers = models.BigIntegerField(default=0)
+    surplus = models.BigIntegerField(default=0)
+    taken = models.BigIntegerField(default=0)
+    nemkonto_end = models.BigIntegerField(default=0)
+    general_savings_before = models.BigIntegerField(default=0)
+    general_savings_after = models.BigIntegerField(default=0)
+    notices = models.JSONField(default=list, blank=True)
+
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-month"]
+
+    def __str__(self) -> str:
+        return f"Month-end {self.transfer_day:%d %b %Y}"
+
+    @property
+    def budget_month(self) -> YearMonth:
+        return YearMonth.of(self.month)
+
+    @property
+    def is_closed(self) -> bool:
+        return self.status == self.Status.CLOSED
+
+    @property
+    def transfer_day(self) -> date:
+        return (self.budget_month - 1).last_day()
+
+
+class ContributionLine(models.Model):
+    """What one closed month did to one expense."""
+
+    close = models.ForeignKey(MonthClose, on_delete=models.CASCADE, related_name="lines")
+    expense = models.ForeignKey(Expense, on_delete=models.PROTECT, related_name="lines")
+    contribution = models.BigIntegerField(default=0)
+    expected_spend = models.BigIntegerField(default=0)
+    topup = models.BigIntegerField(default=0)
+    cover = models.BigIntegerField(default=0)
+    release = models.BigIntegerField(default=0)
+    balance_before = models.BigIntegerField(default=0)
+    planned_before = models.BigIntegerField(default=0)
+    amount_before = models.BigIntegerField(default=0)
+    amount_after = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["close", "expense"], name="one_line_per_expense")
+        ]
+
+    @property
+    def balance_after(self) -> int:
+        return self.balance_before + self.topup - self.cover - self.release + self.contribution
+
+
+class Transfer(models.Model):
+    """A bank transfer made at a month-end. Positive: from the NemKonto to the account."""
+
+    close = models.ForeignKey(MonthClose, on_delete=models.CASCADE, related_name="transfers")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="transfers")
+    amount = models.BigIntegerField()
+    contributions = models.BigIntegerField(default=0)
+    interest = models.BigIntegerField(default=0)
+    topups = models.BigIntegerField(default=0)
+    covers = models.BigIntegerField(default=0)
+    releases = models.BigIntegerField(default=0)
+    general_savings = models.BigIntegerField(default=0)
+    done = models.BooleanField(default=False)
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    done_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["account__sort_order", "account_id"]
+
+
+class Decision(models.Model):
+    """Money taken from an expense at a month-end: to the NemKonto (cover) or to General Savings
+    (release)."""
+
+    class Type(models.TextChoices):
+        COVER = "cover", "Cover the NemKonto"
+        RELEASE = "release", "Move to General Savings"
+
+    close = models.ForeignKey(MonthClose, on_delete=models.CASCADE, related_name="decisions")
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name="decisions")
+    kind = models.CharField(max_length=10, choices=Type.choices)
+    amount = models.BigIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["close", "expense", "kind"], name="one_decision_each")
+        ]

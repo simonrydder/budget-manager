@@ -1,0 +1,26 @@
+{% extends "ledger/base.html" %}
+{% block title %}{% if source.pk %}Edit {{ source.name }}{% else %}Add income{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <h1>{% if source.pk %}Edit {{ source.name }}{% else %}Add income{% endif %}</h1>
+  <p class="muted">The expected amount is used for the forecast. At each month-end you enter what actually arrived.</p>
+</div></div>
+<form method="post" class="form card flat" novalidate>
+  {% csrf_token %}
+  {% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}
+  <div class="form-row">
+    {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
+    {% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}
+  </div>
+  <div class="form-row">
+    {% with field=form.first_month %}{% include "ledger/_field.html" %}{% endwith %}
+    {% with field=form.end_month %}{% include "ledger/_field.html" %}{% endwith %}
+  </div>
+  {% with field=form.notes %}{% include "ledger/_field.html" %}{% endwith %}
+  <div class="form-actions">
+    <button class="btn primary">Save</button>
+    <a class="btn" href="{% url 'income' %}">Cancel</a>
+    {% if source.pk %}<a class="btn danger" style="margin-left:auto" href="{% url 'income-delete' source.id %}">Delete</a>{% endif %}
+  </div>
+</form>
+{% endblock %}

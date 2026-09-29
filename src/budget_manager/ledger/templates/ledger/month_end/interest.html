@@ -1,0 +1,32 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}{{ previous.name }} interest{% endblock %}
+{% block content %}
+{% include "ledger/month_end/_steps.html" with title=previous.name|add:" interest" %}
+<div class="checklist">
+  <p class="lead">Enter the interest each account received in {{ previous.label }}. Use a minus for interest you paid. It counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller by the same amount.</p>
+  <form method="post" class="stack" style="gap:14px" novalidate>
+    {% csrf_token %}
+    <section class="entry-group">
+      <header><h3>Accounts</h3><span class="muted small">Leave empty for no interest</span></header>
+      {% for row in rows %}
+      <div class="entry">
+        <label class="name" for="interest-{{ row.account.id }}">
+          <b>{{ row.account.name }}</b>
+          <small>{% if row.account.is_nemkonto %}Adds to the money available this month{% else %}Reduces the transfer to {{ row.account.name }}{% endif %}</small>
+        </label>
+        <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
+               id="interest-{{ row.account.id }}" name="interest-{{ row.account.id }}" placeholder="0,00"
+               value="{% if row.raw is not None %}{{ row.raw }}{% else %}{{ row.value|money_input }}{% endif %}">
+        <span></span>
+        {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    <div class="sticky-actions">
+      <a class="btn" href="{% url 'month-end-spending' month %}">Back</a>
+      <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>
+    </div>
+  </form>
+</div>
+{% endblock %}

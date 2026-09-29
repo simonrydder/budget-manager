@@ -1,0 +1,85 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Forecast{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Forecast</h1>
+    <p class="muted">Expected balances at each month-end, after the transfers, using the expected amounts for income and expenses.</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="row" style="gap:12px">
+    {% if previous %}<a class="btn small" href="?month={{ previous.month }}" aria-label="Previous month">←</a>{% else %}<span class="btn small" aria-disabled="true">←</span>{% endif %}
+    <label class="sr-only" for="month-slider">Month</label>
+    <input id="month-slider" type="range" min="0" max="{{ points|length|add:'-1' }}" value="{{ index }}" style="flex:1;min-width:140px;accent-color:var(--accent)"
+           data-months='[{% for p in points %}["{{ p.month }}","{{ p.month.label }}"]{% if not forloop.last %},{% endif %}{% endfor %}]'>
+    {% if next %}<a class="btn small" href="?month={{ next.month }}" aria-label="Next month">→</a>{% else %}<span class="btn small" aria-disabled="true">→</span>{% endif %}
+    <b id="slider-month" style="min-width:9em">{{ point.month.label }}</b>
+  </div>
+  {% include "ledger/_trends.html" with cards=trends %}
+  <p class="muted small">Each chart has its own scale. The dashed line marks the selected month.</p>
+</section>
+
+<div class="split">
+  <section class="stack">
+    <h2>End of {{ point.month.label }}</h2>
+    <p class="muted small">After the transfers on {{ plan.transfer_date|date:"j F Y" }}, which pay for {{ plan.month.label }}.</p>
+    {% for group in groups %}
+    <section class="entry-group">
+      <header>
+        <h3>{{ group.account.name }}</h3>
+        <span class="num"><b class="{{ group.balance|tone }}">{{ group.balance|money }}</b></span>
+      </header>
+      <div class="table-wrap">
+      <table class="table compact fixed">
+        <colgroup><col><col style="width:9rem"><col style="width:9rem"></colgroup>
+        <tbody>
+        {% if group.account.is_nemkonto %}<tr><td class="muted">Free money after the transfers</td><td></td><td class="num {{ point.nemkonto|tone }}">{{ point.nemkonto|money }}</td></tr>{% endif %}
+        {% for item in group.items %}
+          <tr>
+            <td><a href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% if item.expected %} <span class="chip">pays {{ item.expected|money0 }} in {{ plan.month.name|slice:":3" }}</span>{% endif %}</td>
+            <td class="num dim small">{% if item.contribution %}+{{ item.contribution|money }}{% endif %}</td>
+            <td class="num {{ item.balance|tone }}">{{ item.balance|money }}</td>
+          </tr>
+        {% endfor %}
+        {% if group.account.holds_general_savings %}<tr><td><b>General Savings</b></td><td></td><td class="num {{ point.general_savings|tone }}"><b>{{ point.general_savings|money }}</b></td></tr>{% endif %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+    {% endfor %}
+  </section>
+
+  <aside class="stack" style="gap:16px">
+    <section class="card">
+      <h2>That month-end</h2>
+      <div class="flow">
+        <div><span>Expected income</span><span class="num">{{ plan.income|money }}</span></div>
+        <div><span>Contributions</span><span class="num">{{ plan.contributions_total|money }}</span></div>
+        {% if plan.surplus %}<div><span>To General Savings</span><span class="num pos">+{{ plan.surplus|money }}</span></div>{% endif %}
+        {% if plan.taken %}<div><span>From General Savings</span><span class="num neg">−{{ plan.taken|money }}</span></div>{% endif %}
+        <div class="total"><span>NemKonto ends at</span><span class="num {{ plan.nemkonto_end|tone }}">{{ plan.nemkonto_end|money }}</span></div>
+      </div>
+      {% if plan.notices %}
+      <div class="notices">{% for notice in plan.notices %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endfor %}</div>
+      {% endif %}
+    </section>
+    <section class="card">
+      <h2>Warnings ahead</h2>
+      {% if warnings %}
+      <div class="notices">
+        {% for item in warnings %}
+        <a class="notice {{ item.notice.level }}" href="?month={{ item.point.month }}" style="color:inherit;text-decoration:none">
+          <small>{{ item.point.close.transfer_date|date:"j M Y" }}</small><span>{{ item.notice.message }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No warnings in the next {{ points|length }} months.</p>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

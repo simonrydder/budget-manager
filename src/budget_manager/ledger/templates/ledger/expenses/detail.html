@@ -1,0 +1,89 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}{{ expense.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="label">{{ expense.category.name|default:"Uncategorised" }} · {{ expense.account.name }}</span>
+    <h1>{{ expense.name }}</h1>
+    <p class="row" style="gap:6px">
+      {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}
+      <span class="muted">{{ expense.amount|money }} · {{ expense.frequency|lower }}{% if expense.end_date %} · {% if ended %}ended{% else %}ends{% endif %} {{ expense.end_date|date:"j M Y" }}{% endif %}</span>
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'expense-edit' expense.id %}">Edit</a>
+    {% if not ended %}<a class="btn" href="{% url 'expense-end' expense.id %}">End</a>{% endif %}
+    {% if can_delete %}<a class="btn danger" href="{% url 'expense-delete' expense.id %}">Delete</a>{% endif %}
+  </div>
+</div>
+
+<section class="grid cols-3">
+  <div class="card"><span class="label">Balance now</span><span class="big {{ balance|tone }}">{{ balance|money }}</span></div>
+  <div class="card"><span class="label">Next contribution</span><span class="big">{{ next_contribution|money }}</span><span class="small muted">at the coming month-end</span></div>
+  <div class="card"><span class="label">Next due</span>
+    {% if upcoming %}<span class="big">{{ upcoming.0|date:"j M Y" }}</span><span class="small muted">then {% for day in upcoming|slice:"1:" %}{{ day|date:"j M Y" }}{% if not forloop.last %}, {% endif %}{% empty %}nothing more{% endfor %}</span>{% else %}<span class="big muted">Nothing due</span>{% endif %}
+  </div>
+</section>
+
+<div class="split">
+  <section class="card">
+    <div class="card-head"><h2>Plan for the next 12 month-ends</h2><span class="muted small">Balance right after each transfer</span></div>
+    <div class="table-wrap">
+    <table class="table compact">
+      <thead><tr><th>Month-end</th><th class="num">Set aside</th><th class="num">Payment in</th><th class="num">Balance</th></tr></thead>
+      <tbody>
+      {% for row in plan_rows %}
+        <tr><td class="nowrap">{{ row.transfer_day|date:"j M Y" }}</td><td class="num">{{ row.contribution|money }}</td><td class="num dim">{% if row.expected %}{{ row.expected|money }} <span class="small">({{ row.month.short_label|slice:":3" }})</span>{% endif %}</td><td class="num {{ row.balance|tone }}">{{ row.balance|money }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  <div class="stack" style="gap:16px">
+    {% if expense.notes %}<section class="card"><h2>Notes</h2><p>{{ expense.notes|linebreaksbr }}</p></section>{% endif %}
+    <section class="card">
+      <h2>Move money to General Savings</h2>
+      {% if pending_release %}
+        <p>{{ pending_release.amount|money }} moves to General Savings at the coming month-end.</p>
+        <form method="post" action="{% url 'expense-release' expense.id %}">{% csrf_token %}<button class="btn small" name="cancel" value="1">Cancel</button></form>
+      {% elif balance > 0 %}
+        <p class="muted small">For money this expense no longer needs, for example after ending it. It is moved at the coming month-end.</p>
+        <form method="post" action="{% url 'expense-release' expense.id %}" class="row">
+          {% csrf_token %}
+          <label class="sr-only" for="id_amount">Amount to move</label>
+          {{ release_form.amount }}
+          <button class="btn small">Move</button>
+        </form>
+      {% else %}
+        <p class="muted small">Nothing to move: the balance is {{ balance|money }}.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<section class="card">
+  <h2>History</h2>
+  {% if history %}
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Month</th><th class="num">Contribution</th><th class="num">Expected</th><th class="num">Actually spent</th><th class="num">Other</th><th class="num">Balance at month end</th></tr></thead>
+    <tbody>
+    {% for row in history %}
+      <tr>
+        <td>{{ row.month.label }}</td>
+        <td class="num">{{ row.line.contribution|money }}</td>
+        <td class="num dim">{% if row.line.expected_spend %}{{ row.line.expected_spend|money }}{% endif %}</td>
+        <td class="num">{% if row.spent is not None %}{{ row.spent|money }}{% else %}<span class="muted">not entered</span>{% endif %}</td>
+        <td class="num small">{% if row.line.topup %}top-up {{ row.line.topup|money }}{% endif %}{% if row.line.cover %} taken {{ row.line.cover|money }}{% endif %}{% if row.line.release %} released {{ row.line.release|money }}{% endif %}{% if row.line.amount_after %} amount → {{ row.line.amount_after|money }}{% endif %}</td>
+        <td class="num {{ row.balance_end|tone }}">{% if row.balance_end is not None %}{{ row.balance_end|money }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">No month-ends yet for this expense.</p>
+  {% endif %}
+</section>
+{% endblock %}

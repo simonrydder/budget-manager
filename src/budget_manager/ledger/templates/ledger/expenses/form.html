@@ -1,0 +1,40 @@
+{% extends "ledger/base.html" %}
+{% block title %}{% if expense.pk %}Edit {{ expense.name }}{% else %}Add expense{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <h1>{% if expense.pk %}Edit {{ expense.name }}{% else %}Add expense{% endif %}</h1>
+  <p class="muted">An expense is a planned cost. Money is set aside every month so it is there when the payment is due.</p>
+</div></div>
+<form method="post" class="form card flat" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="notice danger">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  {% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}
+  <div class="form-row">
+    {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
+    {% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}
+  </div>
+  {% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}
+  <div class="form-row">
+    {% with field=form.account %}{% include "ledger/_field.html" %}{% endwith %}
+    {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
+  </div>
+  {% with field=form.kind %}{% include "ledger/_field.html" %}{% endwith %}
+  <div class="notice info small">
+    <span><b>Fixed</b>: a stable amount, like insurance. If it costs more than expected, General Savings covers the difference and the expected amount is raised.</span>
+    <span><b>Variable</b>: it varies, like parking or groceries. The balance may go below zero or build up; you adjust the amount yourself.</span>
+  </div>
+  <details class="more" {% if form.starting_balance.errors or form.end_date.errors or expense.end_date or expense.starting_balance %}open{% endif %}>
+    <summary>More options</summary>
+    <div class="stack" style="gap:16px">
+      {% with field=form.starting_balance %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.end_date %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.notes %}{% include "ledger/_field.html" %}{% endwith %}
+    </div>
+  </details>
+  <div class="form-actions">
+    <button class="btn primary">Save</button>
+    {% if not expense.pk %}<button class="btn" name="another" value="1">Save and add another</button>{% endif %}
+    <a class="btn" href="{% if expense.pk %}{% url 'expense-detail' expense.pk %}{% else %}{% url 'expenses' %}{% endif %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

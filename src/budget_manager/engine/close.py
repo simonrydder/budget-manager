@@ -1,0 +1,345 @@
+"""The month-end close: how much goes where on the last day of the month.
+
+For budget month *B* the close happens on the last day of *B − 1*:
+
+1. Fixed expenses that went below zero during *B − 1* are topped up from General Savings, and
+   their expected amount is raised to the real cost when the payment itself cost more.
+2. Every active expense gets its contribution for *B*.
+3. Each account receives the contributions of its expenses minus the interest that already
+   landed on it (interest counts as if it had arrived on the NemKonto).
+4. What is left on the NemKonto is kept between its minimum (X) and maximum (Y): the excess goes
+   to General Savings, a shortfall is taken from General Savings. If General Savings cannot cover
+   it, the NemKonto may go below X, and if it would go below 0 the person has to choose which
+   expenses to take the money from (``covers``).
+
+All transfers are netted so the NemKonto sends (or receives) one amount per account.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from datetime import date
+
+from budget_manager.engine.model import BudgetState, Kind, Line, Role
+from budget_manager.engine.money import format_amount
+from budget_manager.engine.months import YearMonth
+
+
+@dataclass(frozen=True)
+class Notice:
+    level: str  # "info", "warning" or "danger"
+    code: str
+    message: str
+    amount: int = 0
+    expense_id: int | None = None
+
+
+@dataclass
+class LinePlan:
+    expense_id: int
+    account_id: int
+    balance_before: int  # actual balance after last month's spending
+    planned_before: int
+    contribution: int = 0
+    expected_spend: int = 0
+    topup_needed: int = 0
+    topup: int = 0
+    cover: int = 0
+    release: int = 0
+    amount_before: int = 0
+    amount_after: int | None = None  # set when a fixed expense's expected amount is raised
+    next_due: date | None = None
+
+    @property
+    def balance_after(self) -> int:
+        return self.balance_before + self.topup - self.cover - self.release + self.contribution
+
+    def to_line(self) -> Line:
+        return Line(
+            contribution=self.contribution,
+            expected_spend=self.expected_spend,
+            topup=self.topup,
+            cover=self.cover,
+            release=self.release,
+        )
+
+
+@dataclass
+class TransferPlan:
+    """The net amount the NemKonto sends to one account (negative: the account sends it back)."""
+
+    account_id: int
+    contributions: int = 0
+    interest: int = 0
+    topups: int = 0
+    covers: int = 0
+    releases: int = 0
+    general_savings: int = 0  # net change of General Savings, only on the savings account
+
+    @property
+    def amount(self) -> int:
+        return (
+            self.contributions
+            - self.interest
+            + self.topups
+            - self.covers
+            - self.releases
+            + self.general_savings
+        )
+
+
+@dataclass
+class ClosePlan:
+    month: YearMonth
+    lines: dict[int, LinePlan]
+    transfers: dict[int, TransferPlan]
+    nemkonto_before: int
+    income: int
+    interest: dict[int, int]
+    nemkonto_after_transfers: int  # before surplus/shortfall handling
+    surplus: int  # moved from the NemKonto to General Savings
+    taken: int  # moved from General Savings to the NemKonto
+    nemkonto_end: int
+    general_savings_before: int
+    general_savings_after: int
+    min_balance: int
+    max_balance: int
+    notices: list[Notice] = field(default_factory=list)
+
+    @property
+    def transfer_date(self) -> date:
+        return (self.month - 1).last_day()
+
+    @property
+    def interest_total(self) -> int:
+        return sum(self.interest.values())
+
+    @property
+    def contributions_total(self) -> int:
+        return sum(line.contribution for line in self.lines.values())
+
+    @property
+    def topups_total(self) -> int:
+        return sum(line.topup for line in self.lines.values())
+
+    @property
+    def releases_total(self) -> int:
+        return sum(line.release for line in self.lines.values())
+
+    @property
+    def covers_total(self) -> int:
+        return sum(line.cover for line in self.lines.values())
+
+    @property
+    def shortfall(self) -> int:
+        """How far the NemKonto would end below zero. Must be covered before closing."""
+        return max(0, -self.nemkonto_end)
+
+    @property
+    def general_savings_change(self) -> int:
+        return self.general_savings_after - self.general_savings_before
+
+
+class CloseError(ValueError):
+    pass
+
+
+def plan_close(
+    state: BudgetState,
+    *,
+    income: int = 0,
+    interest: dict[int, int] | None = None,
+    covers: dict[int, int] | None = None,
+    releases: dict[int, int] | None = None,
+) -> ClosePlan:
+    """Plan the close for ``state.month``.
+
+    ``income`` is the income that arrived on the NemKonto for the month. ``interest`` maps
+    account ids to the interest (negative for interest paid) that landed during the month
+    before. ``covers`` and ``releases`` map expense ids to amounts taken from an expense to the
+    NemKonto or moved to General Savings.
+    """
+    interest = {k: v for k, v in (interest or {}).items() if v}
+    covers = {k: v for k, v in (covers or {}).items() if v}
+    releases = {k: v for k, v in (releases or {}).items() if v}
+    month = state.month
+    nemkonto = state.nemkonto_account
+    savings = state.savings_account
+    notices: list[Notice] = []
+
+    account_ids = {account.id for account in state.accounts}
+    for account_id in interest:
+        if account_id not in account_ids:
+            raise CloseError(f"Unknown account {account_id}")
+    known = {ledger.expense.id for ledger in state.ledgers}
+    for expense_id in (*covers, *releases):
+        if expense_id not in known:
+            raise CloseError(f"Unknown expense {expense_id}")
+
+    lines: dict[int, LinePlan] = {}
+    for ledger in state.ledgers:
+        expense = ledger.expense
+        balance = ledger.balance_end_of(month - 1)
+        line = LinePlan(
+            expense_id=expense.id,
+            account_id=expense.account_id,
+            balance_before=balance,
+            planned_before=ledger.planned_balance_before(month),
+            amount_before=expense.amount,
+        )
+        if expense.kind is Kind.FIXED and balance < 0:
+            line.topup_needed = -balance
+            previous = ledger.lines.get(month - 1)
+            spent = ledger.spending.get(month - 1, 0)
+            if previous and previous.expected_spend and spent > previous.expected_spend:
+                line.amount_after = spent if spent > expense.amount else None
+        effective = replace(expense, amount=line.amount_after) if line.amount_after else expense
+        line.contribution = effective.contribution(month, line.planned_before)
+        line.expected_spend = effective.expected_spend(month)
+        line.next_due = effective.schedule.next_due(month)
+        line.cover = covers.get(expense.id, 0)
+        line.release = releases.get(expense.id, 0)
+        if line.cover < 0 or line.release < 0:
+            raise CloseError("Amounts taken from an expense cannot be negative")
+        available = max(0, balance) + line.contribution
+        if line.cover + line.release > available:
+            name = expense.name
+            raise CloseError(
+                f"{name} only has {format_amount(available)} after this month's contribution"
+            )
+        lines[expense.id] = line
+
+    transfers = {
+        account.id: TransferPlan(account.id)
+        for account in state.accounts
+        if account.role is not Role.NEMKONTO
+    }
+    for line in lines.values():
+        transfer = transfers[line.account_id]
+        transfer.contributions += line.contribution
+        transfer.covers += line.cover
+        transfer.releases += line.release
+    for account_id, amount in interest.items():
+        if account_id != nemkonto.id:
+            transfers[account_id].interest += amount
+
+    contributions = sum(line.contribution for line in lines.values())
+    after = (
+        state.nemkonto
+        + income
+        + sum(interest.values())
+        - contributions
+        + sum(line.cover for line in lines.values())
+    )
+
+    pool = state.general_savings + sum(line.release for line in lines.values())
+    surplus = taken = 0
+    if after > nemkonto.max_balance:
+        surplus = after - nemkonto.max_balance
+    elif after < nemkonto.min_balance:
+        needed = nemkonto.min_balance - after
+        taken = min(needed, max(0, pool))
+        if taken < needed:
+            end = after + taken
+            notices.append(
+                Notice(
+                    "warning",
+                    "savings_cannot_cover_nemkonto",
+                    f"General Savings cannot cover the shortfall. The NemKonto ends at "
+                    f"{format_amount(end)}, below its minimum of "
+                    f"{format_amount(nemkonto.min_balance)}.",
+                    amount=needed - taken,
+                )
+            )
+    pool += surplus - taken
+    end = after - surplus + taken
+    if end < 0:
+        notices.append(
+            Notice(
+                "danger",
+                "nemkonto_below_zero",
+                f"The NemKonto would end at {format_amount(end)}. Choose which expenses or "
+                f"savings goals to take {format_amount(-end)} from.",
+                amount=-end,
+            )
+        )
+
+    names = {ledger.expense.id: ledger.expense.name for ledger in state.ledgers}
+    needing = sorted(
+        (line for line in lines.values() if line.topup_needed),
+        key=lambda line: (line.next_due or date.max, names[line.expense_id]),
+    )
+    for line in needing:
+        line.topup = min(line.topup_needed, max(0, pool))
+        pool -= line.topup
+        transfers[line.account_id].topups += line.topup
+        name = names[line.expense_id]
+        if line.topup:
+            message = f"{name} was {format_amount(line.topup_needed)} below zero. "
+            message += f"{format_amount(line.topup)} is taken from General Savings."
+            if line.amount_after:
+                message += (
+                    f" Its expected amount is raised from {format_amount(line.amount_before)}"
+                    f" to {format_amount(line.amount_after)}."
+                )
+            notices.append(Notice("info", "fixed_topped_up", message, line.topup, line.expense_id))
+        if line.topup < line.topup_needed:
+            missing = line.topup_needed - line.topup
+            notices.append(
+                Notice(
+                    "warning",
+                    "savings_cannot_cover_fixed",
+                    f"General Savings cannot cover {name}. It stays "
+                    f"{format_amount(missing)} below zero.",
+                    missing,
+                    line.expense_id,
+                )
+            )
+    kinds = {ledger.expense.id: ledger.expense.kind for ledger in state.ledgers}
+    for line in lines.values():
+        if kinds[line.expense_id] is Kind.VARIABLE and line.balance_before < 0:
+            notices.append(
+                Notice(
+                    "info",
+                    "variable_below_zero",
+                    f"{names[line.expense_id]} is at {format_amount(line.balance_before)}. "
+                    "It is a variable expense, so adjust its amount if this keeps happening.",
+                    -line.balance_before,
+                    line.expense_id,
+                )
+            )
+
+    transfers[savings.id].general_savings = pool - state.general_savings
+    return ClosePlan(
+        month=month,
+        lines=lines,
+        transfers=transfers,
+        nemkonto_before=state.nemkonto,
+        income=income,
+        interest=interest,
+        nemkonto_after_transfers=after,
+        surplus=surplus,
+        taken=taken,
+        nemkonto_end=end,
+        general_savings_before=state.general_savings,
+        general_savings_after=pool,
+        min_balance=nemkonto.min_balance,
+        max_balance=nemkonto.max_balance,
+        notices=notices,
+    )
+
+
+def apply_close(state: BudgetState, plan: ClosePlan) -> None:
+    """Record ``plan`` in ``state`` and move on to the next month."""
+    if plan.month != state.month:
+        raise CloseError(f"The plan is for {plan.month}, but the next close is {state.month}")
+    for ledger in state.ledgers:
+        line = plan.lines.get(ledger.expense.id)
+        if line is None:
+            continue
+        ledger.lines[plan.month] = line.to_line()
+        if line.amount_after:
+            ledger.expense = replace(ledger.expense, amount=line.amount_after)
+    state.nemkonto = plan.nemkonto_end
+    state.general_savings = plan.general_savings_after
+    state.month = plan.month + 1

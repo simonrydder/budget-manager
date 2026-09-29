@@ -1,136 +1,120 @@
-# Budget Manager – Design proposal (draft)
+# Budget Manager – Design
 
-Status: proposal for review. Requirements are in [requirements.md](requirements.md).
-Open questions are at the end. Personal figures from the budget spreadsheet are
-deliberately kept out of this repository, because the repository is public.
+Requirements are in [requirements.md](requirements.md). This document describes how the app
+meets them and records the decisions taken along the way. The old spreadsheet only showed where
+the budget came from; the requirements are the source of truth.
 
-## 1. Architecture
+## Decisions
+
+| Question | Decision |
+|---|---|
+| Accounts | Customisable. Four to start with: **NemKonto**, **Budget**, **Food** and **Savings**. The NemKonto always exists and cannot be deleted. |
+| General Savings | Not a separate bank account: it is the part of the **savings account** not set aside for a savings goal. Exactly one account holds it (Savings by default; it can be moved). |
+| Expenses | Defined in the app: name, amount, first due date and frequency, fixed or variable, category and account. They can be dragged between categories (or accounts) on the expenses board. A food budget is just an expense linked to the Food account. |
+| Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
+| Month-end routine | On the last day of a month: enter that month's actual spending, the interest received, next month's income (it arrives at the end of the month), then make the transfers. |
+| Forecast | Uses expected amounts for everything not yet entered. |
+| Users | Everyone who can log in sees and edits the same budget. |
+| Interface | English. Amounts as plain numbers like `1.234,56`, no currency. |
+| Layout | The dashboard layout (sidebar, status first) with the month-end as a step-by-step checklist. |
+
+## Architecture
 
 ```mermaid
 flowchart LR
-  B[Browser on home network] -->|HTTP| W[Waitress / Gunicorn]
-  W --> DJ[Django app]
-  DJ --> E[budget engine\npure Python]
-  DJ --> DB[(SQLite file\non the server)]
-  E -.reads.-> DB
+  B[Browser on the home network] -->|HTTP| W[Waitress]
+  W --> M[Local-network check]
+  M --> DJ[Django views and templates]
+  DJ --> S[ledger.services]
+  S --> E[engine: pure Python rules]
+  S --> DB[(SQLite file)]
 ```
 
-| Concern | Choice | Why |
+| Part | Choice | Why |
 |---|---|---|
-| Web framework | **Django** | Built-in login, sessions, users, CSRF protection, forms, migrations and an admin site. Most of the "Management" feature comes for free, and there is little glue code to maintain. |
-| Interactivity | Server-rendered templates + **HTMX** | Inline editing and live recalculation without a JavaScript build step. Stays readable Python + HTML. |
-| Charts | A small chart library loaded as a static file (e.g. Chart.js) | Only needed for forecast and history. |
-| Storage | **SQLite** in a single file on the server | Local, no separate database server, and backups are just copying the file. |
-| Money | Integers in **øre** (hundredths) | No float rounding errors. Formatted as plain numbers, e.g. `1.234,56`, with no currency. |
-| Calculation | A pure `budget_manager.engine` package with no Django imports | The transfer and forecast rules are the hard part. Keeping them pure makes them easy to unit test with pytest and freezegun. |
-| LAN-only access | Bind to the LAN interface, set `ALLOWED_HOSTS`, and add middleware that rejects any client IP outside private ranges (`10/8`, `172.16/12`, `192.168/16`, `127/8`). The router must not forward the port. | Defence in depth, even if a port is forwarded by mistake. |
-| Deployment | `uv run` + Waitress as a systemd service, or a single Docker container. Nightly SQLite backup via `sqlite3 .backup`. | Simple on a home server or Raspberry Pi. |
-| Tooling | Existing uv, ruff, pytest, commitizen and CI setup is kept. | |
+| Web framework | Django 5.2 | Login, sessions, CSRF protection, forms and migrations built in. |
+| Server | Waitress + WhiteNoise | Pure Python, runs anywhere, serves static files itself. |
+| Storage | SQLite in `BUDGET_DATA_DIR` | Local, one file, easy to back up. |
+| Money | Whole hundredths (øre) | No rounding errors. |
+| Rules | `budget_manager.engine` | No Django imports, so every rule is unit tested on its own. |
+| Charts | SVG drawn on the server | No JavaScript chart library; works offline. |
+| JavaScript | One small file | Only for conveniences (drag and drop, live balances, fill buttons, copy). Every page works without it. |
+| Local only | Middleware checks the connecting address against private ranges; login required everywhere | The app refuses the internet even if a port is forwarded by mistake. |
 
-Package layout:
+## The month-end
 
-```
-src/budget_manager/
-  engine/        # pure calculation: schedules, contributions, month close, forecast
-  web/           # Django project: settings, urls, LAN-only middleware
-  ledger/        # Django app: models, views, templates, admin
-tests/
-  unit/engine/   # rule tests (no database)
-  integration/   # Django views and models
-```
+A **budget month** is the month whose payments a transfer pays for. The transfers for May are made
+on 30 April, funded by the income that arrives at the end of April. The checklist on 30 April:
 
-## 2. Data model
+1. **April spending**: what each expense actually cost in April.
+2. **April interest**: interest per account (negative if paid).
+3. **May income**: what arrived on the NemKonto.
+4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
+5. **Check and close**: compare the balances with the bank (optional), then close. Closing
+   freezes the month; the latest month-end can be reopened.
+
+### Rules (engine/close.py)
+
+For budget month *B*:
+
+1. **Fixed expenses below zero** after last month's spending are topped up from General Savings.
+   If the payment in a due month cost more than expected, the expected amount is raised to the
+   real cost.
+2. **Contribution per expense**: what is missing for the next payment, spread evenly over the
+   transfers left before it is due and rounded up to whole units (the last one tops up exactly):
+   `(amount − planned balance) / transfers left`. Changing the amount therefore catches up by the
+   due date (the 500 → 600 example). Expenses whose end date has passed get nothing.
+   The *planned* balance assumes every payment cost what was expected, so actual deviations never
+   change the contributions: the actual balance of a variable expense may go below zero or build
+   up, and a fixed expense below zero is handled by rule 1.
+3. **Transfer per account** = its contributions − interest that landed on it (+ top-ups).
+4. **NemKonto**: what is left after the transfers is kept between the minimum X and maximum Y.
+   Above Y the excess goes to General Savings; below X the difference comes from General Savings.
+   If General Savings cannot cover it there is a warning and the NemKonto may end below X. If it
+   would end below 0, the person chooses which expenses or savings goals to take the money from
+   (a *cover*); later contributions rebuild them.
+5. All movements are netted, so each account gets one transfer from (or to) the NemKonto.
+
+Money that an expense no longer needs (for example after ending it) can be **released** to General
+Savings at the next month-end.
+
+The forecast (engine/forecast.py) runs the same close forward, assuming expected income, expected
+spending and no interest for everything not yet entered.
+
+## Data model
 
 ```mermaid
 erDiagram
   ACCOUNT ||--o{ EXPENSE : "holds money for"
-  CATEGORY ||--o{ EXPENSE : groups
-  EXPENSE ||--o{ EXPENSE_PLAN : "versions over time"
-  ACCOUNT ||--o{ INCOME_SOURCE : "receives"
-  INCOME_SOURCE ||--o{ INCOME_PLAN : "versions over time"
-  ACCOUNT ||--o{ TRANSACTION : ""
-  EXPENSE |o--o{ TRANSACTION : "actual spending"
-  INCOME_SOURCE |o--o{ TRANSACTION : "actual income"
-  MONTH_CLOSE ||--o{ CONTRIBUTION : "frozen per expense"
-  MONTH_CLOSE ||--o{ TRANSFER : "to perform"
-  ACCOUNT ||--o{ BANK_CHECK : "reconciled against"
+  CATEGORY |o--o{ EXPENSE : groups
+  EXPENSE ||--o{ SPENDING_ENTRY : "actual per month"
+  INCOME_SOURCE ||--o{ INCOME_ENTRY : "actual per month"
+  ACCOUNT ||--o{ INTEREST_ENTRY : "per month"
+  MONTH_CLOSE ||--o{ CONTRIBUTION_LINE : "one per expense"
+  MONTH_CLOSE ||--o{ TRANSFER : "one per account"
+  MONTH_CLOSE ||--o{ DECISION : "covers and releases"
 ```
 
-**Account**
-`name`, `role` (`nemkonto` | `general_savings` | `normal`), `min_balance` / `max_balance` (X/Y, NemKonto only),
-`opening_balance`, `opening_date`, `closed_on`, `sort_order`.
-Exactly one account has each special role.
+| Table | Holds |
+|---|---|
+| `BudgetSettings` | First budget month, NemKonto minimum and maximum, starting balances of the NemKonto and General Savings, forecast length. |
+| `Account` | Name and role: `nemkonto`, `savings` (holds General Savings) or `normal`. |
+| `Category` | Name and order. |
+| `Expense` | Amount, first due date, frequency in months (0 = once), end date, fixed/variable, account, category, starting balance, first month with a contribution. |
+| `IncomeSource` | Expected amount, first month, frequency, last month. |
+| `SpendingEntry`, `IncomeEntry`, `InterestEntry` | What actually happened, one row per month. |
+| `MonthClose` | One per budget month: status (in progress or closed), the NemKonto and General Savings flow, notices. |
+| `ContributionLine` | Frozen per expense and month: contribution, expected payment, top-up, cover, release, amount change. |
+| `Transfer` | The net transfer per account, and whether it has been made. |
+| `Decision` | Covers and releases chosen for a month-end. |
+| `BalanceCorrection` | Manual corrections of the NemKonto or General Savings (for example a bank fee). |
 
-**Category**
-`name`, `sort_order`.
+Balances are never stored; they are derived from the starting balances, the frozen lines and the
+entries. Past months keep their frozen values when a plan changes.
 
-**Expense**
-`name`, `category`, `account`, `kind` (`fixed` | `variable`), `starting_balance`, `start_date`, `end_date` (optional), `notes`.
+### Importing bank statements later
 
-**ExpensePlan** (effective-dated, so history stays correct when an amount changes)
-`expense`, `valid_from`, `schedule` (`monthly` | `every_n_months` | `one_off_goal` | `recurring_goal`),
-`amount`, `interval_months` (1 = monthly, 12 = yearly), `due_date` (the first or next due date; day of month for monthly),
-`fixed_contribution` (optional manual override, e.g. "always set aside 1.500").
-A yearly bill is `every_n_months` with interval 12. A recurring savings goal is the same shape with a target instead of a bill.
-
-**IncomeSource**
-`name`, `account` (NemKonto for salary; the actual account for interest), `is_interest`, `start_date`, `end_date`.
-**IncomePlan**: `income_source`, `valid_from`, `expected_amount`.
-An interest *expense* is an income source with a negative amount.
-
-**Transaction** (the one table for all actual money movements; ready for a future bank import)
-`date`, `account`, `amount` (+ in, − out), `expense` (nullable), `income_source` (nullable), `description`,
-`source` (`manual` | `import`), `import_ref` (nullable, unique per account, for de-duplicating imports), `created_by`.
-Monthly entry creates or updates one manual transaction per expense or income source per month. An import would later add
-several transactions and let the user assign them to expenses.
-
-**MonthClose** (one per month, created when the month's transfers are confirmed)
-`month`, `nemkonto_before`, `closed_by`, `closed_at`, plus the warnings and decisions made (e.g. which expense covered a NemKonto shortfall).
-Closing freezes the month: later plan changes affect only future months.
-
-**Contribution**: `month_close`, `expense`, `amount`. The frozen monthly amount set aside per expense.
-
-**Transfer**: `month_close`, `from_account`, `to_account`, `amount`,
-`reason` (`contribution` | `surplus` | `shortfall` | `fixed_topup` | `manual_cover`), `done_at` (ticked off after doing it in the bank).
-
-**BankCheck**: `account`, `date`, `bank_balance`, `checked_by`. Used on the Accounts screen to show differences.
-
-Balances are always **derived**, never stored:
-expense balance = starting balance + contributions − actual spending; account balance = opening balance + transfers + transactions.
-
-## 3. Calculation rules (engine)
-
-For month *M* (transfers on its last day):
-
-1. **Contribution per active expense**
-   - `monthly`: the plan amount.
-   - `every_n_months` / goals: `(amount − balance now) / transfers left before the due date`, so a changed amount
-     automatically raises or lowers the remaining contributions (the 500 → 600 example in the requirements).
-     A bill due on day *d* of month *K* is funded by the transfers up to the end of month *K − 1*.
-   - `fixed_contribution` overrides the calculation.
-   - Expenses whose `end_date` has passed get no contribution.
-2. **Transfer per account** = sum of contributions for its expenses − (interest income − interest expense) that landed on that account this month.
-3. **NemKonto after transfers** = balance before payday + income on NemKonto − all transfers.
-   - Above Y → move the excess to General Savings.
-   - Below X → move the difference from General Savings. If General Savings can't cover it, warn and leave NemKonto below X.
-   - Below 0 → the user picks the expense(s) or goal(s) whose contribution is reduced this month.
-4. **Fixed expenses below zero** → cover from General Savings (General Savings → the expense's account),
-   and update the plan amount to the last actual cost.
-5. **Forecast** = run the same steps month by month with expected income and expected spending
-   (fixed expenses spend their plan amount on due dates; variable expenses are assumed to spend their monthly amount).
-
-## 4. Screens
-
-1. Monthly transfer overview (with checklist and warnings)
-2. Account balances and bank reconciliation
-3. Monthly entry of actual spending and income
-4. Forecast
-5. History (per year and monthly average, by expense, category and account)
-6. Management of accounts, categories, expenses and income sources
-7. Login and user management
-
-The three layout mockups (Ledger, Dashboard, Month close) cover screens 1–4. They are shared outside the repository because they contain real spreadsheet data.
-
-## 5. Open questions
-
-See the list in the conversation. Answers will be folded into this document.
+Spending, income and interest are stored per month, separately from the rules. An import would add
+a `BankTransaction` table with the raw lines (date, text, amount, account, a unique reference to
+avoid duplicates) and a screen to assign each line to an expense, income source or interest. The
+assigned lines are summed into the existing monthly entries, so nothing else changes.

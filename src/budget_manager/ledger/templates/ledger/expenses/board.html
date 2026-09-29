@@ -1,0 +1,67 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Expenses{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Expenses</h1>
+    <p class="muted">{{ count }} active expense{{ count|pluralize }}. Drag a card to another {{ group }} to move it.</p>
+  </div>
+  <div class="actions">
+    <nav class="seg" aria-label="Group by">
+      <a href="?group=category"{% if group == "category" %} aria-current="true"{% endif %}>By category</a>
+      <a href="?group=account"{% if group == "account" %} aria-current="true"{% endif %}>By account</a>
+    </nav>
+    <a class="btn" href="{% url 'categories' %}">Categories</a>
+    <a class="btn primary" href="{% url 'expense-new' %}">Add expense</a>
+  </div>
+</div>
+
+{% csrf_token %}
+<div class="board" data-board="{{ group }}">
+  {% for column in columns %}
+  <section class="column" data-value="{{ column.key }}" aria-label="{{ column.name }}">
+    <header>
+      <h3>{{ column.name }} <span class="muted small">(<span data-count>{{ column.cards|length }}</span>)</span></h3>
+      {% if column.monthly %}<span class="muted small" title="Amounts spread per month">≈ {{ column.monthly|money0 }}/mo</span>{% endif %}
+    </header>
+    <div class="cards stack" style="gap:8px">
+      {% for card in column.cards %}
+      {% with expense=card.expense %}
+      <a class="xcard" href="{% url 'expense-detail' expense.id %}" draggable="true" data-id="{{ expense.id }}" data-move="{% url 'expense-move' expense.id %}">
+        <span class="top"><b>{{ expense.name }}</b><span class="num">{{ expense.amount|money }}</span></span>
+        <span class="meta">
+          <span>{{ expense.frequency }}{% if card.next_due %} · next {{ card.next_due|date:"j M Y" }}{% endif %}</span>
+        </span>
+        <span class="meta">
+          {% if group == "category" %}<span class="chip">{{ expense.account.name }}</span>{% else %}<span class="chip">{{ expense.category.name|default:"Uncategorised" }}</span>{% endif %}
+          {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}
+          <span class="{{ card.balance|tone }}">Balance {{ card.balance|money }}</span>
+        </span>
+      </a>
+      {% endwith %}
+      {% endfor %}
+    </div>
+    <p class="hint"{% if column.cards %} hidden{% endif %}>{% if column.hint %}{{ column.hint }}{% else %}Drop an expense here.{% endif %}</p>
+    {% if group == "category" and column.key %}<a class="small" href="{% url 'expense-new' %}?category={{ column.key }}">+ Add to {{ column.name }}</a>{% endif %}
+  </section>
+  {% endfor %}
+</div>
+
+{% if ended %}
+<details class="card more">
+  <summary>{{ ended|length }} ended expense{{ ended|length|pluralize }}</summary>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Expense</th><th>Ended</th><th>Account</th><th class="num">Balance left</th></tr></thead>
+    <tbody>
+    {% for card in ended %}
+      <tr><td><a href="{% url 'expense-detail' card.expense.id %}">{{ card.expense.name }}</a></td><td class="dim">{{ card.expense.end_date|date:"j M Y" }}</td><td class="dim">{{ card.expense.account.name }}</td><td class="num {{ card.balance|tone }}">{{ card.balance|money }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Money left on an ended expense can be moved to General Savings from the expense's page.</p>
+</details>
+{% endif %}
+{% endblock %}

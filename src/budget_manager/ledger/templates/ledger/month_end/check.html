@@ -1,0 +1,33 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Check and close {{ month.label }}{% endblock %}
+{% block content %}
+{% include "ledger/month_end/_steps.html" with title="Check and close" %}
+<div class="checklist">
+  <p class="lead">After making the transfers, the accounts should show these balances. Type what your bank shows to compare. This is optional; nothing you type here is saved.</p>
+  {% if open_count %}<div class="notice warning">{{ open_count }} transfer{{ open_count|pluralize }} {{ open_count|pluralize:"is,are" }} not ticked off yet. <a href="{% url 'month-end-transfers' month %}">Back to transfers</a></div>{% endif %}
+  <section class="entry-group">
+    <header><h3>Balances after the transfers</h3><span class="muted small">Expected · in the bank</span></header>
+    {% for row in balances_after %}
+    <div class="entry">
+      <label class="name" for="bank-{{ row.account.id }}">
+        <b>{{ row.account.name }}</b>
+        <small>Expected <b class="{{ row.balance|tone }}">{{ row.balance|money }}</b> · <span id="diff-{{ row.account.id }}" class="muted"></span>
+        {% if row.account.is_nemkonto %}<a id="diff-{{ row.account.id }}-fix" hidden data-base="{% url 'correction' 'nemkonto' %}?after=1&amp;next={{ request.path|urlencode }}" href="#">Record the difference</a>{% endif %}
+        {% if row.account.holds_general_savings %}<a id="diff-{{ row.account.id }}-fix" hidden data-base="{% url 'correction' 'general_savings' %}?after=1&amp;next={{ request.path|urlencode }}" href="#">Record it in General Savings</a>{% endif %}
+        </small>
+      </label>
+      <input type="text" class="amount" inputmode="decimal" autocomplete="off" id="bank-{{ row.account.id }}" placeholder="Bank balance"
+             data-bank="diff-{{ row.account.id }}" data-expected="{{ row.balance }}">
+      <span></span>
+    </div>
+    {% endfor %}
+  </section>
+  <p class="muted small">A difference on an expense account usually means some spending was not entered. Go back to step 1 to fix it.</p>
+  <form method="post" action="{% url 'month-end-close' month %}" class="sticky-actions">
+    {% csrf_token %}
+    <a class="btn" href="{% url 'month-end-transfers' month %}">Back</a>
+    <button class="btn primary">Close the month-end</button>
+  </form>
+</div>
+{% endblock %}
