@@ -259,7 +259,16 @@ def expense_form(request, pk: int | None = None):
     if not pk and request.GET.get("category"):
         initial["category"] = request.GET["category"]
     previous_account = expense.account if pk else None
+    balance = services.build_state().current_expense_balances().get(expense.pk, 0) if pk else 0
+    draft = services.draft_close() if pk else None
+    pending = (
+        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
+    )
+    if pending:
+        initial["topup"] = pending.amount
     form = ExpenseForm(request.POST or None, instance=expense, initial=initial)
+    if not pk:
+        del form.fields["topup"]
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
         if previous_account and previous_account.pk != item.account_id:
@@ -269,11 +278,41 @@ def expense_form(request, pk: int | None = None):
         if not item.pk and services.last_closed() is not None:
             item.start_month = services.next_close_month().first_day()
         item.save()
+        if pk:
+            _save_topup(request, item, form.cleaned_data.get("topup"))
         messages.success(request, f"Saved {item.name}.")
         if "another" in request.POST:
             return redirect("expense-new")
         return redirect("expense-detail", pk=item.pk)
-    return render(request, "ledger/expenses/form.html", {"form": form, "expense": expense})
+    context = {
+        "form": form,
+        "expense": expense,
+        "balance": balance,
+        "transfer_day": (services.next_close_month() - 1).last_day(),
+    }
+    return render(request, "ledger/expenses/form.html", context)
+
+
+def _save_topup(request, expense: Expense, amount: int | None) -> None:
+    """Remember (or drop) a top-up from General Savings for the next month-end."""
+    month = services.next_close_month()
+    if amount:
+        close = services.start_draft(month, request.user)
+        Decision.objects.update_or_create(
+            close=close, expense=expense, kind=Decision.Type.TOPUP, defaults={"amount": amount}
+        )
+        messages.info(
+            request,
+            f"{format_amount(amount)} moves from General Savings to {expense.name} at the "
+            f"month-end on {(month - 1).last_day():%d %B}.",
+        )
+    else:
+        Decision.objects.filter(
+            close__month=month.first_day(),
+            close__status="draft",
+            expense=expense,
+            kind=Decision.Type.TOPUP,
+        ).delete()
 
 
 def expense_detail(request, pk: int):
@@ -306,6 +345,9 @@ def expense_detail(request, pk: int):
         for point in points
     ]
     draft = services.draft_close()
+    pending_topup = (
+        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
+    )
     pending_release = (
         draft.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).first()
         if draft
@@ -319,6 +361,7 @@ def expense_detail(request, pk: int):
         "plan_rows": plan_rows,
         "next_contribution": points[0].close.lines[expense.id].contribution,
         "pending_release": pending_release,
+        "pending_topup": pending_topup,
         "release_form": ReleaseForm(initial={"amount": max(0, balance)}),
         "can_delete": not expense.lines.exists() and not expense.spending.exists(),
         "ended": expense.is_ended(today()),

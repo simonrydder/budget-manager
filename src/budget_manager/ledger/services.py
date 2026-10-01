@@ -180,6 +180,7 @@ class CloseInputs:
     interest: dict[int, int] = field(default_factory=dict)
     covers: dict[int, int] = field(default_factory=dict)
     releases: dict[int, int] = field(default_factory=dict)
+    topups: dict[int, int] = field(default_factory=dict)
 
     @property
     def income(self) -> int:
@@ -195,7 +196,11 @@ def close_inputs(month: YearMonth) -> CloseInputs:
     close = draft_close(month)
     if close:
         for decision in close.decisions.all():
-            target = inputs.covers if decision.kind == Decision.Type.COVER else inputs.releases
+            target = {
+                Decision.Type.COVER: inputs.covers,
+                Decision.Type.RELEASE: inputs.releases,
+                Decision.Type.TOPUP: inputs.topups,
+            }[decision.kind]
             target[decision.expense_id] = decision.amount
     return inputs
 
@@ -210,6 +215,7 @@ def plan_next_close() -> tuple[BudgetState, ClosePlan, CloseInputs]:
         interest=inputs.interest,
         covers=inputs.covers,
         releases=inputs.releases,
+        topups=inputs.topups,
     )
     return state, plan, inputs
 
@@ -233,6 +239,7 @@ def forecast(months: int | None = None, state: BudgetState | None = None) -> lis
         interest={state.month: inputs.interest},
         covers={state.month: inputs.covers},
         releases={state.month: inputs.releases},
+        topups={state.month: inputs.topups},
     )
 
 

@@ -235,3 +235,31 @@ def test_settings_are_locked_after_the_first_month_end(client, budget):
     assert config.start_month == date(2025, 5, 1)
     assert config.nemkonto_opening == 300000
     assert config.nemkonto_max == 400000
+
+
+def test_top_up_chosen_while_editing_a_variable_expense(client, budget, accounts):
+    month_end(client, "2025-05")
+    month_end(client, "2025-06", spending={"Groceries": "8.500"})  # balance -500
+    groceries = expense("Groceries")
+    page = client.get(f"/expenses/{groceries.id}/edit/")
+    assert b"To bring it back to 0, top it up with 500,00" in page.content
+    form = {
+        "name": "Groceries",
+        "amount": "4.000",
+        "interval_months": "1",
+        "first_due": "2025-05-01",
+        "kind": "variable",
+        "account": accounts["Food"].id,
+        "topup": "500",
+    }
+    assert client.post(f"/expenses/{groceries.id}/edit/", form).status_code == 302
+    assert Decision.objects.get(kind="topup").amount == 50000
+    month_end(client, "2025-07")
+    line = MonthClose.objects.get(month=date(2025, 7, 1)).lines.get(expense=groceries)
+    assert line.topup == 50000
+    assert line.balance_after == 400000
+
+    # Saving without a top-up removes a planned one.
+    client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": "100"})
+    client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": ""})
+    assert not Decision.objects.filter(kind="topup", close__status="draft").exists()

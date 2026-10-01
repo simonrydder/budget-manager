@@ -1,4 +1,5 @@
 {% extends "ledger/base.html" %}
+{% load budget %}
 {% block title %}{% if expense.pk %}Edit {{ expense.name }}{% else %}Add expense{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head"><div>
@@ -31,6 +32,17 @@
       {% with field=form.notes %}{% include "ledger/_field.html" %}{% endwith %}
     </div>
   </details>
+  {% if form.topup %}
+  <section class="notice {% if balance < 0 %}warning{% else %}info{% endif %} stack" style="gap:8px">
+    <span>The balance is <b class="{{ balance|tone }}">{{ balance|money }}</b>.{% if balance < 0 %} To bring it back to 0, top it up with {{ balance|absolute|money }}.{% endif %}</span>
+    <div class="field{% if form.topup.errors %} invalid{% endif %}">
+      <label for="{{ form.topup.id_for_label }}">{{ form.topup.label }}</label>
+      {{ form.topup }}
+      <span class="help">Moved at the month-end on {{ transfer_day|date:"j F" }}. Leave empty for no top-up. General Savings lives on the savings account, so the money arrives as part of that month's transfers.</span>
+      {% for error in form.topup.errors %}<span class="error">{{ error }}</span>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <div class="form-actions">
     <button class="btn primary">Save</button>
     {% if not expense.pk %}<button class="btn" name="another" value="1">Save and add another</button>{% endif %}

@@ -43,6 +43,7 @@ class LinePlan:
     contribution: int = 0
     expected_spend: int = 0
     topup_needed: int = 0
+    topup_chosen: int = 0
     topup: int = 0
     cover: int = 0
     release: int = 0
@@ -151,17 +152,21 @@ def plan_close(
     interest: dict[int, int] | None = None,
     covers: dict[int, int] | None = None,
     releases: dict[int, int] | None = None,
+    topups: dict[int, int] | None = None,
 ) -> ClosePlan:
     """Plan the close for ``state.month``.
 
     ``income`` is the income that arrived on the NemKonto for the month. ``interest`` maps
     account ids to the interest (negative for interest paid) that landed during the month
     before. ``covers`` and ``releases`` map expense ids to amounts taken from an expense to the
-    NemKonto or moved to General Savings.
+    NemKonto or moved to General Savings. ``topups`` maps expense ids to amounts the person
+    chose to move from General Savings to an expense (any kind, e.g. a variable expense that
+    has been below zero for a while).
     """
     interest = {k: v for k, v in (interest or {}).items() if v}
     covers = {k: v for k, v in (covers or {}).items() if v}
     releases = {k: v for k, v in (releases or {}).items() if v}
+    topups = {k: v for k, v in (topups or {}).items() if v}
     month = state.month
     nemkonto = state.nemkonto_account
     savings = state.savings_account
@@ -172,7 +177,7 @@ def plan_close(
         if account_id not in account_ids:
             raise CloseError(f"Unknown account {account_id}")
     known = {ledger.expense.id for ledger in state.ledgers}
-    for expense_id in (*covers, *releases):
+    for expense_id in (*covers, *releases, *topups):
         if expense_id not in known:
             raise CloseError(f"Unknown expense {expense_id}")
 
@@ -193,6 +198,10 @@ def plan_close(
             spent = ledger.spending.get(month - 1, 0)
             if previous and previous.expected_spend and spent > previous.expected_spend:
                 line.amount_after = spent if spent > expense.amount else None
+        line.topup_chosen = topups.get(expense.id, 0)
+        if line.topup_chosen < 0:
+            raise CloseError("A top-up cannot be negative")
+        line.topup_needed += line.topup_chosen
         effective = replace(expense, amount=line.amount_after) if line.amount_after else expense
         line.contribution = effective.contribution(
             month,
@@ -278,7 +287,7 @@ def plan_close(
         pool -= line.topup
         transfers[line.account_id].topups += line.topup
         name = names[line.expense_id]
-        if line.topup:
+        if line.topup and not line.topup_chosen:
             message = f"{name} was {format_amount(line.topup_needed)} below zero. "
             message += f"{format_amount(line.topup)} is taken from General Savings."
             if line.amount_after:
@@ -287,21 +296,35 @@ def plan_close(
                     f" to {format_amount(line.amount_after)}."
                 )
             notices.append(Notice("info", "fixed_topped_up", message, line.topup, line.expense_id))
+        elif line.topup:
+            notices.append(
+                Notice(
+                    "info",
+                    "topped_up",
+                    f"{name} gets {format_amount(line.topup)} from General Savings, as chosen.",
+                    line.topup,
+                    line.expense_id,
+                )
+            )
         if line.topup < line.topup_needed:
             missing = line.topup_needed - line.topup
             notices.append(
                 Notice(
                     "warning",
                     "savings_cannot_cover_fixed",
-                    f"General Savings cannot cover {name}. It stays "
-                    f"{format_amount(missing)} below zero.",
+                    f"General Savings cannot cover {name}. It gets "
+                    f"{format_amount(missing)} less than needed.",
                     missing,
                     line.expense_id,
                 )
             )
     kinds = {ledger.expense.id: ledger.expense.kind for ledger in state.ledgers}
     for line in lines.values():
-        if kinds[line.expense_id] is Kind.VARIABLE and line.balance_before < 0:
+        if (
+            kinds[line.expense_id] is Kind.VARIABLE
+            and line.balance_before < 0
+            and line.balance_before + line.topup < 0
+        ):
             notices.append(
                 Notice(
                     "info",

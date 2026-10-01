@@ -332,6 +332,7 @@ class Decision(models.Model):
     class Type(models.TextChoices):
         COVER = "cover", "Cover the NemKonto"
         RELEASE = "release", "Move to General Savings"
+        TOPUP = "topup", "Top up from General Savings"
 
     close = models.ForeignKey(MonthClose, on_delete=models.CASCADE, related_name="decisions")
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name="decisions")

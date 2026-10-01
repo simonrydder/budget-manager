@@ -78,6 +78,10 @@ For budget month *B*:
    (a *cover*); later contributions rebuild them.
 5. All movements are netted, so each account gets one transfer from (or to) the NemKonto.
 
+Any expense can also be **topped up** from General Savings by choice, from its edit page (useful
+for a variable expense that has stayed below zero). The top-up happens at the next month-end and
+does not change the expense's plan.
+
 Money that an expense no longer needs (for example after ending it) can be **released** to General
 Savings at the next month-end.
 

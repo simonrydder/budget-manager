@@ -235,3 +235,27 @@ def test_random_months_never_create_or_lose_money():
             assert_consistent(budget, plan)
             assert plan.general_savings_after >= min(0, budget.general_savings)
             apply_close(budget, plan)
+
+
+def test_chosen_top_up_restores_a_variable_expense_from_general_savings():
+    budget = household()
+    apply_close(budget, plan_close(budget, income=kr(25000)))
+    budget.ledger(2).spending[MAY] = kr(4500)  # groceries 500 over
+    plan = plan_close(budget, income=kr(18500), topups={2: kr(500)})
+    line = plan.lines[2]
+    assert line.balance_before == kr(-500)
+    assert line.topup == kr(500)
+    assert line.contribution == kr(4000)  # the plan is unchanged
+    assert line.balance_after == kr(4000)
+    assert amounts(plan)[FOOD] == kr(4500)
+    assert [n.code for n in plan.notices] == ["topped_up"]
+    assert_consistent(budget, plan)
+
+
+def test_chosen_top_up_is_limited_by_general_savings():
+    budget = household(general_savings=100)
+    plan = plan_close(budget, income=kr(18500), topups={2: kr(300)})
+    assert plan.lines[2].topup == kr(100)
+    assert plan.general_savings_after == 0
+    assert "savings_cannot_cover_fixed" in [n.code for n in plan.notices]
+    assert_consistent(budget, plan)

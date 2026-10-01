@@ -144,6 +144,13 @@ class ExpenseForm(forms.ModelForm):
             if budget:
                 self.fields["account"].initial = budget.pk
 
+    topup = AmountField(
+        required=False,
+        allow_negative=False,
+        label="Top up from General Savings",
+        help_text="Moves this amount from General Savings to the expense at the next month-end.",
+    )
+
     def clean_starting_balance(self):
         return self.cleaned_data.get("starting_balance") or 0
 

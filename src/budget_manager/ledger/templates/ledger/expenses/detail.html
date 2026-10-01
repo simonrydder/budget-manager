@@ -42,6 +42,12 @@
   </section>
   <div class="stack" style="gap:16px">
     {% if expense.notes %}<section class="card"><h2>Notes</h2><p>{{ expense.notes|linebreaksbr }}</p></section>{% endif %}
+    {% if pending_topup %}
+    <section class="card">
+      <h2>Top-up planned</h2>
+      <p>{{ pending_topup.amount|money }} moves from General Savings to {{ expense.name }} at the coming month-end. <a href="{% url 'expense-edit' expense.id %}">Change it</a></p>
+    </section>
+    {% endif %}
     <section class="card">
       <h2>Move money to General Savings</h2>
       {% if pending_release %}
