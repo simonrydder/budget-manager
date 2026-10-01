@@ -32,7 +32,7 @@ def test_forecast_uses_expected_amounts_and_keeps_the_nemkonto_at_its_maximum():
     assert all(p.nemkonto == kr(5000) for p in points)
     # The holiday goal is full right after the transfer at the end of February 2026...
     february = next(p for p in points if p.month == YearMonth(2026, 2))
-    assert february.expense_balances[3] == kr(30000)
+    assert february.expense_balances[3] == kr(11 * 2728)  # rounded up, a little over 30.000
     # ...and the expected payment in March empties it again.
     march = next(p for p in points if p.month == YearMonth(2026, 3))
     assert march.expense_balances[3] < kr(30000)

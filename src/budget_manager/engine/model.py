@@ -48,27 +48,48 @@ class Expense:
             return 0
         return self.amount if self.schedule.due_in(month) else 0
 
-    def contribution(self, month: YearMonth, planned_balance: int) -> int:
+    def cycle_start(self, month: YearMonth) -> YearMonth:
+        """The first transfer that saves for the payment due next after ``month`` starts."""
+        previous = self.schedule.previous_due(month)
+        start = YearMonth.of(previous) + 1 if previous else self.start_month
+        return max(start, self.start_month)
+
+    def contribution(
+        self, month: YearMonth, planned_balance: int, planned_at_cycle_start: int | None = None
+    ) -> int:
         """What to set aside in the transfer for ``month``.
 
-        The rest of the next payment is spread evenly over the transfers left before it is due,
-        so a changed amount is caught up by the due date. Amounts are rounded up to whole units
-        and the last transfer before a payment tops up exactly.
+        Each saving period (the transfers up to a payment) uses one fixed amount, rounded up to
+        whole units, so the transfer stays the same every month and can be a standing order in
+        the bank. Rounding up overshoots a little; the next period starts from what is left.
+        If the amount changes, the rest is caught up by the due date. Monthly payments are
+        topped up exactly.
         """
         if month < self.start_month:
             return 0
         due = self.schedule.next_due(month)
         if due is None:
             return 0
+        due_month = YearMonth.of(due)
         missing = self.amount - planned_balance
-        if missing <= 0:
-            return 0
-        transfers_left = month.months_until(YearMonth.of(due)) + 1
-        if transfers_left <= 1:
-            return missing
-        per_transfer = -(-missing // transfers_left)
-        per_transfer = -(-per_transfer // 100) * 100
-        return min(per_transfer, missing)
+        cycle = self.cycle_start(month)
+        cycle_transfers = cycle.months_until(due_month) + 1
+        if cycle_transfers <= 1:
+            return max(0, missing)
+        if planned_at_cycle_start is None:
+            planned_at_cycle_start = planned_balance
+        rate = _round_up(max(0, self.amount - planned_at_cycle_start), cycle_transfers)
+        if missing <= -rate:
+            return 0  # already a whole contribution ahead
+        transfers_left = month.months_until(due_month) + 1
+        catch_up = _round_up(missing, transfers_left) if missing > 0 else 0
+        return max(rate, catch_up)
+
+
+def _round_up(amount: int, parts: int) -> int:
+    """``amount`` split into ``parts``, rounded up to whole units (hundredths)."""
+    per_part = -(-amount // parts)
+    return -(-per_part // 100) * 100
 
 
 @dataclass(frozen=True)

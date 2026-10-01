@@ -68,3 +68,12 @@ def test_frequency_labels():
     assert frequency_label(0) == "One-off"
     assert frequency_label(12) == "Yearly"
     assert frequency_label(5) == "Every 5 months"
+
+
+def test_previous_due():
+    schedule = Schedule(date(2025, 3, 1), 12)
+    assert schedule.previous_due(YearMonth(2025, 3)) is None
+    assert schedule.previous_due(YearMonth(2025, 4)) == date(2025, 3, 1)
+    assert schedule.previous_due(YearMonth(2026, 3)) == date(2025, 3, 1)
+    assert schedule.previous_due(YearMonth(2026, 4)) == date(2026, 3, 1)
+    assert Schedule(date(2025, 3, 1), 0).previous_due(YearMonth(2030, 1)) == date(2025, 3, 1)

@@ -68,6 +68,16 @@ class Schedule:
         due_month = self.first_month + steps * self.interval_months
         return self._valid(due_month.day(self.first_due.day))
 
+    def previous_due(self, month: YearMonth) -> date | None:
+        """The last due date in a month before ``month``."""
+        offset = self.first_month.months_until(month - 1)
+        if offset < 0:
+            return None
+        steps = 0 if self.interval_months == 0 else offset // self.interval_months
+        return self._valid(
+            (self.first_month + steps * self.interval_months).day(self.first_due.day)
+        )
+
     def next_due_from(self, day: date) -> date | None:
         """The first due date on or after ``day``."""
         due = self.next_due(YearMonth.of(day))

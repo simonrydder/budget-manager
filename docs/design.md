@@ -60,10 +60,13 @@ For budget month *B*:
 1. **Fixed expenses below zero** after last month's spending are topped up from General Savings.
    If the payment in a due month cost more than expected, the expected amount is raised to the
    real cost.
-2. **Contribution per expense**: what is missing for the next payment, spread evenly over the
-   transfers left before it is due and rounded up to whole units (the last one tops up exactly):
-   `(amount − planned balance) / transfers left`. Changing the amount therefore catches up by the
-   due date (the 500 → 600 example). Expenses whose end date has passed get nothing.
+2. **Contribution per expense**: each saving period (the transfers up to a payment) uses one
+   fixed amount, `(amount − planned balance at the start of the period) / transfers in the
+   period`, rounded up to whole units. The transfer is the same every month, so it can be a
+   standing order; rounding up overshoots a little (66 a year is saved as 12 × 6) and the next
+   period starts from what is left. If the amount changes, the missing money is caught up by the
+   due date (the 500 → 600 example). Monthly payments are topped up exactly. Expenses whose end
+   date has passed get nothing.
    The *planned* balance assumes every payment cost what was expected, so actual deviations never
    change the contributions: the actual balance of a variable expense may go below zero or build
    up, and a fixed expense below zero is handled by rule 1.

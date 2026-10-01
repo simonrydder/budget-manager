@@ -194,7 +194,11 @@ def plan_close(
             if previous and previous.expected_spend and spent > previous.expected_spend:
                 line.amount_after = spent if spent > expense.amount else None
         effective = replace(expense, amount=line.amount_after) if line.amount_after else expense
-        line.contribution = effective.contribution(month, line.planned_before)
+        line.contribution = effective.contribution(
+            month,
+            line.planned_before,
+            ledger.planned_balance_before(effective.cycle_start(month)),
+        )
         line.expected_spend = effective.expected_spend(month)
         line.next_due = effective.schedule.next_due(month)
         line.cover = covers.get(expense.id, 0)

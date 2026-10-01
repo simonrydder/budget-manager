@@ -30,18 +30,25 @@ def test_monthly_expense_contributes_its_amount_every_month():
     assert rent.balance_after_close(YearMonth(2025, 7)) == kr(10692.55)
 
 
-def test_yearly_expense_is_spread_until_due_and_then_over_twelve_months():
+def test_yearly_expense_uses_the_same_amount_every_month():
     insurance = expense(1, 500, date(2025, 12, 1), 12)
     budget = state([insurance])
     plans = run_months(budget, 20)
     contributions = [p.lines[1].contribution for p in plans]
-    # May–December: 8 transfers. Each month spreads what is missing over the transfers left,
-    # rounded up to whole units, so the amounts stay even and add up exactly.
-    assert contributions[:8] == [kr(63)] * 4 + [kr(62)] * 4
-    assert insurance.balance_after_close(YearMonth(2025, 12)) == kr(500)
-    # Next cycle: January–December 2026 spreads 500 over 12 transfers.
-    assert contributions[8:20] == [kr(42)] * 8 + [kr(41)] * 4
-    assert sum(contributions[8:20]) == kr(500)
+    # May–December: 8 transfers of 500/8 = 62,50 rounded up, so 4 over.
+    assert contributions[:8] == [kr(63)] * 8
+    assert insurance.balance_after_close(YearMonth(2025, 12)) == kr(504)
+    # The next year starts from the 4 left over: 496/12 rounded up.
+    assert contributions[8:20] == [kr(42)] * 12
+
+
+def test_small_yearly_payment_overshoots_rather_than_varying():
+    fee = expense(1, 66, date(2026, 4, 1), 12, start=YearMonth(2025, 5))
+    budget = state([fee])
+    plans = run_months(budget, 24)
+    contributions = [p.lines[1].contribution for p in plans]
+    assert contributions[:12] == [kr(6)] * 12  # 72 saved for 66
+    assert contributions[12:24] == [kr(5)] * 12  # starts with 6 left: 60/12
 
 
 def test_changed_amount_is_caught_up_by_the_due_date():
