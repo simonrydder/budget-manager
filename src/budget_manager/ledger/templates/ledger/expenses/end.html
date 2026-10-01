@@ -1,0 +1,14 @@
+{% extends "ledger/base.html" %}
+{% block title %}End {{ expense.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>End {{ expense.name }}</h1>
+  <p class="muted">For example when you cancel a subscription. No payments are expected after the last day, so contributions stop. Past months stay as they were.</p></div></div>
+<form method="post" class="form card flat">
+  {% csrf_token %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions">
+    <button class="btn primary">End expense</button>
+    <a class="btn" href="{% url 'expense-detail' expense.id %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

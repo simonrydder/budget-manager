@@ -1,0 +1,43 @@
+{% extends "ledger/base.html" %}
+{% block title %}Categories{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Categories</h1><p class="muted">Group expenses, for example House, Insurance or Children. The order here is the order on the expenses board.</p></div>
+  <div class="actions"><a class="btn" href="{% url 'expenses' %}">Back to expenses</a></div>
+</div>
+<div class="split">
+  <section class="card">
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Category</th><th class="num">Expenses</th><th></th></tr></thead>
+      <tbody>
+      {% for category in categories %}
+        <tr>
+          <td>{{ category.name }}</td>
+          <td class="num">{{ category.expenses.count }}</td>
+          <td class="num">
+            <span class="actions" style="justify-content:flex-end">
+              {% if not forloop.first %}<form method="post" action="{% url 'category-move' category.id 'up' %}">{% csrf_token %}<button class="btn small" aria-label="Move {{ category.name }} up">↑</button></form>{% endif %}
+              {% if not forloop.last %}<form method="post" action="{% url 'category-move' category.id 'down' %}">{% csrf_token %}<button class="btn small" aria-label="Move {{ category.name }} down">↓</button></form>{% endif %}
+              <a class="btn small" href="{% url 'category-edit' category.id %}">Rename</a>
+              <a class="btn small danger" href="{% url 'category-delete' category.id %}">Delete</a>
+            </span>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" class="muted">No categories yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Add category</h2>
+    <form method="post" class="form">
+      {% csrf_token %}
+      {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+      <div class="form-actions"><button class="btn primary">Add</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

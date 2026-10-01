@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# App data (database, secret key)
+data/
+demo-data/

@@ -1,0 +1,10 @@
+{% load budget %}<a href="{% url 'dashboard' %}"{% current 'dashboard' %}>Overview</a>
+<a href="{% url 'month-end' %}"{% current 'month-end' 'close' %}>Month-end {% if nav_close_month %}<span class="badge">{% if nav_close_step %}Step {{ nav_close_step }}/5{% else %}{{ nav_transfer_day|date:"j M" }}{% endif %}</span>{% endif %}</a>
+<a href="{% url 'accounts' %}"{% current 'account' 'correction' %}>Accounts</a>
+<a href="{% url 'expenses' %}"{% current 'expense' 'categor' %}>Expenses</a>
+<a href="{% url 'income' %}"{% current 'income' %}>Income</a>
+<a href="{% url 'forecast' %}"{% current 'forecast' %}>Forecast</a>
+<a href="{% url 'history' %}"{% current 'history' %}>History</a>
+<div class="nav-sep"></div>
+<a href="{% url 'settings' %}"{% current 'settings' %}>Settings</a>
+<a href="{% url 'users' %}"{% current 'user' %}>People</a>

@@ -1,0 +1,56 @@
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+from budget_manager.ledger.views import admin, home, manage, month_end, reports
+
+urlpatterns = [
+    path("", home.dashboard, name="dashboard"),
+    path("setup/", home.setup, name="setup"),
+    path("login/", home.LoginView.as_view(), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # Month-end checklist
+    path("month-end/", month_end.month_end, name="month-end"),
+    path("month-end/<str:month>/spending/", month_end.spending, name="month-end-spending"),
+    path("month-end/<str:month>/interest/", month_end.interest, name="month-end-interest"),
+    path("month-end/<str:month>/income/", month_end.income, name="month-end-income"),
+    path("month-end/<str:month>/transfers/", month_end.transfers, name="month-end-transfers"),
+    path("month-end/<str:month>/check/", month_end.check, name="month-end-check"),
+    path("month-end/<str:month>/close/", month_end.finish, name="month-end-close"),
+    path("closes/", month_end.close_list, name="closes"),
+    path("closes/<str:month>/", month_end.close_detail, name="close-detail"),
+    path("closes/<str:month>/reopen/", month_end.close_reopen, name="close-reopen"),
+    # Management
+    path("accounts/", manage.account_list, name="accounts"),
+    path("accounts/new/", manage.account_form, name="account-new"),
+    path("accounts/<int:pk>/edit/", manage.account_form, name="account-edit"),
+    path("accounts/<int:pk>/delete/", manage.account_delete, name="account-delete"),
+    path("accounts/correct/<str:target>/", manage.correction, name="correction"),
+    path("expenses/", manage.expense_board, name="expenses"),
+    path("expenses/new/", manage.expense_form, name="expense-new"),
+    path("expenses/<int:pk>/", manage.expense_detail, name="expense-detail"),
+    path("expenses/<int:pk>/edit/", manage.expense_form, name="expense-edit"),
+    path("expenses/<int:pk>/end/", manage.expense_end, name="expense-end"),
+    path("expenses/<int:pk>/delete/", manage.expense_delete, name="expense-delete"),
+    path("expenses/<int:pk>/move/", manage.expense_move, name="expense-move"),
+    path("expenses/<int:pk>/release/", manage.expense_release, name="expense-release"),
+    path("categories/", manage.category_list, name="categories"),
+    path("categories/<int:pk>/edit/", manage.category_edit, name="category-edit"),
+    path("categories/<int:pk>/delete/", manage.category_delete, name="category-delete"),
+    path(
+        "categories/<int:pk>/move/<str:direction>/",
+        manage.category_move,
+        name="category-move",
+    ),
+    path("income/", manage.income_list, name="income"),
+    path("income/new/", manage.income_form, name="income-new"),
+    path("income/<int:pk>/edit/", manage.income_form, name="income-edit"),
+    path("income/<int:pk>/delete/", manage.income_delete, name="income-delete"),
+    # Reports
+    path("forecast/", reports.forecast, name="forecast"),
+    path("history/", reports.history, name="history"),
+    # Settings and people
+    path("settings/", admin.settings_view, name="settings"),
+    path("users/", admin.user_list, name="users"),
+    path("users/<int:pk>/password/", admin.user_password, name="user-password"),
+    path("users/<int:pk>/delete/", admin.user_delete, name="user-delete"),
+]

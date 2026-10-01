@@ -1,0 +1,14 @@
+{% extends "ledger/base.html" %}
+{% block title %}Reopen month-end{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Reopen the month-end on {{ close.transfer_day|date:"j F Y" }}?</h1></div></div>
+<section class="card flat" style="max-width:640px">
+  <p>The month-end goes back to the transfer step so you can change spending, interest or income and close it again. Expected amounts raised by this month-end are set back.</p>
+  <p class="muted">If you already made the transfers in your bank, compare the new amounts with what you sent.</p>
+  <form method="post" class="form-actions">
+    {% csrf_token %}
+    <a class="btn" href="{% url 'close-detail' month %}">Cancel</a>
+    <button class="btn danger">Reopen</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Month-end {{ transfer_day|date:"j M Y" }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="label">Month-end · pays for {{ month.label }}</span>
+    <h1>{{ transfer_day|date:"j F Y" }}</h1>
+    <p class="muted">Closed {{ close.closed_at|date:"j M Y H:i" }}{% if close.closed_by %} by {{ close.closed_by.first_name|default:close.closed_by.username }}{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'closes' %}">All month-ends</a>
+    {% if can_reopen %}<a class="btn" href="{% url 'close-reopen' month %}">Reopen</a>{% endif %}
+  </div>
+</div>
+
+<section class="grid cols-4">
+  <div class="card"><span class="label">Income</span><span class="big">{{ close.income|money }}</span></div>
+  <div class="card"><span class="label">Contributions</span><span class="big">{{ close.contributions|money }}</span></div>
+  <div class="card"><span class="label">General Savings</span><span class="big {% if close.general_savings_after < close.general_savings_before %}neg{% else %}pos{% endif %}">{{ close.general_savings_after|money }}</span><span class="small muted">was {{ close.general_savings_before|money }}</span></div>
+  <div class="card"><span class="label">NemKonto after</span><span class="big {{ close.nemkonto_end|tone }}">{{ close.nemkonto_end|money }}</span></div>
+</section>
+
+{% if close.notices %}
+<div class="notices">{% for notice in close.notices %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endfor %}</div>
+{% endif %}
+
+<div class="split">
+  <section class="stack">
+    <h2>Transfers</h2>
+    <div class="transfers">
+      {% for transfer in transfers %}
+      <div class="transfer{% if transfer.done %} done{% endif %}">
+        <form method="post">{% csrf_token %}<input type="hidden" name="transfer" value="{{ transfer.id }}">
+          <button class="tick" aria-label="{% if transfer.done %}Mark as not done{% else %}Mark as done{% endif %}">{% if transfer.done %}✓{% endif %}</button>
+        </form>
+        <div>
+          <div class="amt">{{ transfer.amount|absolute|money }}</div>
+          <div class="route">{% if transfer.amount < 0 %}{{ transfer.account.name }} → NemKonto{% else %}NemKonto → {{ transfer.account.name }}{% endif %}{% if transfer.done and transfer.done_by %} · done by {{ transfer.done_by.first_name|default:transfer.done_by.username }}{% endif %}</div>
+        </div>
+        <button type="button" class="btn small" data-copy="{{ transfer.amount|absolute|money_input }}" hidden>Copy</button>
+      </div>
+      {% empty %}
+      <p class="empty">No transfers were needed.</p>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>NemKonto</h2>
+    <div class="flow">
+      <div><span>Before the income</span><span class="num">{{ close.nemkonto_before|money }}</span></div>
+      <div><span>+ Income</span><span class="num">{{ close.income|money }}</span></div>
+      {% if close.interest %}<div><span>+ Interest</span><span class="num">{{ close.interest|money }}</span></div>{% endif %}
+      <div><span>− Contributions</span><span class="num">{{ close.contributions|money }}</span></div>
+      <div class="total"><span>Left after transfers</span><span class="num">{{ close.nemkonto_after_transfers|money }}</span></div>
+      {% if close.surplus %}<div><span>To General Savings</span><span class="num">−{{ close.surplus|money }}</span></div>{% endif %}
+      {% if close.taken %}<div><span>From General Savings</span><span class="num">+{{ close.taken|money }}</span></div>{% endif %}
+      <div class="total"><span>Ended at</span><span class="num {{ close.nemkonto_end|tone }}">{{ close.nemkonto_end|money }}</span></div>
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Expenses this month</h2>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Expense</th><th>Account</th><th class="num">Balance before</th><th class="num">Contribution</th><th class="num">Other</th><th class="num">Balance after</th><th class="num">Expected spend</th></tr></thead>
+    <tbody>
+    {% for line in lines %}
+      <tr>
+        <td><a href="{% url 'expense-detail' line.expense.id %}">{{ line.expense.name }}</a>{% if line.amount_after %}<br><span class="small muted">Amount raised to {{ line.amount_after|money }}</span>{% endif %}</td>
+        <td class="dim">{{ line.expense.account.name }}</td>
+        <td class="num {{ line.balance_before|tone }}">{{ line.balance_before|money }}</td>
+        <td class="num">{{ line.contribution|money }}</td>
+        <td class="num small">{% if line.topup %}top-up {{ line.topup|money }}{% endif %}{% if line.cover %} taken {{ line.cover|money }}{% endif %}{% if line.release %} released {{ line.release|money }}{% endif %}</td>
+        <td class="num {{ line.balance_after|tone }}">{{ line.balance_after|money }}</td>
+        <td class="num dim">{% if line.expected_spend %}{{ line.expected_spend|money }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

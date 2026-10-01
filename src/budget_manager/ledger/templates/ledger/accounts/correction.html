@@ -1,0 +1,16 @@
+{% extends "ledger/base.html" %}
+{% block title %}Correct {{ label }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Correct {{ label }}</h1>
+  <p class="muted">Use this when the bank shows a different amount, for example after a fee.{% if after %} The correction counts from the next month-end, because this month's transfers are already made.{% else %} The correction counts from the coming month-end.{% endif %}</p></div></div>
+<form method="post" class="form card flat">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}">
+  {% if after %}<input type="hidden" name="after" value="1">{% endif %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions">
+    <button class="btn primary">Save correction</button>
+    <a class="btn" href="{{ next|default:'/accounts/' }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

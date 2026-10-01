@@ -1,0 +1,30 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Month-ends{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Month-ends</h1><p class="muted">Every month-end you have done, newest first.</p></div>
+  <div class="actions"><a class="btn primary" href="{% url 'month-end' %}">Next month-end</a></div>
+</div>
+<section class="card">
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Month-end</th><th>Pays for</th><th>Status</th><th class="num">Income</th><th class="num">General Savings</th><th class="num">NemKonto after</th></tr></thead>
+    <tbody>
+    {% for close in closes %}
+      <tr>
+        <td><a href="{% if close.is_closed %}{% url 'close-detail' close.budget_month %}{% else %}{% url 'month-end' %}{% endif %}">{{ close.transfer_day|date:"j M Y" }}</a></td>
+        <td>{{ close.budget_month.label }}</td>
+        <td>{% if close.is_closed %}<span class="chip ok">Closed</span>{% else %}<span class="chip warn">In progress</span>{% endif %}</td>
+        <td class="num">{% if close.is_closed %}{{ close.income|money }}{% endif %}</td>
+        <td class="num">{% if close.is_closed %}{{ close.general_savings_after|money }}{% endif %}</td>
+        <td class="num">{% if close.is_closed %}{{ close.nemkonto_end|money }}{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted">No month-ends yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

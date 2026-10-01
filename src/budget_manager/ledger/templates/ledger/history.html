@@ -1,0 +1,60 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}History {{ year }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>History {{ year }}</h1>
+    <p class="muted">What was actually spent each month.{% if counted %} The average is over the {{ counted|length }} month{{ counted|length|pluralize }} with entered spending.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <nav class="seg" aria-label="Group by">
+      <a href="?year={{ year }}&amp;by=category"{% if by == "category" %} aria-current="true"{% endif %}>By category</a>
+      <a href="?year={{ year }}&amp;by=expense"{% if by == "expense" %} aria-current="true"{% endif %}>By expense</a>
+      <a href="?year={{ year }}&amp;by=account"{% if by == "account" %} aria-current="true"{% endif %}>By account</a>
+    </nav>
+    <nav class="seg" aria-label="Year">
+      {% for y in years %}<a href="?year={{ y }}&amp;by={{ by }}"{% if y == year %} aria-current="true"{% endif %}>{{ y }}</a>{% endfor %}
+    </nav>
+  </div>
+</div>
+
+<section class="grid cols-3">
+  <div class="card"><span class="label">Spent in {{ year }}</span><span class="big">{{ grand_total|money }}</span></div>
+  <div class="card"><span class="label">Average per month</span><span class="big">{% if grand_average is not None %}{{ grand_average|money }}{% else %}—{% endif %}</span></div>
+  <div class="card"><span class="label">Expected in the same months</span><span class="big">{{ grand_expected|money }}</span></div>
+</section>
+
+<section class="card">
+  {% if table %}
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead>
+      <tr><th>{{ by|capfirst }}</th>{% for name in month_names %}<th class="num">{{ name }}</th>{% endfor %}<th class="num">Total</th><th class="num">Avg / month</th><th class="num">Expected</th></tr>
+    </thead>
+    <tbody>
+    {% for row in table %}
+      <tr>
+        <td class="nowrap">{% if by == "expense" %}<a href="{% url 'expense-detail' row.object.id %}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+        {% for cell in row.cells %}<td class="num{% if not cell.counted %} dim{% endif %}">{% if cell.amount %}{{ cell.amount|money0 }}{% endif %}</td>{% endfor %}
+        <td class="num"><b>{{ row.total|money0 }}</b></td>
+        <td class="num">{% if row.average is not None %}{{ row.average|money0 }}{% endif %}</td>
+        <td class="num dim">{{ row.expected|money0 }}</td>
+      </tr>
+    {% endfor %}
+      <tr class="total">
+        <td>Total</td>
+        {% for cell in totals %}<td class="num">{% if cell.amount %}{{ cell.amount|money0 }}{% endif %}</td>{% endfor %}
+        <td class="num">{{ grand_total|money0 }}</td>
+        <td class="num">{% if grand_average is not None %}{{ grand_average|money0 }}{% endif %}</td>
+        <td class="num">{{ grand_expected|money0 }}</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Amounts are rounded to whole numbers. "Expected" is what the plan expected to be paid in the months counted above. Greyed months have no complete spending yet.</p>
+  {% else %}
+  <p class="empty">No spending entered for {{ year }} yet. Spending is entered in step 1 of each month-end.</p>
+  {% endif %}
+</section>
+{% endblock %}

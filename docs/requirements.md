@@ -1,0 +1,76 @@
+# Budget Manager – Requirements
+
+Build a self-hosted **budget manager** web application.
+
+## Technical requirements
+
+- Runs on a local server on the home network and is accessed through a web browser.
+- Python is strongly preferred (e.g. Flask, FastAPI or Django) so the code is easy to read and maintain. It is not a hard requirement.
+- Any storage works, but all data must be stored locally on the machine running the app.
+- Do not display any currency symbol or code. Amounts are shown as plain numbers.
+- Multiple users can log in, but the app must only be reachable from the local network (not exposed to the internet).
+
+## Core concepts
+
+### Accounts
+
+Money is spread across several bank accounts, such as Budget, Food and Savings. The app must show the current balance of every account so it is easy to compare with the bank and verify everything is aligned.
+
+Two accounts are special:
+
+- **NemKonto** – where income arrives. After the monthly transfers, its balance should end up between a configurable minimum (X) and maximum (Y).
+- **General Savings** – receives surplus and covers shortfalls:
+  - If income minus expenses leaves more than Y on the NemKonto, the excess is transferred to General Savings.
+  - If it leaves less than X, the difference is taken from General Savings.
+  - If General Savings cannot cover it, show a warning and allow the NemKonto to go below X.
+  - If the NemKonto would go below 0, ask the user which expense or savings goal to take the money from.
+
+### Monthly cycle
+
+- All transfers happen on the **last day of the month**.
+- Expenses can still be due on any day, e.g. a monthly payment on the 15th or a yearly payment on a specific date.
+
+### Expenses
+
+An expense is a planned cost that money is set aside for. Each expense has:
+
+- A name, a **category** (e.g. Insurance, Entertainment, Children, House) and a **linked account**.
+- An amount and a schedule, for example:
+  - **Monthly**, e.g. a mortgage payment of a fixed amount per month.
+  - **Yearly on a fixed date**, e.g. insurance of 500 due on a specific day. Money is saved monthly so the expense's balance equals the full amount on the due date.
+  - **One-off savings goal**, e.g. a boarding-school stay in 2030. The app calculates the required monthly contribution.
+  - **Recurring savings goal**, e.g. a summer holiday needing 30,000 by March 1st every year.
+- An optional **starting balance**, meaning money already in the linked account for this expense.
+- An optional **end date**. Ending an expense (e.g. cancelling Disney+) stops contributions from then on.
+- An **expense type**, either fixed or variable (see below).
+
+**Changes over time:** if an expense's amount changes, the monthly contribution is recalculated so the shortfall is covered by the due date. Example: a yearly payment of 500 has 250 saved after 6 months, then it turns out to be 600. The contribution for the remaining 6 months must rise so the balance reaches 600 on the due date.
+
+### Fixed vs. variable expenses
+
+- **Fixed expenses** have a relatively stable amount (e.g. insurance). If the balance goes negative, the missing amount is taken from General Savings and the expense's expected amount is updated to match the real cost.
+- **Variable expenses** fluctuate (e.g. parking: 100 set aside per month, sometimes less is spent, sometimes more). The balance may go negative or build up, and it is the user's responsibility to adjust the amount.
+
+### Actual spending
+
+Expenses are based on expected costs. Each month the user enters the actual amount spent on each expense, if any. This gives each expense a current balance (contributions minus actual spending). Balances are allowed to go negative.
+
+### Income
+
+- Income sources (e.g. salary, child benefit, interest) have both an **expected** and an **actual** amount, since income varies.
+- Salary, benefits etc. arrive on the NemKonto.
+- **Interest income and interest expenses** land directly on the account they belong to, not the NemKonto. They are treated as if they had arrived on the NemKonto: if 30 in interest lands on the Budget account, the next transfer to the Budget account is 30 smaller (and correspondingly larger for interest expenses).
+
+## Features
+
+1. **Monthly transfer overview:** how much to transfer from the NemKonto to each account at the end of the month, based on all active expenses, interest adjustments, and the resulting transfer to or from General Savings.
+2. **Account balances:** current balance of every account, easy to match against the bank.
+3. **Management:** create, edit and end expenses, categories, accounts and income sources.
+4. **Monthly entry** of actual spending per expense and actual income per income source.
+5. **History:** actual spending per year and average per month, broken down by expense, category and account.
+6. **Forecast:** navigate to future months and see the expected balance of every account and expense.
+7. **Warnings** when General Savings can't cover a shortfall, and a prompt to choose where to take money from if the NemKonto would go below 0.
+
+## Future extension (not needed now)
+
+- Pasting or importing bank statements. For now all data is entered manually, but the data model must allow an import feature to be added later.
