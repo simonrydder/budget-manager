@@ -64,6 +64,13 @@ def upcoming_payments(state, balances, days: int = 60) -> list[dict]:
     return sorted(rows, key=lambda row: (row["date"], row["expense"].name))
 
 
+def budget_warning(state) -> list[dict]:
+    warning = services.monthly_balance(state).warning()
+    if not warning:
+        return []
+    return [{"level": "warning", "message": warning, "when": None, "is_next": True}]
+
+
 def attention(points, state, balances) -> list[dict]:
     """Notices worth showing: the next month-end first, then the first time each warning
     appears in the forecast."""
@@ -152,7 +159,7 @@ def dashboard(request):
         "nemkonto": state.nemkonto,
         "set_aside": sum(balances.values()),
         "upcoming": upcoming_payments(state, balances),
-        "attention": attention(points, state, balances),
+        "attention": budget_warning(state) + attention(points, state, balances),
         "trends": trend_cards(points, accounts),
         "checklist": checklist,
         "setup_done": all(done for _, done, _ in checklist),

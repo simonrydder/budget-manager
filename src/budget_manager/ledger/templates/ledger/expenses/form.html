@@ -43,6 +43,11 @@
     </div>
   </section>
   {% endif %}
+  <p class="muted small">
+    The budget now: expected income {{ budget.income|money0 }} a month, set aside {{ budget.expenses|money0 }} a month.
+    {% if budget.shortfall %}<span class="neg">Already {{ budget.shortfall|money0 }} short each month.</span>
+    {% else %}Room for {{ budget.difference|money0 }} more a month{% if expense.pk %} (this expense included){% endif %}.{% endif %}
+  </p>
   <div class="form-actions">
     <button class="btn primary">Save</button>
     {% if not expense.pk %}<button class="btn" name="another" value="1">Save and add another</button>{% endif %}

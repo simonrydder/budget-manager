@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from budget_manager import engine
 from budget_manager.engine import (
+    format_amount,
     BudgetState,
     ClosePlan,
     CloseError,
@@ -365,3 +366,83 @@ def completed_spending_months(year: int) -> list[int]:
         if first <= month <= latest_complete:
             months.append(number)
     return months
+
+
+# --- Is the budget balanced? --------------------------------------------------------------------
+
+
+@dataclass
+class MonthlyBalance:
+    """Average expected income against the average set aside each month."""
+
+    income: int
+    expenses: int
+    general_savings: int
+    month: YearMonth  # first month the averages apply to
+
+    @property
+    def difference(self) -> int:
+        return self.income - self.expenses
+
+    @property
+    def shortfall(self) -> int:
+        return max(0, -self.difference)
+
+    @property
+    def months_covered(self) -> int | None:
+        """How many months General Savings can cover the shortfall (None: no shortfall)."""
+        if not self.shortfall:
+            return None
+        return max(0, self.general_savings) // self.shortfall
+
+    @property
+    def runs_out(self) -> YearMonth | None:
+        """The first month General Savings cannot cover in full."""
+        covered = self.months_covered
+        return None if covered is None else self.month + covered
+
+    def warning(self) -> str | None:
+        if not self.shortfall:
+            return None
+        text = (
+            f"Your expenses now need {format_amount(self.expenses)} a month on average, "
+            f"{format_amount(self.shortfall)} more than your expected income of "
+            f"{format_amount(self.income)}. "
+        )
+        if self.months_covered == 0:
+            return text + "General Savings cannot cover that, so the NemKonto will run short."
+        return text + (
+            f"About {format_amount(self.shortfall)} is taken from General Savings each month. "
+            f"Its {format_amount(self.general_savings)} covers {self.months_covered} "
+            f"month{'s' if self.months_covered != 1 else ''} and runs out in "
+            f"{self.runs_out.label}."
+        )
+
+
+def monthly_balance(state: BudgetState | None = None) -> MonthlyBalance:
+    """Average income and set-aside per month from the next month-end on.
+
+    A repeating expense counts as its amount divided by its interval; a one-off savings goal
+    counts as what is still missing spread over the months left. Ended expenses and incomes
+    count as 0.
+    """
+    state = state or build_state()
+    month = state.month
+    expenses = 0
+    for ledger in state.ledgers:
+        expense = ledger.expense
+        due = expense.schedule.next_due(month)
+        if due is None:
+            continue
+        interval = expense.schedule.interval_months
+        if interval:
+            expenses += expense.amount // interval
+        else:
+            missing = max(0, expense.amount - ledger.planned_balance_before(month))
+            expenses += missing // (month.months_until(YearMonth.of(due)) + 1)
+    income = 0
+    for source in state.incomes:
+        schedule = source.schedule
+        if schedule.interval_months and (schedule.end_month is None or schedule.end_month >= month):
+            income += source.amount // schedule.interval_months
+    return MonthlyBalance(income, expenses, state.general_savings, month)

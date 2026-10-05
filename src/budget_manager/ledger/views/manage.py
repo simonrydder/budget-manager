@@ -281,12 +281,15 @@ def expense_form(request, pk: int | None = None):
         if pk:
             _save_topup(request, item, form.cleaned_data.get("topup"))
         messages.success(request, f"Saved {item.name}.")
+        if warning := services.monthly_balance().warning():
+            messages.warning(request, warning)
         if "another" in request.POST:
             return redirect("expense-new")
         return redirect("expense-detail", pk=item.pk)
     context = {
         "form": form,
         "expense": expense,
+        "budget": services.monthly_balance(),
         "balance": balance,
         "transfer_day": (services.next_close_month() - 1).last_day(),
     }
@@ -509,6 +512,8 @@ def income_form(request, pk: int | None = None):
     if request.method == "POST" and form.is_valid():
         item = form.save()
         messages.success(request, f"Saved {item.name}.")
+        if warning := services.monthly_balance().warning():
+            messages.warning(request, warning)
         return redirect("income")
     return render(request, "ledger/income/form.html", {"form": form, "source": source})
 

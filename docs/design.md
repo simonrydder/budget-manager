@@ -82,6 +82,10 @@ Any expense can also be **topped up** from General Savings by choice, from its e
 for a variable expense that has stayed below zero). The top-up happens at the next month-end and
 does not change the expense's plan.
 
+When expenses on average need more than the expected income (a repeating expense counts as its
+amount divided by its interval), adding or changing an expense or income shows a warning, also on
+the overview: how much General Savings pays each month and the month it runs out.
+
 Money that an expense no longer needs (for example after ending it) can be **released** to General
 Savings at the next month-end.
 

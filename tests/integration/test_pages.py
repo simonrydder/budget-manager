@@ -271,3 +271,31 @@ def test_malformed_posts_do_not_crash(client, budget):
     response = client.post(f"/expenses/{rent.id}/move/", {"field": "category", "value": "1; drop"})
     assert response.status_code == 400
     assert client.post("/categories/99999/move/up/").status_code == 404
+
+
+def test_warning_when_expenses_exceed_income(client, budget, accounts):
+    # Income 25.000; rent 10.000 + groceries 4.000 + holiday 30.000/12 = 16.500 a month.
+    page = client.get("/expenses/new/")
+    assert b"Room for 8.500 more a month" in page.content
+    response = client.post(
+        "/expenses/new/",
+        {
+            "name": "New car loan",
+            "amount": "10.500",
+            "interval_months": "1",
+            "first_due": "2025-05-15",
+            "kind": "fixed",
+            "account": accounts["Budget"].id,
+        },
+        follow=True,
+    )
+    text = response.content.decode()
+    assert "27.000,00 a month on average, 2.000,00 more than your expected income" in text
+    # General Savings starts at 10.000: May to September, then it runs out.
+    assert "covers 5 months and runs out in October 2025" in text
+    assert "2.000,00 more than your expected income" in client.get("/").content.decode()
+
+
+def test_no_warning_when_income_covers_expenses(client, budget):
+    response = client.get("/", follow=True)
+    assert "more than your expected income" not in response.content.decode()
