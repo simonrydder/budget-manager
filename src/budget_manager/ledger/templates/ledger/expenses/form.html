@@ -20,6 +20,8 @@
     {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
   </div>
   {% with field=form.kind %}{% include "ledger/_field.html" %}{% endwith %}
+  {% if form.fill_from_savings %}{% with field=form.fill_from_savings %}{% include "ledger/_field.html" %}{% endwith %}
+  <p class="muted small" style="margin-top:-10px">Example: 600 a year, due in two months. Filled: 500 now, then 50 a month. Not filled: 300, 300, then 50 a month.</p>{% endif %}
   <div class="notice info small">
     <span><b>Fixed</b>: a stable amount, like insurance. If it costs more than expected, General Savings covers the difference and the expected amount is raised.</span>
     <span><b>Variable</b>: it varies, like parking or groceries. The balance may go below zero or build up; you adjust the amount yourself.</span>

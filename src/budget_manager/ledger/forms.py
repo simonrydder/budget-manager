@@ -144,6 +144,12 @@ class ExpenseForm(forms.ModelForm):
             if budget:
                 self.fields["account"].initial = budget.pk
 
+    fill_from_savings = forms.BooleanField(
+        required=False,
+        label="Fill from General Savings",
+        help_text="Moves in what a steady monthly amount would already have saved, so it saves "
+        "the same every month. Without it, the first payment is split over the months left.",
+    )
     topup = AmountField(
         required=False,
         allow_negative=False,

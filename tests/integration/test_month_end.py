@@ -263,3 +263,33 @@ def test_top_up_chosen_while_editing_a_variable_expense(client, budget, accounts
     client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": "100"})
     client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": ""})
     assert not Decision.objects.filter(kind="topup", close__status="draft").exists()
+
+
+def test_new_expense_can_be_filled_from_general_savings(client, budget, accounts):
+    month_end(client, "2025-05")  # the budget is running; next month-end pays for June
+    data = {
+        "name": "New insurance",
+        "amount": "600",
+        "interval_months": "12",
+        "first_due": "2025-07-07",
+        "kind": "fixed",
+        "account": accounts["Budget"].id,
+    }
+    page = client.get("/expenses/new/")
+    assert b"Fill from General Savings" in page.content
+    client.post("/expenses/new/", {**data, "fill_from_savings": "on"})
+    client.post("/expenses/new/", {**data, "name": "Not filled"})
+    insurance = expense("New insurance")
+    assert Decision.objects.get(kind="fund", expense=insurance).amount == 50000
+    assert not Decision.objects.filter(expense__name="Not filled").exists()
+
+    month_end(client, "2025-06")
+    june = MonthClose.objects.get(month=date(2025, 6, 1))
+    filled = june.lines.get(expense=insurance)
+    assert (filled.funding, filled.contribution) == (50000, 5000)
+    assert june.lines.get(expense__name="Not filled").contribution == 30000
+
+    month_end(client, "2025-07")
+    july = MonthClose.objects.get(month=date(2025, 7, 1))
+    assert july.lines.get(expense=insurance).contribution == 5000
+    assert july.lines.get(expense__name="Not filled").contribution == 30000

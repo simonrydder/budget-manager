@@ -44,6 +44,8 @@ class LinePlan:
     expected_spend: int = 0
     topup_needed: int = 0
     topup_chosen: int = 0
+    funding_requested: int = 0
+    funding: int = 0
     topup: int = 0
     cover: int = 0
     release: int = 0
@@ -62,6 +64,7 @@ class LinePlan:
             topup=self.topup,
             cover=self.cover,
             release=self.release,
+            funding=self.funding,
         )
 
 
@@ -153,6 +156,7 @@ def plan_close(
     covers: dict[int, int] | None = None,
     releases: dict[int, int] | None = None,
     topups: dict[int, int] | None = None,
+    funding: dict[int, int] | None = None,
 ) -> ClosePlan:
     """Plan the close for ``state.month``.
 
@@ -161,12 +165,14 @@ def plan_close(
     before. ``covers`` and ``releases`` map expense ids to amounts taken from an expense to the
     NemKonto or moved to General Savings. ``topups`` maps expense ids to amounts the person
     chose to move from General Savings to an expense (any kind, e.g. a variable expense that
-    has been below zero for a while).
+    has been below zero for a while). ``funding`` is the same, but counts towards the plan: it
+    fills a new expense up to what a steady monthly amount would have saved by now.
     """
     interest = {k: v for k, v in (interest or {}).items() if v}
     covers = {k: v for k, v in (covers or {}).items() if v}
     releases = {k: v for k, v in (releases or {}).items() if v}
     topups = {k: v for k, v in (topups or {}).items() if v}
+    funding = {k: v for k, v in (funding or {}).items() if v}
     month = state.month
     nemkonto = state.nemkonto_account
     savings = state.savings_account
@@ -177,7 +183,7 @@ def plan_close(
         if account_id not in account_ids:
             raise CloseError(f"Unknown account {account_id}")
     known = {ledger.expense.id for ledger in state.ledgers}
-    for expense_id in (*covers, *releases, *topups):
+    for expense_id in (*covers, *releases, *topups, *funding):
         if expense_id not in known:
             raise CloseError(f"Unknown expense {expense_id}")
 
@@ -201,12 +207,17 @@ def plan_close(
         line.topup_chosen = topups.get(expense.id, 0)
         if line.topup_chosen < 0:
             raise CloseError("A top-up cannot be negative")
-        line.topup_needed += line.topup_chosen
+        line.funding_requested = funding.get(expense.id, 0)
+        if line.topup_chosen < 0 or line.funding_requested < 0:
+            raise CloseError("A top-up cannot be negative")
+        line.topup_needed += line.topup_chosen + line.funding_requested
         effective = replace(expense, amount=line.amount_after) if line.amount_after else expense
+        cycle_start = effective.cycle_start(month)
+        planned_at_start = ledger.planned_at_cycle_start(cycle_start)
+        if cycle_start == month:
+            planned_at_start += line.funding_requested
         line.contribution = effective.contribution(
-            month,
-            line.planned_before,
-            ledger.planned_balance_before(effective.cycle_start(month)),
+            month, line.planned_before + line.funding_requested, planned_at_start
         )
         line.expected_spend = effective.expected_spend(month)
         line.next_due = effective.schedule.next_due(month)
@@ -284,10 +295,22 @@ def plan_close(
     )
     for line in needing:
         line.topup = min(line.topup_needed, max(0, pool))
+        line.funding = min(line.funding_requested, line.topup)
         pool -= line.topup
         transfers[line.account_id].topups += line.topup
         name = names[line.expense_id]
-        if line.topup and not line.topup_chosen:
+        if line.funding:
+            notices.append(
+                Notice(
+                    "info",
+                    "funded",
+                    f"{name} is filled with {format_amount(line.funding)} from General Savings, "
+                    f"so it can save {format_amount(line.contribution)} a month from now on.",
+                    line.funding,
+                    line.expense_id,
+                )
+            )
+        if line.topup and not line.topup_chosen and not line.funding_requested:
             message = f"{name} was {format_amount(line.topup_needed)} below zero. "
             message += f"{format_amount(line.topup)} is taken from General Savings."
             if line.amount_after:
@@ -296,13 +319,14 @@ def plan_close(
                     f" to {format_amount(line.amount_after)}."
                 )
             notices.append(Notice("info", "fixed_topped_up", message, line.topup, line.expense_id))
-        elif line.topup:
+        elif line.topup > line.funding:
             notices.append(
                 Notice(
                     "info",
                     "topped_up",
-                    f"{name} gets {format_amount(line.topup)} from General Savings, as chosen.",
-                    line.topup,
+                    f"{name} gets {format_amount(line.topup - line.funding)} from General "
+                    "Savings, as chosen.",
+                    line.topup - line.funding,
                     line.expense_id,
                 )
             )

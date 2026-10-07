@@ -70,6 +70,11 @@ def start_draft(month: YearMonth, user) -> MonthClose:
     return close
 
 
+def budget_started() -> bool:
+    """True once the budget has been started or has had a month-end."""
+    return BudgetSettings.load().started_on is not None or last_closed() is not None
+
+
 def default_start_month(expense: Expense) -> YearMonth:
     return ym(expense.start_month) if expense.start_month else BudgetSettings.load().start
 
@@ -130,7 +135,14 @@ def build_state() -> BudgetState:
 
     lines: dict[int, dict[YearMonth, Line]] = defaultdict(dict)
     for row in ContributionLine.objects.filter(close__status=MonthClose.Status.CLOSED).values(
-        "expense_id", "close__month", "contribution", "expected_spend", "topup", "cover", "release"
+        "expense_id",
+        "close__month",
+        "contribution",
+        "expected_spend",
+        "topup",
+        "cover",
+        "release",
+        "funding",
     ):
         lines[row["expense_id"]][ym(row["close__month"])] = Line(
             contribution=row["contribution"],
@@ -138,6 +150,7 @@ def build_state() -> BudgetState:
             topup=row["topup"],
             cover=row["cover"],
             release=row["release"],
+            funding=row["funding"],
         )
     spending: dict[int, dict[YearMonth, int]] = defaultdict(dict)
     for row in SpendingEntry.objects.values("expense_id", "month", "amount"):
@@ -185,6 +198,7 @@ class CloseInputs:
     covers: dict[int, int] = field(default_factory=dict)
     releases: dict[int, int] = field(default_factory=dict)
     topups: dict[int, int] = field(default_factory=dict)
+    funding: dict[int, int] = field(default_factory=dict)
 
     @property
     def income(self) -> int:
@@ -204,6 +218,7 @@ def close_inputs(month: YearMonth) -> CloseInputs:
                 Decision.Type.COVER: inputs.covers,
                 Decision.Type.RELEASE: inputs.releases,
                 Decision.Type.TOPUP: inputs.topups,
+                Decision.Type.FUND: inputs.funding,
             }[decision.kind]
             target[decision.expense_id] = decision.amount
     return inputs
@@ -220,6 +235,7 @@ def plan_next_close() -> tuple[BudgetState, ClosePlan, CloseInputs]:
         covers=inputs.covers,
         releases=inputs.releases,
         topups=inputs.topups,
+        funding=inputs.funding,
     )
     return state, plan, inputs
 
@@ -244,6 +260,7 @@ def forecast(months: int | None = None, state: BudgetState | None = None) -> lis
         covers={state.month: inputs.covers},
         releases={state.month: inputs.releases},
         topups={state.month: inputs.topups},
+        funding={state.month: inputs.funding},
     )
 
 
@@ -288,6 +305,7 @@ def finalize_close(month: YearMonth, user) -> MonthClose:
             topup=line.topup,
             cover=line.cover,
             release=line.release,
+            funding=line.funding,
             balance_before=line.balance_before,
             planned_before=line.planned_before,
             amount_before=line.amount_before,

@@ -34,6 +34,7 @@ def run_forecast(
     covers: dict[YearMonth, dict[int, int]] | None = None,
     releases: dict[YearMonth, dict[int, int]] | None = None,
     topups: dict[YearMonth, dict[int, int]] | None = None,
+    funding: dict[YearMonth, dict[int, int]] | None = None,
 ) -> list[ForecastMonth]:
     """Forecast ``months`` month-ends, starting with the next close.
 
@@ -48,6 +49,7 @@ def run_forecast(
     covers = covers or {}
     releases = releases or {}
     topups = topups or {}
+    funding = funding or {}
     result: list[ForecastMonth] = []
     for _ in range(months):
         month = state.month
@@ -70,6 +72,7 @@ def run_forecast(
             covers=covers.get(month),
             releases=releases.get(month),
             topups=topups.get(month),
+            funding=funding.get(month),
         )
         apply_close(state, plan)
         result.append(

@@ -88,6 +88,11 @@ For budget month *B*:
    (a *cover*); later contributions rebuild them.
 5. All movements are netted, so each account gets one transfer from (or to) the NemKonto.
 
+A new expense added while the budget runs can be **filled from General Savings**: at the next
+month-end it gets what its steady monthly amount would already have saved (600 a year due in two
+months: 500 now, then 50 a month). This filling counts towards the plan. Without it, the first
+payment is split over the months left (300, 300, then 50).
+
 Any expense can also be **topped up** from General Savings by choice, from its edit page (useful
 for a variable expense that has stayed below zero). The top-up happens at the next month-end and
 does not change the expense's plan.

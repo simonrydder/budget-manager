@@ -266,20 +266,25 @@ def expense_form(request, pk: int | None = None):
     )
     if pending:
         initial["topup"] = pending.amount
+    started = services.budget_started()
     form = ExpenseForm(request.POST or None, instance=expense, initial=initial)
     if not pk:
         del form.fields["topup"]
+    if pk or not started:
+        del form.fields["fill_from_savings"]
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
         if previous_account and previous_account.pk != item.account_id:
             note = _balance_move_note(item, previous_account, item.account)
             if note:
                 messages.warning(request, note)
-        if not item.pk and services.last_closed() is not None:
+        if not item.pk and started:
             item.start_month = services.next_close_month().first_day()
         item.save()
         if pk:
             _save_topup(request, item, form.cleaned_data.get("topup"))
+        if form.cleaned_data.get("fill_from_savings") or (pk and _pending_fund(item)):
+            _save_fund(request, item)
         messages.success(request, f"Saved {item.name}.")
         if warning := services.monthly_balance().warning():
             messages.warning(request, warning)
@@ -294,6 +299,35 @@ def expense_form(request, pk: int | None = None):
         "transfer_day": (services.next_close_month() - 1).last_day(),
     }
     return render(request, "ledger/expenses/form.html", context)
+
+
+def _pending_fund(expense: Expense) -> Decision | None:
+    draft = services.draft_close()
+    return (
+        draft.decisions.filter(expense=expense, kind=Decision.Type.FUND).first() if draft else None
+    )
+
+
+def _save_fund(request, expense: Expense) -> None:
+    """Plan filling a new expense from General Savings up to its steady path."""
+    month = services.next_close_month()
+    model = services.engine_expense(expense, month)
+    suggested = model.suggested_starting_balance()
+    amount = max(0, (suggested or 0) - expense.starting_balance)
+    close = services.start_draft(month, request.user)
+    if not amount:
+        close.decisions.filter(expense=expense, kind=Decision.Type.FUND).delete()
+        if suggested is None:
+            messages.info(request, "A one-off goal has no steady amount, so nothing is filled.")
+        return
+    Decision.objects.update_or_create(
+        close=close, expense=expense, kind=Decision.Type.FUND, defaults={"amount": amount}
+    )
+    messages.info(
+        request,
+        f"{format_amount(amount)} moves from General Savings to {expense.name} at the month-end "
+        f"on {(month - 1).last_day():%d %B}, so it saves the same amount every month.",
+    )
 
 
 def _save_topup(request, expense: Expense, amount: int | None) -> None:
@@ -349,7 +383,11 @@ def expense_detail(request, pk: int):
     ]
     draft = services.draft_close()
     pending_topup = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
+        draft.decisions.filter(
+            expense=expense, kind__in=[Decision.Type.TOPUP, Decision.Type.FUND]
+        ).first()
+        if draft
+        else None
     )
     pending_release = (
         draft.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).first()

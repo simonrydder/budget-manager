@@ -302,6 +302,7 @@ class ContributionLine(models.Model):
     topup = models.BigIntegerField(default=0)
     cover = models.BigIntegerField(default=0)
     release = models.BigIntegerField(default=0)
+    funding = models.BigIntegerField(default=0)
     balance_before = models.BigIntegerField(default=0)
     planned_before = models.BigIntegerField(default=0)
     amount_before = models.BigIntegerField(default=0)
@@ -347,6 +348,7 @@ class Decision(models.Model):
         COVER = "cover", "Cover the NemKonto"
         RELEASE = "release", "Move to General Savings"
         TOPUP = "topup", "Top up from General Savings"
+        FUND = "fund", "Fill a new expense from General Savings"
 
     close = models.ForeignKey(MonthClose, on_delete=models.CASCADE, related_name="decisions")
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name="decisions")

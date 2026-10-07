@@ -150,6 +150,7 @@ class Line:
     topup: int = 0  # added from General Savings because a fixed expense went below zero
     cover: int = 0  # taken to the NemKonto; later contributions rebuild it
     release: int = 0  # moved to General Savings; not rebuilt
+    funding: int = 0  # part of ``topup`` that fills a new expense up to its steady path
 
 
 @dataclass
@@ -169,8 +170,14 @@ class ExpenseLedger:
         total = self.expense.starting_balance - self.expense.due_before_start()
         for line_month, line in self.lines.items():
             if line_month < month:
-                total += line.contribution - line.expected_spend - line.cover
+                total += line.contribution - line.expected_spend - line.cover + line.funding
         return total
+
+    def planned_at_cycle_start(self, month: YearMonth) -> int:
+        """The planned balance a saving period starting at ``month`` begins with, including any
+        filling from General Savings made at that month-end."""
+        line = self.lines.get(month)
+        return self.planned_balance_before(month) + (line.funding if line else 0)
 
     def balance_after_close(self, month: YearMonth) -> int:
         """Actual balance right after the transfer for ``month`` (spending up to the month before)."""

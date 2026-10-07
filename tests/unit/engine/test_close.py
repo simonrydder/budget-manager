@@ -259,3 +259,36 @@ def test_chosen_top_up_is_limited_by_general_savings():
     assert plan.general_savings_after == 0
     assert "savings_cannot_cover_fixed" in [n.code for n in plan.notices]
     assert_consistent(budget, plan)
+
+
+def test_filling_a_new_expense_keeps_the_steady_monthly_amount():
+    # A new insurance of 600 a year, due in two months: fill 500 now, then 50 a month.
+    budget = household()
+    insurance = expense(7, 600, date(2025, 6, 7), 12, name="Insurance")
+    budget.ledgers.append(insurance)
+    assert insurance.expense.suggested_starting_balance() == kr(500)
+    plan = plan_close(budget, income=kr(25000), funding={7: kr(500)})
+    assert plan.lines[7].contribution == kr(50)
+    assert plan.lines[7].funding == kr(500)
+    assert plan.lines[7].balance_after == kr(550)
+    assert amounts(plan)[BUDGET] == kr(10000 + 500 + 50)
+    assert "funded" in [n.code for n in plan.notices]
+    assert_consistent(budget, plan)
+    apply_close(budget, plan)
+    contributions = []
+    for _ in range(13):
+        plan = plan_close(budget, income=kr(25000))
+        contributions.append(plan.lines[7].contribution)
+        apply_close(budget, plan)
+        previous = budget.month - 1
+        line = insurance.lines[previous]
+        if line.expected_spend:
+            insurance.spending[previous] = line.expected_spend
+    assert set(contributions) == {kr(50)}
+
+
+def test_without_filling_the_new_expense_is_split_over_the_months_left():
+    budget = household()
+    budget.ledgers.append(expense(7, 600, date(2025, 6, 7), 12, name="Insurance"))
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[7].contribution == kr(300)
