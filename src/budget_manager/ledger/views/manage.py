@@ -278,6 +278,8 @@ def expense_form(request, pk: int | None = None):
             note = _balance_move_note(item, previous_account, item.account)
             if note:
                 messages.warning(request, note)
+        if not item.pk:
+            item.sort_order = (Expense.objects.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         if not item.pk and started:
             item.start_month = services.next_close_month().first_day()
         item.save()
@@ -449,36 +451,46 @@ def _balance_move_note(expense: Expense, old: Account, new: Account) -> str | No
 
 @require_POST
 def expense_move(request, pk: int):
-    """Drag and drop: set the category or the account of an expense."""
+    """Drag and drop: set the category or the account of an expense, and the order of the
+    expenses in the column it was dropped in (``order``: comma-separated ids, top first)."""
     expense = get_object_or_404(Expense, pk=pk)
     field = request.POST.get("field")
     value = request.POST.get("value", "")
-    if value and not value.isdigit():
+    order = [item for item in request.POST.get("order", "").split(",") if item]
+    wants_json = request.headers.get("Accept", "").startswith("application/json")
+    if (value and not value.isdigit()) or not all(item.isdigit() for item in order):
         return JsonResponse({"ok": False, "error": "Unknown target."}, status=400)
-    if field == "category":
-        expense.category = get_object_or_404(Category, pk=value) if value else None
-        expense.save(update_fields=["category", "updated_at"])
-        target = expense.category.name if expense.category else "Uncategorised"
-    elif field == "account":
-        account = get_object_or_404(Account, pk=value)
-        if account.is_nemkonto:
-            return JsonResponse(
-                {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
-            )
-        previous = expense.account
-        expense.account = account
-        expense.save(update_fields=["account", "updated_at"])
-        target = account.name
-        note = _balance_move_note(expense, previous, account)
-        if note:
-            if request.headers.get("Accept", "").startswith("application/json"):
-                return JsonResponse({"ok": True, "message": note})
-            messages.warning(request, note)
-    else:
+    if field not in {"category", "account"}:
         return JsonResponse({"ok": False, "error": "Unknown field."}, status=400)
-    if request.headers.get("Accept", "").startswith("application/json"):
-        return JsonResponse({"ok": True, "message": f"{expense.name} moved to {target}."})
-    messages.success(request, f"{expense.name} moved to {target}.")
+
+    current = str(getattr(expense, f"{field}_id") or "")
+    message = note = None
+    if value != current:
+        if field == "category":
+            expense.category = get_object_or_404(Category, pk=value) if value else None
+            expense.save(update_fields=["category", "updated_at"])
+            target = expense.category.name if expense.category else "Uncategorised"
+        else:
+            account = get_object_or_404(Account, pk=value)
+            if account.is_nemkonto:
+                return JsonResponse(
+                    {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
+                )
+            previous = expense.account
+            expense.account = account
+            expense.save(update_fields=["account", "updated_at"])
+            target = account.name
+            note = _balance_move_note(expense, previous, account)
+        message = note or f"{expense.name} moved to {target}."
+    if order:
+        with transaction.atomic():
+            for position, expense_id in enumerate(order):
+                Expense.objects.filter(pk=int(expense_id)).update(sort_order=position)
+        message = message or "Order saved."
+    message = message or "Nothing changed."
+    if wants_json:
+        return JsonResponse({"ok": True, "message": message})
+    (messages.warning if note else messages.success)(request, message)
     return redirect(_safe_next(request, "expenses"))
 
 
