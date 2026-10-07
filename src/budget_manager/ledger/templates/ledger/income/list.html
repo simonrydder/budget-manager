@@ -1,0 +1,31 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Income{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Income</h1><p class="muted">Salary, benefits and other income that arrives on the NemKonto. Interest is entered per account at each month-end.</p></div>
+  <div class="actions"><a class="btn primary" href="{% url 'income-new' %}">Add income</a></div>
+</div>
+<section class="card">
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Income</th><th>Frequency</th><th class="num">Expected</th><th>Next expected</th><th class="num">Last actual</th><th></th></tr></thead>
+    <tbody>
+    {% for row in sources %}
+      <tr{% if row.ended %} class="dim"{% endif %}>
+        <td><b>{{ row.source.name }}</b>{% if row.ended %} <span class="chip">ended</span>{% endif %}</td>
+        <td class="dim">{{ row.source.frequency }}</td>
+        <td class="num">{{ row.source.amount|money }}</td>
+        <td>{% if row.next %}{{ row.next.label }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{% if row.last %}{{ row.last.amount|money }} <span class="muted small">({{ row.last.month|month_label }})</span>{% endif %}</td>
+        <td class="num"><a class="btn small" href="{% url 'income-edit' row.source.id %}">Edit</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted">No income yet. <a href="{% url 'income-new' %}">Add your salary</a> to get started.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Income "for {{ month.name }}" is what arrives at the end of the month before and pays for {{ month.name }}.</p>
+</section>
+{% endblock %}

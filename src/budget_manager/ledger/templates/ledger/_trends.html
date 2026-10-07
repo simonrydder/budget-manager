@@ -1,0 +1,10 @@
+{% load budget %}<div class="minis">
+{% for card in cards %}
+  <div class="mini">
+    <span class="label">{{ card.name }}</span>
+    <span class="value {{ card.value|tone }}">{{ card.value|money0 }} <span class="muted small" style="font-weight:400">{{ card.value_label }}</span></span>
+    <span class="low">{% if card.lowest < 0 %}<span class="neg">Lowest {{ card.lowest|money0 }} in {{ card.lowest_label }}</span>{% else %}Lowest {{ card.lowest|money0 }} in {{ card.lowest_label }}{% endif %}</span>
+    {{ card.svg|safe }}
+  </div>
+{% endfor %}
+</div>

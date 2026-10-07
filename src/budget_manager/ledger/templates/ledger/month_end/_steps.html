@@ -1,0 +1,20 @@
+<div class="page-head">
+  <div>
+    <span class="label">Month-end {{ transfer_day|date:"j F Y" }}</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">The transfers on {{ transfer_day|date:"j F" }} pay for {{ month.label }}.</p>
+  </div>
+  <div class="actions"><a class="btn small" href="{% url 'closes' %}">Earlier month-ends</a></div>
+</div>
+<nav class="steps" aria-label="Month-end steps">
+  {% for step in steps %}
+    {% if step.reachable %}
+      <a href="{{ step.url }}" class="{% if step.current %}current{% elif step.done %}done{% endif %}"{% if step.current %} aria-current="step"{% endif %}>
+        <small>{% if step.done %}✓ Done{% else %}Step {{ step.number }}{% endif %}</small>
+        <b>{{ step.label }}</b>
+      </a>
+    {% else %}
+      <span class="step"><small>Step {{ step.number }}</small><b>{{ step.label }}</b></span>
+    {% endif %}
+  {% endfor %}
+</nav>

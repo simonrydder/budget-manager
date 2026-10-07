@@ -1,0 +1,18 @@
+{% extends "ledger/base.html" %}
+{% block title %}Delete {{ object }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Delete {{ object }}?</h1></div></div>
+<section class="card flat" style="max-width:640px">
+  {% if blocked %}
+    <p>{{ blocked }}</p>
+    <div class="form-actions"><a class="btn" href="javascript:history.back()">Go back</a></div>
+  {% else %}
+    <p>This deletes the {{ kind }} <b>{{ object }}</b>. It cannot be undone.</p>
+    <form method="post" class="form-actions">
+      {% csrf_token %}
+      <a class="btn" href="javascript:history.back()">Cancel</a>
+      <button class="btn danger">Delete</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

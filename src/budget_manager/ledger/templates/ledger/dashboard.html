@@ -1,0 +1,136 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Overview</h1>
+    <p class="muted">Balances after the last month-end and the spending entered since.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'expense-new' %}">Add expense</a>
+    <a class="btn primary" href="{% url 'month-end' %}">{% if draft %}Continue month-end{% else %}Start month-end{% endif %}</a>
+  </div>
+</div>
+
+{% if not setup_done %}
+<section class="card flat">
+  <div class="card-head"><h2>Get started</h2><span class="muted small">Do these once. After that, the month-end is all you need.</span></div>
+  <ol class="stack" style="margin:0;padding-left:20px;gap:6px">
+    {% for label, done, url_name in checklist %}
+    <li>{% if done %}<span class="chip ok">Done</span> <span class="muted">{{ label }}</span>{% else %}<a href="{% url url_name %}">{{ label }}</a>{% endif %}</li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<section class="card hero">
+  <div class="split" style="gap:18px">
+    <div class="stack" style="gap:8px">
+      <span class="label">Next month-end</span>
+      <h2 style="font-size:1.35rem">{{ transfer_day|date:"j F Y" }}</h2>
+      <p>Pays for <b>{{ month.label }}</b>
+        {% if days_left > 1 %}<span class="muted">· in {{ days_left }} days</span>
+        {% elif days_left == 1 %}<span class="muted">· tomorrow</span>
+        {% elif days_left == 0 %}<span class="chip warn">today</span>
+        {% else %}<span class="chip bad">{{ days_ago }} day{{ days_ago|pluralize }} ago</span>{% endif %}
+      </p>
+      <p class="muted small">
+        {% if draft %}In progress: step {{ draft.step }} of 5.{% else %}Enter last month's spending and {{ month.name }}'s income, then make the transfers.{% endif %}
+      </p>
+      <div class="actions"><a class="btn primary" href="{% url 'month-end' %}">{% if draft %}Continue{% else %}Start{% endif %}</a></div>
+    </div>
+    <div class="stack" style="gap:10px">
+      <div class="grid cols-2" style="gap:10px">
+        <div class="kpi"><span class="label">Expected income</span><b>{{ preview.income|money0 }}</b></div>
+        <div class="kpi"><span class="label">To transfer</span><b>{{ transfer_total|money0 }}</b></div>
+        <div class="kpi"><span class="label">To General Savings</span><b class="{% if preview.general_savings_change < 0 %}neg{% else %}pos{% endif %}">{{ preview.general_savings_change|signed0 }}</b></div>
+        <div class="kpi"><span class="label">NemKonto after</span><b class="{{ preview.nemkonto_end|tone }}">{{ preview.nemkonto_end|money0 }}</b></div>
+      </div>
+      <p class="muted small">Estimate from expected amounts until you enter the real ones.</p>
+    </div>
+  </div>
+</section>
+
+<section class="grid cols-4">
+  <div class="card"><span class="label">NemKonto now</span><span class="big {{ nemkonto|tone }}">{{ nemkonto|money }}</span></div>
+  <div class="card"><span class="label">General Savings</span><span class="big {{ general_savings|tone }}">{{ general_savings|money }}</span></div>
+  <div class="card"><span class="label">Set aside for expenses</span><span class="big {{ set_aside|tone }}">{{ set_aside|money }}</span></div>
+  <div class="card">
+    <span class="label">Last month-end</span>
+    {% if last %}
+      <span class="big">{{ last.transfer_day|date:"j M Y" }}</span>
+      {% if open_transfers %}<a href="{% url 'close-detail' last.budget_month %}" class="small">{{ open_transfers }} transfer{{ open_transfers|pluralize }} not ticked off</a>{% else %}<span class="small pos">All transfers done</span>{% endif %}
+    {% else %}
+      <span class="big muted">None yet</span>
+    {% endif %}
+  </div>
+</section>
+
+<div class="split">
+  <div class="stack" style="gap:16px">
+    <section class="stack">
+      <div class="spread"><h2>Accounts</h2><a href="{% url 'accounts' %}" class="small">Compare with the bank</a></div>
+      <div class="grid cols-2">
+        {% for row in accounts %}
+        <div class="card account-card">
+          <div class="card-head"><h3>{{ row.account.name }}</h3>{% if row.account.is_nemkonto %}<span class="chip">Income</span>{% elif row.account.holds_general_savings %}<span class="chip">Savings</span>{% endif %}</div>
+          <span class="big {{ row.balance|tone }}">{{ row.balance|money }}</span>
+          <div class="rows">
+            {% for item in row.items|slice:":4" %}
+              <div><span>{{ item.expense.name }}</span><span class="num {{ item.balance|tone }}">{{ item.balance|money }}</span></div>
+            {% endfor %}
+            {% if row.items|length > 4 %}<div class="muted"><span>+ {{ row.items|length|add:"-4" }} more</span></div>{% endif %}
+            {% if row.account.holds_general_savings %}<div class="gs-line"><span><b>General Savings</b></span><span class="num {{ general_savings|tone }}"><b>{{ general_savings|money }}</b></span></div>{% endif %}
+            {% if row.account.is_nemkonto %}<div class="muted"><span>Keeps {{ preview.min_balance|money0 }}–{{ preview.max_balance|money0 }} after transfers</span></div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Next 12 months</h2><a class="small" href="{% url 'forecast' %}">Open forecast</a></div>
+      {% include "ledger/_trends.html" with cards=trends %}
+      <p class="muted small">Expected balances at each month-end after the transfers. Each chart has its own scale.</p>
+    </section>
+  </div>
+
+  <div class="stack" style="gap:16px">
+    <section class="card">
+      <h2>Needs attention</h2>
+      {% if attention %}
+      <div class="notices">
+        {% for item in attention|slice:":8" %}
+        <div class="notice {{ item.level }}">
+          <span>{{ item.message }}</span>
+          {% if item.when and not item.is_next %}<small>Month-end on {{ item.when|short_date }}</small>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">Nothing right now. The forecast looks fine for the next 12 months.</p>
+      {% endif %}
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Coming up</h2><span class="muted small">Next 60 days</span></div>
+      {% if upcoming %}
+      <table class="table compact">
+        <tbody>
+        {% for row in upcoming %}
+          <tr>
+            <td class="nowrap">{{ row.date|date:"j M" }}</td>
+            <td><a href="{% url 'expense-detail' row.expense.id %}">{{ row.expense.name }}</a></td>
+            <td class="num">{{ row.expense.amount|money }}</td>
+            <td class="num">{% if row.short %}<span class="chip warn" title="Balance {{ row.balance|money }}">short {{ row.short|money0 }}</span>{% else %}<span class="chip ok">ready</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted small">"Short" is normal for payments later than next month-end: the money arrives with the coming transfers.</p>
+      {% else %}
+      <p class="empty">No payments due in the next 60 days.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

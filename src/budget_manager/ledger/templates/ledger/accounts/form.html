@@ -1,0 +1,15 @@
+{% extends "ledger/base.html" %}
+{% block title %}{% if account.pk %}Edit {{ account.name }}{% else %}Add account{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{% if account.pk %}Edit {{ account.name }}{% else %}Add account{% endif %}</h1>
+  <p class="muted">{% if account.is_nemkonto %}The NemKonto is where income arrives. Its minimum and maximum are in <a href="{% url 'settings' %}">Settings</a>.{% else %}Expenses are linked to an account; its balance is what they have set aside.{% endif %}</p></div></div>
+<form method="post" class="form card flat">
+  {% csrf_token %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions">
+    <button class="btn primary">Save</button>
+    <a class="btn" href="{% url 'accounts' %}">Cancel</a>
+    {% if account.pk and not account.is_nemkonto %}<a class="btn danger" href="{% url 'account-delete' account.id %}" style="margin-left:auto">Delete</a>{% endif %}
+  </div>
+</form>
+{% endblock %}

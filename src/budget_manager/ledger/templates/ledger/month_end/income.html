@@ -1,0 +1,39 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}{{ month.name }} income{% endblock %}
+{% block content %}
+{% include "ledger/month_end/_steps.html" with title=month.name|add:" income" %}
+<div class="checklist">
+  <p class="lead">Enter what actually arrived on the NemKonto for {{ month.label }}, usually paid on the last working day of {{ previous.name }}. An empty field counts as nothing received.</p>
+  <form method="post" class="stack" style="gap:14px" novalidate>
+    {% csrf_token %}
+    <div class="row">
+      <button type="button" class="btn small" data-fill="input[data-expected]" hidden>Fill with expected amounts</button>
+      {% if hidden and not show_all %}<a class="small" href="?all=1">Show {{ hidden }} income source{{ hidden|pluralize }} not expected this month</a>{% endif %}
+    </div>
+    <section class="entry-group">
+      <header><h3>Income on the NemKonto</h3><a class="small" href="{% url 'income-new' %}">Add income source</a></header>
+      {% for row in rows %}
+      <div class="entry">
+        <label class="name" for="income-{{ row.source.id }}">
+          <b>{{ row.source.name }}</b>
+          <small>{% if row.expected %}Expected {{ row.expected|money }}{% else %}Not expected this month{% endif %}</small>
+        </label>
+        <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
+               id="income-{{ row.source.id }}" name="income-{{ row.source.id }}" placeholder="{{ row.expected|money_input|default:'0,00' }}"
+               value="{% if row.raw is not None %}{{ row.raw }}{% else %}{{ row.value|money_input }}{% endif %}"
+               {% if row.expected %}data-expected="{{ row.expected|money_input }}"{% endif %}>
+        <span></span>
+        {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      </div>
+      {% empty %}
+      <div class="entry"><p class="empty">No income sources yet. <a href="{% url 'income-new' %}">Add one</a>.</p></div>
+      {% endfor %}
+    </section>
+    <div class="sticky-actions">
+      <a class="btn" href="{% url 'month-end-interest' month %}">Back</a>
+      <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>
+    </div>
+  </form>
+</div>
+{% endblock %}
