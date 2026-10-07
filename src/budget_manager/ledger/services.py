@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from django.db import transaction
@@ -93,7 +93,9 @@ def engine_accounts(config: BudgetSettings) -> list[engine.Account]:
     return result
 
 
-def engine_expense(expense: Expense, start: YearMonth) -> engine.Expense:
+def engine_expense(
+    expense: Expense, start: YearMonth, opening: YearMonth | None = None
+) -> engine.Expense:
     return engine.Expense(
         id=expense.id,
         name=expense.name,
@@ -103,6 +105,7 @@ def engine_expense(expense: Expense, start: YearMonth) -> engine.Expense:
         schedule=Schedule(expense.first_due, expense.interval_months, expense.end_date),
         start_month=ym(expense.start_month) if expense.start_month else start,
         starting_balance=expense.starting_balance,
+        opening_month=None if expense.start_month else opening,
     )
 
 
@@ -142,7 +145,7 @@ def build_state() -> BudgetState:
 
     ledgers = [
         ExpenseLedger(
-            engine_expense(expense, config.start),
+            engine_expense(expense, config.start, config.opening),
             lines=lines[expense.id],
             spending=spending[expense.id],
         )
@@ -359,7 +362,7 @@ def completed_spending_months(year: int) -> list[int]:
     if last is None:
         return []
     latest_complete = last.budget_month - 1  # spending of this month was entered at the last close
-    first = BudgetSettings.load().start
+    first = BudgetSettings.load().opening
     months = []
     for number in range(1, 13):
         month = YearMonth(year, number)
@@ -446,3 +449,141 @@ def monthly_balance(state: BudgetState | None = None) -> MonthlyBalance:
         if schedule.interval_months and (schedule.end_month is None or schedule.end_month >= month):
             income += source.amount // schedule.interval_months
     return MonthlyBalance(income, expenses, state.general_savings, month)
+
+
+# --- Starting the budget ------------------------------------------------------------------------
+
+
+@dataclass
+class StartRow:
+    expense: Expense
+    suggested: int | None  # None: one-off goal without a steady amount
+    set_aside: int  # at the start of the opening month
+    spent: int  # in the opening month so far
+    due: date | None  # due date inside the opening month
+
+    @property
+    def now(self) -> int:
+        return self.set_aside - self.spent
+
+
+@dataclass
+class StartAccount:
+    account: Account
+    bank: int | None
+    expected: int
+
+    @property
+    def difference(self) -> int | None:
+        return None if self.bank is None else self.bank - self.expected
+
+
+@dataclass
+class StartPlan:
+    today: date
+    opening: YearMonth
+    rows: list[StartRow]
+    accounts: list[StartAccount]
+
+    @property
+    def start(self) -> YearMonth:
+        return self.opening + 1
+
+    @property
+    def complete(self) -> bool:
+        return all(item.bank is not None for item in self.accounts)
+
+    @property
+    def nemkonto(self) -> int | None:
+        return next(a.bank for a in self.accounts if a.account.is_nemkonto)
+
+    @property
+    def general_savings(self) -> int | None:
+        """What is left on the accounts once every expense has what it should have."""
+        if not self.complete:
+            return None
+        return sum(a.difference for a in self.accounts if not a.account.is_nemkonto)
+
+    @property
+    def moves(self) -> list[tuple[str, str, int]]:
+        """Bank transfers that put each account's surplus into (or shortage from) Savings."""
+        savings = next(a.account for a in self.accounts if a.account.holds_general_savings)
+        moves = []
+        for item in self.accounts:
+            account = item.account
+            if account.is_nemkonto or account.holds_general_savings or not item.difference:
+                continue
+            if item.difference > 0:
+                moves.append((account.name, savings.name, item.difference))
+            else:
+                moves.append((savings.name, account.name, -item.difference))
+        return moves
+
+
+def plan_start(
+    today: date,
+    bank: dict[int, int | None] | None = None,
+    set_aside: dict[int, int | None] | None = None,
+    spent: dict[int, int | None] | None = None,
+) -> StartPlan:
+    """Balances when starting the budget today: what each expense should have (so its monthly
+    contribution stays steady) and how the accounts must be evened out via General Savings."""
+    bank, set_aside, spent = bank or {}, set_aside or {}, spent or {}
+    opening = YearMonth.of(today)
+    rows = []
+    for expense in Expense.objects.select_related("account").order_by(
+        "account__sort_order", "name"
+    ):
+        model = replace(
+            engine_expense(expense, opening + 1), start_month=opening + 1, opening_month=opening
+        )
+        suggested = model.suggested_starting_balance()
+        due = model.schedule.due_in(opening)
+        default_spent = expense.amount if expense.is_fixed and due and due <= today else 0
+        chosen = set_aside.get(expense.id)
+        if chosen is None:
+            chosen = suggested if suggested is not None else expense.starting_balance
+        used = spent.get(expense.id)
+        rows.append(
+            StartRow(expense, suggested, chosen, default_spent if used is None else used, due)
+        )
+    accounts = []
+    for account in Account.objects.all():
+        expected = sum(row.now for row in rows if row.expense.account_id == account.id)
+        accounts.append(StartAccount(account, bank.get(account.id), expected))
+    return StartPlan(today, opening, rows, accounts)
+
+
+@transaction.atomic
+def apply_start(plan: StartPlan, user) -> None:
+    if last_closed() is not None:
+        raise CloseError("The budget has already had a month-end, so it cannot be started again.")
+    if not plan.complete:
+        raise CloseError("Enter the balance of every account.")
+    if plan.general_savings < 0:
+        raise CloseError(
+            f"The accounts hold {format_amount(-plan.general_savings)} less than the expenses "
+            "should have. Lower some set-aside amounts or check the balances."
+        )
+    config = BudgetSettings.load()
+    config.opening_month = plan.opening.first_day()
+    config.start_month = plan.start.first_day()
+    config.started_on = plan.today
+    config.nemkonto_opening = plan.nemkonto
+    config.general_savings_opening = plan.general_savings
+    config.save()
+    SpendingEntry.objects.filter(month=plan.opening.first_day()).delete()
+    for row in plan.rows:
+        Expense.objects.filter(pk=row.expense.pk).update(
+            starting_balance=row.set_aside, start_month=None
+        )
+        if row.spent:
+            SpendingEntry.objects.create(
+                expense=row.expense,
+                month=plan.opening.first_day(),
+                amount=row.spent,
+                updated_by=user,
+            )
+    MonthClose.objects.filter(status=MonthClose.Status.DRAFT).exclude(
+        month=plan.start.first_day()
+    ).delete()

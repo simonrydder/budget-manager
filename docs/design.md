@@ -41,6 +41,16 @@ flowchart LR
 | JavaScript | One small file | Only for conveniences (drag and drop, live balances, fill buttons, copy). Every page works without it. |
 | Local only | Middleware checks the connecting address against private ranges; login required everywhere | The app refuses the internet even if a port is forwarded by mistake. |
 
+## Starting the budget
+
+The **Start the budget** page (until the first month-end) takes today's bank balance of every
+account and, per expense, what should be set aside at the start of the current month and what
+has been spent so far this month. The suggestion keeps the monthly amount steady: a yearly 1.200
+due in two months should already hold 1.000; a payment due this month must be there in full.
+Each account's surplus or shortage is evened out through General Savings, and the page lists the
+bank transfers to make. The first month-end then asks for the rest of the current month's
+spending.
+
 ## The month-end
 
 A **budget month** is the month whose payments a transfer pays for. The transfers for May are made

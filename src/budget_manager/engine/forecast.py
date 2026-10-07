@@ -53,7 +53,13 @@ def run_forecast(
         month = state.month
         previous = month - 1
         for ledger in state.ledgers:
-            if previous not in ledger.spending:
+            expense = ledger.expense
+            if expense.opening <= previous < expense.start_month:
+                # The month the budget was started in: payments still due come on top of what
+                # was entered as spent so far.
+                due = expense.amount if expense.schedule.due_in(previous) else 0
+                ledger.spending[previous] = max(ledger.spending.get(previous, 0), due)
+            elif previous not in ledger.spending:
                 line = ledger.lines.get(previous)
                 if line and line.expected_spend:
                     ledger.spending[previous] = line.expected_spend

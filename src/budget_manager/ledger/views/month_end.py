@@ -120,8 +120,9 @@ def spending(request, month: str):
     month, close = guarded
     previous = month - 1
     state = services.build_state()
-    start = BudgetSettings.load().start
-    first_close = previous < start
+    config = BudgetSettings.load()
+    first_close = previous < config.opening
+    opening_month = previous < config.start
 
     entries = {
         entry.expense_id: entry.amount
@@ -136,7 +137,8 @@ def spending(request, month: str):
         if first_close or (ended and expense.id not in entries):
             continue
         line = ledger.lines.get(previous)
-        expected = line.expected_spend if line else ledger.expense.expected_spend(previous)
+        due_amount = ledger.expense.amount if ledger.expense.schedule.due_in(previous) else 0
+        expected = line.expected_spend if line else due_amount
         rows.append(
             {
                 "expense": expense,
@@ -176,6 +178,8 @@ def spending(request, month: str):
         days_early=days_early if days_early > 3 else 0,
         groups=[(account, items) for account, items in groups.items() if items],
         first_close=first_close,
+        opening_month=opening_month,
+        started_on=config.started_on,
         entered=len(entries),
         total=len(rows),
         errors=errors,

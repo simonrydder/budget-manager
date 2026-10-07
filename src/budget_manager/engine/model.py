@@ -42,6 +42,44 @@ class Expense:
     schedule: Schedule
     start_month: YearMonth  # first budget month that receives a contribution
     starting_balance: int = 0
+    # The month ``starting_balance`` refers to the start of. Normally the start month; when the
+    # budget is started mid-month it is the current month, whose payments come out of it.
+    opening_month: YearMonth | None = None
+
+    @property
+    def opening(self) -> YearMonth:
+        return min(self.opening_month or self.start_month, self.start_month)
+
+    def due_before_start(self) -> int:
+        """Payments due between the opening month and the start month, paid from the
+        starting balance."""
+        total = 0
+        month = self.opening
+        while month < self.start_month:
+            if self.schedule.due_in(month):
+                total += self.amount
+            month += 1
+        return total
+
+    def suggested_starting_balance(self) -> int | None:
+        """What should already be set aside at the start of the opening month so the monthly
+        contribution is the same before and after the next payment ("top up all").
+
+        Payments due in the opening month must be there in full. ``None`` for one-off goals,
+        which have no steady amount.
+        """
+        due = self.schedule.next_due(self.opening)
+        if due is None:
+            return 0
+        due_month = YearMonth.of(due)
+        if due_month < self.start_month:
+            return self.amount
+        interval = self.schedule.interval_months
+        if not interval:
+            return None
+        rate = _round_up(self.amount, interval)
+        transfers = self.start_month.months_until(due_month) + 1
+        return max(0, self.amount - rate * transfers)
 
     def expected_spend(self, month: YearMonth) -> int:
         if month < self.start_month:
@@ -128,7 +166,7 @@ class ExpenseLedger:
         It assumes every payment cost exactly the expected amount, so actual deviations never
         change the contributions. Money taken to cover the NemKonto is rebuilt.
         """
-        total = self.expense.starting_balance
+        total = self.expense.starting_balance - self.expense.due_before_start()
         for line_month, line in self.lines.items():
             if line_month < month:
                 total += line.contribution - line.expected_spend - line.cover

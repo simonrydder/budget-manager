@@ -132,3 +132,46 @@ def test_planned_balance_uses_frozen_expected_spending():
     ledger.lines[YearMonth(2025, 6)] = Line(contribution=kr(63))
     assert ledger.planned_balance_before(YearMonth(2025, 7)) == kr(126)
     assert ledger.planned_balance_before(YearMonth(2025, 6)) == kr(63)
+
+
+OCT, NOV = YearMonth(2026, 10), YearMonth(2026, 11)
+
+
+def started_mid_month(amount, first_due, interval=12, **kwargs):
+    ledger = expense(1, amount, first_due, interval, start=NOV, **kwargs)
+    ledger.expense = replace(ledger.expense, opening_month=OCT)
+    return ledger
+
+
+def test_suggested_balance_keeps_the_monthly_amount_steady():
+    # Insurance 1.200 due 1 December; starting on 7 October. Steady rate 100: two transfers
+    # (end of October and November) are left, so 1.000 should already be there.
+    insurance = started_mid_month(1200, date(2026, 12, 1))
+    assert insurance.expense.suggested_starting_balance() == kr(1000)
+    insurance.expense = replace(insurance.expense, starting_balance=kr(1000))
+    budget = state([insurance], month=NOV)
+    plans = run_months(budget, 14)
+    assert {p.lines[1].contribution for p in plans} == {kr(100)}
+
+
+def test_payment_due_later_this_month_must_be_there_in_full():
+    phone = started_mid_month(199, date(2026, 10, 20), 1)
+    assert phone.expense.suggested_starting_balance() == kr(199)
+    yearly_this_month = started_mid_month(600, date(2026, 10, 25))
+    assert yearly_this_month.expense.suggested_starting_balance() == kr(600)
+
+
+def test_monthly_budget_already_running_counts_this_months_payment():
+    groceries = started_mid_month(5500, date(2026, 10, 1), 1, kind=Kind.VARIABLE)
+    assert groceries.expense.suggested_starting_balance() == kr(5500)
+    groceries.expense = replace(groceries.expense, starting_balance=kr(5500))
+    groceries.spending[OCT] = kr(3200)  # spent so far when starting
+    budget = state([groceries], month=NOV)
+    assert groceries.balance_end_of(OCT) == kr(2300)
+    plan = plan_close(budget, income=kr(50000))
+    assert plan.lines[1].contribution == kr(5500)  # October's payment came from the start
+
+
+def test_one_off_goal_has_no_suggestion():
+    school = started_mid_month(60000, date(2030, 8, 1), 0)
+    assert school.expense.suggested_starting_balance() is None

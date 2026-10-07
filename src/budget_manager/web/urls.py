@@ -50,6 +50,7 @@ urlpatterns = [
     path("history/", reports.history, name="history"),
     # Settings and people
     path("settings/", admin.settings_view, name="settings"),
+    path("start/", admin.start_budget, name="start"),
     path("users/", admin.user_list, name="users"),
     path("users/<int:pk>/password/", admin.user_password, name="user-password"),
     path("users/<int:pk>/delete/", admin.user_delete, name="user-delete"),

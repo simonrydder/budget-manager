@@ -25,6 +25,13 @@ class BudgetSettings(models.Model):
         help_text="The first month you budget for. Its transfers happen on the last day of the "
         "month before.",
     )
+    opening_month = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Set when the budget is started mid-month: the month the starting balances "
+        "refer to the start of.",
+    )
+    started_on = models.DateField(null=True, blank=True)
     nemkonto_min = models.BigIntegerField(default=0)
     nemkonto_max = models.BigIntegerField(default=0)
     nemkonto_opening = models.BigIntegerField(default=0)
@@ -42,6 +49,13 @@ class BudgetSettings(models.Model):
     @property
     def start(self) -> YearMonth:
         return YearMonth.of(self.start_month)
+
+    @property
+    def opening(self) -> YearMonth:
+        """The first month whose spending belongs to the budget."""
+        return (
+            min(YearMonth.of(self.opening_month), self.start) if self.opening_month else self.start
+        )
 
 
 class Account(models.Model):
