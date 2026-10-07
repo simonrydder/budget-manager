@@ -359,3 +359,59 @@ class Decision(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["close", "expense", "kind"], name="one_decision_each")
         ]
+
+
+class Move(models.Model):
+    """Money moved between General Savings and an expense (or a refund put into General
+    Savings) any day, not only at a month-end. It waits until the bank transfers are made."""
+
+    class Type(models.TextChoices):
+        FUND = "fund", "Fill from General Savings"
+        TOPUP = "topup", "Top up from General Savings"
+        RELEASE = "release", "Return to General Savings"
+        REFUND = "refund", "Refund to General Savings"
+
+    kind = models.CharField(max_length=10, choices=Type.choices)
+    expense = models.ForeignKey(
+        Expense, null=True, blank=True, on_delete=models.CASCADE, related_name="moves"
+    )
+    account = models.ForeignKey(
+        Account,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="For a refund: the account the money arrived on.",
+    )
+    amount = models.BigIntegerField()
+    note = models.CharField(max_length=200, blank=True)
+    done = models.BooleanField(default=False)
+    month = models.DateField(
+        null=True, blank=True, help_text="Once made: the budget month of the next month-end."
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    done_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-done_at", "-created_at"]
+
+    @property
+    def to_expense(self) -> int:
+        """What the move adds to its expense (negative: taken from it)."""
+        if self.kind in (self.Type.FUND, self.Type.TOPUP):
+            return self.amount
+        if self.kind == self.Type.RELEASE:
+            return -self.amount
+        return 0
+
+    @property
+    def to_general_savings(self) -> int:
+        if self.kind == self.Type.REFUND:
+            return self.amount
+        return -self.to_expense

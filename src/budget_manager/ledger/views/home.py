@@ -168,6 +168,7 @@ def dashboard(request):
         "trends": trend_cards(points, accounts),
         "checklist": checklist,
         "setup_done": all(done for _, done, _ in checklist),
+        "balancing": services.balancing(today(), state),
         "transfer_total": sum(t.amount for t in preview.transfers.values() if t.amount > 0),
     }
     return render(request, "ledger/dashboard.html", context)

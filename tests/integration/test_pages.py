@@ -87,6 +87,7 @@ def test_requests_from_the_internet_are_refused(client):
         "/settings/",
         "/users/",
         "/closes/",
+        "/balance/",
         "/accounts/correct/nemkonto/",
     ],
 )

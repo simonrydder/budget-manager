@@ -52,6 +52,16 @@
   </div>
 </section>
 
+{% if balancing.moves %}
+<section class="card" style="border-color:var(--accent)">
+  <div class="card-head"><h2>Money waiting to be moved</h2><a class="btn small primary" href="{% url 'balance' %}">Balance now</a></div>
+  <p class="muted small">{{ balancing.moves|length }} move{{ balancing.moves|length|pluralize }} between General Savings and your expenses. Make {{ balancing.bank_moves|length|pluralize:"this transfer,these transfers" }} any day:</p>
+  <ul class="plain">
+    {% for move in balancing.bank_moves %}<li><b>{{ move.amount|money }}</b> {{ move.source.name }} → {{ move.target.name }}</li>{% empty %}<li class="muted">No bank transfer needed, only bookkeeping on {{ balancing.savings.name }}.</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <section class="grid cols-4">
   <div class="card"><span class="label">NemKonto now</span><span class="big {{ nemkonto|tone }}">{{ nemkonto|money }}</span></div>
   <div class="card"><span class="label">General Savings</span><span class="big {{ general_savings|tone }}">{{ general_savings|money }}</span></div>

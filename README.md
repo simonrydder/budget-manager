@@ -124,6 +124,10 @@ This creates a made-up household with three closed month-ends. Log in as `demo` 
    3. enter the income that arrived for next month,
    4. make the transfers it lists and tick them off,
    5. optionally compare the balances with the bank, then close the month-end.
+3. **Any day:** under **Balance**, move money between General Savings and your expenses: filling
+   a new expense, a top-up, money an expense no longer needs (an ended expense returns what is
+   left by itself) or a refund. It lists the bank transfers to make; press **Transfers made**
+   once they are done and the balances update.
 
 The **Overview** shows balances, warnings, upcoming payments and the next 12 months. **Forecast**
 goes further ahead, **History** shows actual spending per year.

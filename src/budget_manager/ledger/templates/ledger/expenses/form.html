@@ -40,7 +40,7 @@
     <div class="field{% if form.topup.errors %} invalid{% endif %}">
       <label for="{{ form.topup.id_for_label }}">{{ form.topup.label }}</label>
       {{ form.topup }}
-      <span class="help">Moved at the month-end on {{ transfer_day|date:"j F" }}. Leave empty for no top-up. General Savings lives on the savings account, so the money arrives as part of that month's transfers.</span>
+      <span class="help">Leave empty for no top-up. It waits under <a href="{% url 'balance' %}">Balance</a> until you make the bank transfer from the savings account, any day.</span>
       {% for error in form.topup.errors %}<span class="error">{{ error }}</span>{% endfor %}
     </div>
   </section>

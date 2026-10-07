@@ -326,3 +326,5 @@ details.more > summary { cursor: pointer; color: var(--accent); font-weight: 600
 details.more[open] > summary { margin-bottom: 10px; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }

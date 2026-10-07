@@ -298,6 +298,7 @@ def _plan_context(month: YearMonth, close: MonthClose):
         "state": state,
         "plan": plan,
         "inputs": inputs,
+        "waiting_moves": [item for item in services.balancing(today(), state).moves if item.move],
         "transfers": transfers,
         "lines": lines,
         "missing_income": missing,

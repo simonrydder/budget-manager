@@ -6,6 +6,7 @@
 <div class="checklist">
   <p class="lead">After making the transfers, the accounts should show these balances. Type what your bank shows to compare. This is optional; nothing you type here is saved.</p>
   {% if open_count %}<div class="notice warning">{{ open_count }} transfer{{ open_count|pluralize }} {{ open_count|pluralize:"is,are" }} not ticked off yet. <a href="{% url 'month-end-transfers' month %}">Back to transfers</a></div>{% endif %}
+  {% if waiting_moves %}<div class="notice warning">{{ waiting_moves|length }} move{{ waiting_moves|length|pluralize }} to or from General Savings {{ waiting_moves|length|pluralize:"is,are" }} still waiting. Make {{ waiting_moves|length|pluralize:"it,them" }} (or cancel {{ waiting_moves|length|pluralize:"it,them" }}) under <a href="{% url 'balance' %}">Balance</a> before closing.</div>{% endif %}
   <section class="entry-group">
     <header><h3>Balances after the transfers</h3><span class="muted small">Expected · in the bank</span></header>
     {% for row in balances_after %}

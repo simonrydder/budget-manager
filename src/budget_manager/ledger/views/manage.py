@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Max, ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,9 +26,9 @@ from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
     Category,
-    Decision,
     Expense,
     IncomeSource,
+    Move,
 )
 from budget_manager.ledger.views.common import today
 
@@ -260,10 +260,7 @@ def expense_form(request, pk: int | None = None):
         initial["category"] = request.GET["category"]
     previous_account = expense.account if pk else None
     balance = services.build_state().current_expense_balances().get(expense.pk, 0) if pk else 0
-    draft = services.draft_close() if pk else None
-    pending = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
-    )
+    pending = _waiting(expense, Move.Type.TOPUP) if pk else None
     if pending:
         initial["topup"] = pending.amount
     started = services.budget_started()
@@ -284,8 +281,8 @@ def expense_form(request, pk: int | None = None):
             item.start_month = services.next_close_month().first_day()
         item.save()
         if pk:
-            _save_topup(request, item, form.cleaned_data.get("topup"))
-        if form.cleaned_data.get("fill_from_savings") or (pk and _pending_fund(item)):
+            _save_waiting(request, item, Move.Type.TOPUP, form.cleaned_data.get("topup"))
+        if form.cleaned_data.get("fill_from_savings"):
             _save_fund(request, item)
         messages.success(request, f"Saved {item.name}.")
         if warning := services.monthly_balance().warning():
@@ -298,60 +295,46 @@ def expense_form(request, pk: int | None = None):
         "expense": expense,
         "budget": services.monthly_balance(),
         "balance": balance,
-        "transfer_day": (services.next_close_month() - 1).last_day(),
     }
     return render(request, "ledger/expenses/form.html", context)
 
 
-def _pending_fund(expense: Expense) -> Decision | None:
-    draft = services.draft_close()
-    return (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.FUND).first() if draft else None
-    )
+def _waiting(expense: Expense, kind: str) -> Move | None:
+    return expense.moves.filter(done=False, kind=kind).first()
 
 
 def _save_fund(request, expense: Expense) -> None:
-    """Plan filling a new expense from General Savings up to its steady path."""
-    month = services.next_close_month()
-    model = services.engine_expense(expense, month)
-    suggested = model.suggested_starting_balance()
-    amount = max(0, (suggested or 0) - expense.starting_balance)
-    close = services.start_draft(month, request.user)
+    """Fill a new expense from General Savings up to its steady path."""
+    state = services.build_state()
+    amount = services.fund_amount(state.ledger(expense.pk), state.month)
     if not amount:
-        close.decisions.filter(expense=expense, kind=Decision.Type.FUND).delete()
-        if suggested is None:
+        if state.ledger(expense.pk).expense.suggested_starting_balance() is None:
             messages.info(request, "A one-off goal has no steady amount, so nothing is filled.")
         return
-    Decision.objects.update_or_create(
-        close=close, expense=expense, kind=Decision.Type.FUND, defaults={"amount": amount}
+    _save_waiting(request, expense, Move.Type.FUND, amount)
+
+
+def _save_waiting(request, expense: Expense, kind: str, amount: int | None) -> None:
+    """Remember (or drop) money to move between General Savings and an expense."""
+    pending = _waiting(expense, kind)
+    if not amount:
+        if pending:
+            pending.delete()
+        return
+    if pending and pending.amount == amount:
+        return
+    Move.objects.update_or_create(
+        expense=expense,
+        kind=kind,
+        done=False,
+        defaults={"amount": amount, "account": expense.account, "created_by": request.user},
     )
+    direction = "to" if kind != Move.Type.RELEASE else "from"
     messages.info(
         request,
-        f"{format_amount(amount)} moves from General Savings to {expense.name} at the month-end "
-        f"on {(month - 1).last_day():%d %B}, so it saves the same amount every month.",
+        f"{format_amount(amount)} is waiting to move {direction} {expense.name}. Make the bank "
+        "transfer any day under Balance (or at the month-end).",
     )
-
-
-def _save_topup(request, expense: Expense, amount: int | None) -> None:
-    """Remember (or drop) a top-up from General Savings for the next month-end."""
-    month = services.next_close_month()
-    if amount:
-        close = services.start_draft(month, request.user)
-        Decision.objects.update_or_create(
-            close=close, expense=expense, kind=Decision.Type.TOPUP, defaults={"amount": amount}
-        )
-        messages.info(
-            request,
-            f"{format_amount(amount)} moves from General Savings to {expense.name} at the "
-            f"month-end on {(month - 1).last_day():%d %B}.",
-        )
-    else:
-        Decision.objects.filter(
-            close__month=month.first_day(),
-            close__status="draft",
-            expense=expense,
-            kind=Decision.Type.TOPUP,
-        ).delete()
 
 
 def expense_detail(request, pk: int):
@@ -383,19 +366,8 @@ def expense_detail(request, pk: int):
         }
         for point in points
     ]
-    draft = services.draft_close()
-    pending_topup = (
-        draft.decisions.filter(
-            expense=expense, kind__in=[Decision.Type.TOPUP, Decision.Type.FUND]
-        ).first()
-        if draft
-        else None
-    )
-    pending_release = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).first()
-        if draft
-        else None
-    )
+    waiting = [item for item in services.balancing(today(), state).moves if item.expense == expense]
+    pending_release = next((item for item in waiting if item.kind == Move.Type.RELEASE), None)
     context = {
         "expense": expense,
         "balance": balance,
@@ -403,10 +375,11 @@ def expense_detail(request, pk: int):
         "upcoming": upcoming,
         "plan_rows": plan_rows,
         "next_contribution": points[0].close.lines[expense.id].contribution,
+        "waiting": [item for item in waiting if item is not pending_release],
         "pending_release": pending_release,
-        "pending_topup": pending_topup,
+        "moves": expense.moves.filter(done=True),
         "release_form": ReleaseForm(initial={"amount": max(0, balance)}),
-        "can_delete": not expense.lines.exists() and not expense.spending.exists(),
+        "can_delete": not _has_history(expense),
         "ended": expense.is_ended(today()),
     }
     return render(request, "ledger/expenses/detail.html", context)
@@ -418,7 +391,11 @@ def expense_end(request, pk: int):
     if request.method == "POST" and form.is_valid():
         expense.end_date = form.cleaned_data["end_date"]
         expense.save(update_fields=["end_date", "updated_at"])
-        messages.success(request, f"{expense.name} ends on {expense.end_date:%d %b %Y}.")
+        messages.success(
+            request,
+            f"{expense.name} ends on {expense.end_date:%d %b %Y}. Once it has ended and its last "
+            "payment is entered, what is left on it returns to General Savings under Balance.",
+        )
         return redirect("expense-detail", pk=expense.pk)
     return render(request, "ledger/expenses/end.html", {"form": form, "expense": expense})
 
@@ -426,7 +403,7 @@ def expense_end(request, pk: int):
 def expense_delete(request, pk: int):
     expense = get_object_or_404(Expense, pk=pk)
     blocked = None
-    if expense.lines.exists() or expense.spending.exists():
+    if _has_history(expense):
         blocked = "This expense has history. End it instead, so past months stay correct."
     if request.method == "POST" and not blocked:
         expense.delete()
@@ -436,6 +413,14 @@ def expense_delete(request, pk: int):
         request,
         "ledger/confirm_delete.html",
         {"object": expense, "blocked": blocked, "kind": "expense"},
+    )
+
+
+def _has_history(expense: Expense) -> bool:
+    return (
+        expense.lines.exists()
+        or expense.spending.exists()
+        or expense.moves.filter(done=True).exists()
     )
 
 
@@ -496,37 +481,20 @@ def expense_move(request, pk: int):
 
 @require_POST
 def expense_release(request, pk: int):
-    """Move (part of) an expense's balance to General Savings at the next month-end."""
+    """Move (part of) an expense's balance to General Savings."""
     expense = get_object_or_404(Expense, pk=pk)
-    month = services.next_close_month()
-    close = services.start_draft(month, request.user)
     if "cancel" in request.POST:
-        close.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).delete()
+        expense.moves.filter(done=False, kind=Move.Type.RELEASE).delete()
         messages.success(request, "Cancelled.")
         return redirect("expense-detail", pk=pk)
     form = ReleaseForm(request.POST)
-    state = services.build_state()
-    balance = state.current_expense_balances()[expense.id]
+    balance = services.build_state().current_expense_balances()[expense.id]
     if form.is_valid():
         amount = form.cleaned_data["amount"]
         if not amount or amount > balance:
             messages.error(request, "Enter an amount up to the current balance.")
         else:
-            try:
-                Decision.objects.update_or_create(
-                    close=close,
-                    expense=expense,
-                    kind=Decision.Type.RELEASE,
-                    defaults={"amount": amount},
-                )
-            except IntegrityError:
-                messages.error(request, "Could not save. Try again.")
-            else:
-                messages.success(
-                    request,
-                    f"The amount moves to General Savings at the month-end on "
-                    f"{(month - 1).last_day():%d %b %Y}.",
-                )
+            _save_waiting(request, expense, Move.Type.RELEASE, amount)
     else:
         messages.error(request, " ".join(form.errors.get("amount", ["Enter an amount."])))
     return redirect("expense-detail", pk=pk)

@@ -88,21 +88,27 @@ For budget month *B*:
    (a *cover*); later contributions rebuild them.
 5. All movements are netted, so each account gets one transfer from (or to) the NemKonto.
 
-A new expense added while the budget runs can be **filled from General Savings**: at the next
-month-end it gets what its steady monthly amount would already have saved (600 a year due in two
-months: 500 now, then 50 a month). This filling counts towards the plan. Without it, the first
-payment is split over the months left (300, 300, then 50).
+### Balancing between month-ends
 
-Any expense can also be **topped up** from General Savings by choice, from its edit page (useful
-for a variable expense that has stayed below zero). The top-up happens at the next month-end and
-does not change the expense's plan.
+Money can move between General Savings and the expenses on any day, not only at a month-end. Each
+move waits on the **Balance** page until its bank transfer is made:
+
+| Move | Effect |
+|---|---|
+| **Fill** a new expense | It gets what its steady monthly amount would already have saved (600 a year due in two months: 500 now, then 50 a month). This counts towards the plan. Without it, the first payment is split over the months left (300, 300, then 50). |
+| **Top up** an expense | Chosen on its edit page, for example a variable expense that stayed below zero. Does not change the plan. |
+| **Return** money to General Savings | Chosen on the expense's page. An **ended** expense returns what is left by itself, once its last payment has been entered. |
+| **Refund** | Money that came back (for example a surplus from the insurance company) goes to General Savings. |
+
+The page nets the waiting moves into one bank transfer per account, to or from the account holding
+General Savings. **Transfers made** records them (table `Move`, with the budget month of the next
+month-end) and the balances update at once. A move can be undone until the next month-end, and a
+month-end cannot be closed while moves are waiting. In the engine a made move is an `Adjustment`
+on the expense: it changes the actual balance, and a filling also the planned balance.
 
 When expenses on average need more than the expected income (a repeating expense counts as its
 amount divided by its interval), adding or changing an expense or income shows a warning, also on
 the overview: how much General Savings pays each month and the month it runs out.
-
-Money that an expense no longer needs (for example after ending it) can be **released** to General
-Savings at the next month-end.
 
 The forecast (engine/forecast.py) runs the same close forward, assuming expected income, expected
 spending and no interest for everything not yet entered.
@@ -118,7 +124,8 @@ erDiagram
   ACCOUNT ||--o{ INTEREST_ENTRY : "per month"
   MONTH_CLOSE ||--o{ CONTRIBUTION_LINE : "one per expense"
   MONTH_CLOSE ||--o{ TRANSFER : "one per account"
-  MONTH_CLOSE ||--o{ DECISION : "covers and releases"
+  MONTH_CLOSE ||--o{ DECISION : covers
+  EXPENSE ||--o{ MOVE : "between month-ends"
 ```
 
 | Table | Holds |
@@ -132,7 +139,8 @@ erDiagram
 | `MonthClose` | One per budget month: status (in progress or closed), the NemKonto and General Savings flow, notices. |
 | `ContributionLine` | Frozen per expense and month: contribution, expected payment, top-up, cover, release, amount change. |
 | `Transfer` | The net transfer per account, and whether it has been made. |
-| `Decision` | Covers and releases chosen for a month-end. |
+| `Decision` | Covers chosen for a month-end. |
+| `Move` | Money moved between General Savings and an expense, or a refund, between month-ends. |
 | `BalanceCorrection` | Manual corrections of the NemKonto or General Savings (for example a bank fee). |
 
 Balances are never stored; they are derived from the starting balances, the frozen lines and the
