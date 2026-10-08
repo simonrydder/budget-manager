@@ -112,6 +112,8 @@ def test_step_two_adds_and_removes_expenses(client, household, accounts):
     assert f"account={accounts['Food'].id}" in response.url
     page = client.get(response.url).content.decode()
     assert "Gym" in page and "next due 15 Oct 2026" in page
+    assert "Added <b>Gym</b>" in page  # shown by the form, which the page jumps to
+    assert "autofocus" in page  # ready for the next one
     gym = Expense.objects.get(name="Gym")
     assert gym.budget == household and gym.start_month is None
     client.post("/start/expenses/", {"action": "remove", "expense": gym.id})
@@ -151,6 +153,13 @@ def test_the_whole_setup_starts_the_budget_mid_month(client, household, accounts
     page = client.get("/start/transfers/")
     assert page.status_code == 200
     groceries = Expense.objects.get(name="Groceries")
+    # Fixed payments follow their due dates; only variable expenses ask what was spent.
+    text = page.content.decode()
+    assert "Already paid: Rent (1 Oct)." in text
+    assert "so the money is still on the account: Phone (20 Oct)." in text
+    assert f'name="spent-{groceries.id}"' in text
+    rent = Expense.objects.get(name="Rent")
+    assert f'name="spent-{rent.id}"' not in text
     preview = client.post(
         "/start/transfers/", {"action": "preview", f"spent-{groceries.id}": "3.200"}
     )

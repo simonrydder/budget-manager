@@ -150,12 +150,12 @@ def expenses(request):
         expense = form.save(commit=False)
         expense.sort_order = (budget.expenses.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         expense.save()
-        messages.success(request, f"Added {expense.name}.")
         keep = {
             "account": expense.account_id,
             "category": expense.category_id or "",
             "interval_months": expense.interval_months,
             "kind": expense.kind,
+            "added": expense.name,
         }
         return redirect(f"{reverse('setup-expenses')}?{urlencode(keep)}#add")
     if action == "remove":
@@ -190,8 +190,16 @@ def expenses(request):
         ]
         if items:
             groups.append({"name": category.name if category else "Uncategorised", "items": items})
+    added = request.GET.get("added", "")
+    if added and not form.is_bound:
+        form.fields["name"].widget.attrs["autofocus"] = True
     context = _context(
-        request, 2, form=form, groups=groups, count=sum(len(g["items"]) for g in groups)
+        request,
+        2,
+        form=form,
+        groups=groups,
+        count=sum(len(g["items"]) for g in groups),
+        added=added,
     )
     return render(request, "ledger/setup/expenses.html", context)
 
@@ -238,8 +246,7 @@ def income(request):
         source = form.save(commit=False)
         source.sort_order = (budget.incomes.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         source.save()
-        messages.success(request, f"Added {source.name}.")
-        return redirect(reverse("setup-income") + "#add")
+        return redirect(f"{reverse('setup-income')}?{urlencode({'added': source.name})}#add")
     if action == "remove":
         source = budget.incomes.filter(pk=_int(request.POST.get("source"))).first()
         if source is not None:
@@ -263,7 +270,12 @@ def income(request):
         }
         for source in budget.incomes.all()
     ]
-    context = _context(request, 4, form=form, sources=sources, summary=result, start=start)
+    added = request.GET.get("added", "")
+    if added and not form.is_bound:
+        form.fields["name"].widget.attrs["autofocus"] = True
+    context = _context(
+        request, 4, form=form, sources=sources, summary=result, start=start, added=added
+    )
     return render(request, "ledger/setup/income.html", context)
 
 
@@ -316,6 +328,9 @@ def transfers(request):
         row.aside_field = field(f"aside-{row.expense.id}", row.set_aside)
         row.spent_field = field(f"spent-{row.expense.id}", row.spent or None)
     missing = [item.account for item in plan.accounts if item.bank is None]
+    fixed_due = sorted(
+        (row for row in plan.rows if row.due and row.expense.is_fixed), key=lambda row: row.due
+    )
     preview = services.preview_first_close(budget, plan) if not errors else None
     accounts_by_id = {account.pk: account for account in items}
     first_transfers = []
@@ -333,7 +348,9 @@ def transfers(request):
         first_transfers=first_transfers,
         missing=missing,
         errors=errors,
-        due_rows=[row for row in plan.rows if row.due],
+        variable_rows=[row for row in plan.rows if row.due and not row.expense.is_fixed],
+        paid_rows=[row for row in fixed_due if row.spent],
+        unpaid_rows=[row for row in fixed_due if not row.spent],
         old_balances=budget.balances_on and budget.balances_on != now,
         shortage=format_amount(-plan.general_savings)
         if plan.complete and plan.general_savings < 0

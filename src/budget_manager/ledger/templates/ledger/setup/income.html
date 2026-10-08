@@ -10,6 +10,7 @@
     {% csrf_token %}
     <input type="hidden" name="action" value="add">
     <h2>Add an income</h2>
+    {% if added %}<div class="notice success"><span>Added <b>{{ added }}</b>. Add the next one, or continue at the bottom.</span></div>{% endif %}
     <div class="quick-grid">
       <div class="wide">{% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}</div>
       {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
