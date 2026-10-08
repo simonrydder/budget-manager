@@ -3,19 +3,23 @@ from datetime import date
 import pytest
 
 from budget_manager.ledger import services
-from budget_manager.ledger.models import Expense, MonthClose, Move
+from budget_manager.ledger.models import Budget, Expense, MonthClose, Move
 
 from .test_month_end import expense, month_end
 
 pytestmark = pytest.mark.django_db
 
 
+def state():
+    return services.build_state(Budget.objects.get())
+
+
 def general_savings() -> int:
-    return services.build_state().general_savings
+    return state().general_savings
 
 
 def balance_of(name: str) -> int:
-    return services.build_state().current_expense_balances()[expense(name).id]
+    return state().current_expense_balances()[expense(name).id]
 
 
 def bank_moves(client) -> list[tuple[str, str, int]]:
@@ -101,6 +105,7 @@ def test_top_up_chosen_while_editing_a_variable_expense(client, budget, accounts
 def test_money_left_on_an_ended_expense_returns_to_general_savings(client, budget, accounts):
     month_end(client, "2025-05")
     old = Expense.objects.create(
+        budget=budget,
         name="Old subscription",
         amount=8900,
         interval_months=1,
@@ -189,7 +194,7 @@ def test_the_month_end_waits_for_moves(client, budget, accounts):
     month_end(client, "2025-05")
     client.post("/balance/", {"amount": "300", "account": accounts["Budget"].id})
     response = month_end(client, "2025-06", close=False)
-    assert response.url == "/month-end/2025-06/check/"
+    assert response.url == client.at("/month-end/2025-06/check/")
     assert b"still waiting" in client.get("/month-end/2025-06/check/").content
     response = client.post("/month-end/2025-06/close/", follow=True)
     assert b"Make those transfers" in response.content
@@ -202,13 +207,15 @@ def test_the_month_end_waits_for_moves(client, budget, accounts):
 def test_moves_need_enough_general_savings(client, budget, accounts):
     month_end(client, "2025-05")
     rent = expense("Rent")
-    Move.objects.create(kind="topup", expense=rent, account=rent.account, amount=10**9)
+    Move.objects.create(
+        budget=rent.budget, kind="topup", expense=rent, account=rent.account, amount=10**9
+    )
     response = client.post("/balance/made/", follow=True)
     assert b"too little for these moves" in response.content
     assert not Move.objects.filter(done=True).exists()
 
 
-def test_moves_wait_until_the_budget_is_started(client, budget, accounts):
+def test_moves_wait_until_the_budget_is_started(client, household, accounts):
     client.post("/balance/", {"amount": "300", "account": accounts["Budget"].id})
     response = client.post("/balance/made/", follow=True)
     assert b"Start the budget before moving money" in response.content

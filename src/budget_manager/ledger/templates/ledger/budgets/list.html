@@ -1,0 +1,39 @@
+{% extends "ledger/base.html" %}
+{% block title %}Budgets{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Budgets</h1>
+    <p class="muted">Each budget has its own accounts, expenses, income and month-ends, for example one for the household and one for a company. You only see the budgets you have been given access to.</p>
+  </div>
+</div>
+
+<div class="budget-cards">
+  {% for item in items %}
+  {% with budget=item.budget %}
+  <section class="card{% if item.current %} hero{% endif %}">
+    <div class="card-head"><h2>{{ budget.name }}</h2>{% if item.current %}<span class="chip ok">Last opened</span>{% endif %}</div>
+    <p class="muted small">{{ item.status }}</p>
+    <p class="small">People: {{ item.people|join:", " }}</p>
+    <div class="actions">
+      <a class="btn primary small" href="{{ budget.get_absolute_url }}">Open</a>
+      <a class="btn small" href="{% url 'budget-copy' budget.id %}">Copy</a>
+      <a class="btn small" href="{{ budget.get_absolute_url }}settings/">Settings</a>
+    </div>
+  </section>
+  {% endwith %}
+  {% empty %}
+  <p class="empty">You have no budgets yet. Create your first one.</p>
+  {% endfor %}
+</div>
+
+<section class="card flat" style="max-width:640px">
+  <h2>New budget</h2>
+  <p class="muted small">Starts with the usual accounts (NemKonto, Budget, Food and Savings) and categories, and takes you through the setup. To start from an existing budget, use Copy instead.</p>
+  <form method="post" action="{% url 'budget-new' %}" class="form" novalidate>
+    {% csrf_token %}
+    {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+    <div class="form-actions"><button class="btn primary">Create budget</button></div>
+  </form>
+</section>
+{% endblock %}

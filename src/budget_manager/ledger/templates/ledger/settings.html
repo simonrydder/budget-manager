@@ -1,28 +1,49 @@
 {% extends "ledger/base.html" %}
+{% load budget %}
 {% block title %}Settings{% endblock %}
 {% block content %}
 <div class="page-head"><div>
   <h1>Settings</h1>
-  <p class="muted">Budget-wide settings shared by everyone who logs in.</p>
+  <p class="muted">Settings for {{ current_budget.name }}, shared by everyone who can use it.</p>
 </div></div>
 <form method="post" class="form card flat" novalidate>
   {% csrf_token %}
-  <h2>When to start</h2>
-  {% with field=form.start_month %}{% include "ledger/_field.html" %}{% endwith %}
+  <h2>Budget</h2>
+  {% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}
+  {% with field=form.members %}{% include "ledger/_field.html" %}{% endwith %}
   <h2>NemKonto</h2>
   <p class="muted small">After each month-end the NemKonto should end between the minimum and the maximum. More goes to General Savings; less is taken from it.</p>
   <div class="form-row">
     {% with field=form.nemkonto_min %}{% include "ledger/_field.html" %}{% endwith %}
     {% with field=form.nemkonto_max %}{% include "ledger/_field.html" %}{% endwith %}
   </div>
-  <h2>Starting balances</h2>
-  <p class="muted small">What you have when you start. Money already saved for an expense is set on that expense ("Already saved").</p>
-  <div class="form-row">
-    {% with field=form.nemkonto_opening %}{% include "ledger/_field.html" %}{% endwith %}
-    {% with field=form.general_savings_opening %}{% include "ledger/_field.html" %}{% endwith %}
-  </div>
   <h2>Forecast</h2>
   {% with field=form.forecast_months %}{% include "ledger/_field.html" %}{% endwith %}
   <div class="form-actions"><button class="btn primary">Save settings</button></div>
 </form>
+
+<section class="card flat" style="max-width:640px">
+  <h2>Starting point</h2>
+  {% if started %}
+  <div class="flow">
+    {% if current_budget.started_on %}<div><span>Started on</span><span>{{ current_budget.started_on|date:"j F Y" }}</span></div>{% endif %}
+    <div><span>First month-end</span><span>{{ current_budget.opening.last_day|date:"j F Y" }}</span></div>
+    <div><span>NemKonto at the start</span><span class="num">{{ current_budget.nemkonto_opening|money }}</span></div>
+    <div><span>General Savings at the start</span><span class="num">{{ current_budget.general_savings_opening|money }}</span></div>
+  </div>
+  {% if running %}<p class="muted small">The budget has had its first month-end, so the starting point is fixed. Use a correction on the Accounts page if the bank shows something else.</p>
+  {% else %}<p class="muted small">Until the first month-end you can <a href="{% url 'start' %}">go through the setup again</a>.</p>{% endif %}
+  {% else %}
+  <p class="muted">Not started yet. <a href="{% url 'start' %}">Continue the setup</a>.</p>
+  {% endif %}
+</section>
+
+<section class="card flat" style="max-width:640px">
+  <h2>Copy or delete</h2>
+  <p class="muted small">A copy is a separate budget, for example to start a budget for a company from this one.</p>
+  <div class="actions">
+    <a class="btn" href="{% url 'budget-copy' current_budget.id %}">Copy this budget</a>
+    <a class="btn danger" href="{% url 'budget-delete' %}">Delete this budget</a>
+  </div>
+</section>
 {% endblock %}

@@ -14,6 +14,7 @@
   {% with step=nav_close_step %}
   <aside class="sidebar" aria-label="Main">
     <a class="brand" href="{% url 'dashboard' %}">Budget</a>
+    {% include "ledger/_switcher.html" %}
     <nav class="nav">
       {% include "ledger/_nav.html" %}
     </nav>
@@ -23,7 +24,8 @@
     </div>
   </aside>
   <details class="topbar">
-    <summary><span class="brand">Budget</span><span class="menu-btn">Menu</span></summary>
+    <summary><span class="brand">{% if current_budget %}{{ current_budget.name }}{% else %}Budget{% endif %}</span><span class="menu-btn">Menu</span></summary>
+    {% include "ledger/_switcher.html" %}
     <nav class="nav">
       {% include "ledger/_nav.html" %}
       <form method="post" action="{% url 'logout' %}" style="padding:8px 10px">{% csrf_token %}<button class="linklike">Log out {{ user.username }}</button></form>

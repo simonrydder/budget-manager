@@ -32,9 +32,19 @@ def test_first_visit_creates_the_first_login(db):
             "password2": "correct horse battery",
         },
     )
-    assert response.url == "/"
-    assert get_user_model().objects.filter(username="sam").exists()
-    assert visitor.get("/").status_code == 200
+    sam = get_user_model().objects.get(username="sam")
+    budget = sam.budgets.get()
+    assert budget.name == "My budget"
+    assert set(budget.accounts.values_list("name", flat=True)) == {
+        "NemKonto",
+        "Budget",
+        "Food",
+        "Savings",
+    }
+    assert response.url == f"/b/{budget.pk}/start/"
+    page = visitor.get("/", follow=True)
+    assert page.redirect_chain[-1][0] == f"/b/{budget.pk}/"
+    assert b"Set up My budget" in page.content
     assert Client().get("/setup/").url == "/login/"
 
 
@@ -130,7 +140,7 @@ def test_add_expense_with_danish_amounts(client, budget, accounts):
     assert car.amount == 481250
     assert car.starting_balance == 100000
     assert car.category is None
-    assert car.start_month is None  # before the first month-end: counts from the start
+    assert car.start_month == date(2025, 5, 1)  # counts from the coming month-end
 
 
 def test_expense_added_later_starts_at_the_next_month_end(client, budget, accounts):
@@ -306,6 +316,7 @@ def test_expenses_can_be_reordered_within_a_category(client, budget, accounts):
     house = Category.objects.get(name="House")
     rent = Expense.objects.get(name="Rent")
     water = Expense.objects.create(
+        budget=budget,
         name="Water",
         amount=30000,
         first_due=date(2025, 5, 1),

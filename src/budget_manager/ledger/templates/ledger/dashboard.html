@@ -13,14 +13,16 @@
   </div>
 </div>
 
-{% if not setup_done %}
-<section class="card flat">
-  <div class="card-head"><h2>Get started</h2><span class="muted small">Do these once. After that, the month-end is all you need.</span></div>
-  <ol class="stack" style="margin:0;padding-left:20px;gap:6px">
-    {% for label, done, url_name in checklist %}
-    <li>{% if done %}<span class="chip ok">Done</span> <span class="muted">{{ label }}</span>{% else %}<a href="{% url url_name %}">{{ label }}</a>{% endif %}</li>
-    {% endfor %}
-  </ol>
+{% if start_transfers %}
+<section class="card" style="border-color:var(--warn)">
+  <div class="card-head">
+    <h2>Finish starting: even out the accounts</h2>
+    <form method="post" action="{% url 'start-transfers-done' %}">{% csrf_token %}<button class="btn small primary">Done</button></form>
+  </div>
+  <p class="muted small">Make {{ start_transfers|length|pluralize:"this transfer,these transfers" }} in your bank, so the accounts match the budget. Press Done when they are made.</p>
+  <ul class="plain">
+    {% for item in start_transfers %}<li><b>{{ item.amount|money }}</b> {{ item.source }} → {{ item.target }}</li>{% endfor %}
+  </ul>
 </section>
 {% endif %}
 

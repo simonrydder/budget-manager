@@ -1,0 +1,60 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Set up · Expenses{% endblock %}
+{% block content %}
+{% include "ledger/setup/_steps.html" with title="What do you spend money on?" %}
+<div class="stack" style="gap:18px">
+  <p class="lead">Add every expense, one at a time: rent, insurance, subscriptions, food, fuel, savings goals. For each one the amount, how often it is paid and the next date it is due. The next step adds them up.</p>
+
+  <form method="post" class="card quick-add" id="add" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add">
+    <h2>Add an expense</h2>
+    <div class="quick-grid">
+      <div class="wide">{% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}</div>
+      {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.account %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.kind %}{% include "ledger/_field.html" %}{% endwith %}
+    </div>
+    <div class="form-actions">
+      <button class="btn primary">Add expense</button>
+      <span class="muted small"><b>Fixed</b>: a stable amount like insurance. <b>Variable</b>: it varies, like food or fuel. For a savings goal, choose <i>Once</i> and the date the money must be ready.</span>
+    </div>
+  </form>
+
+  <section class="stack">
+    <div class="spread"><h2>Your expenses</h2><span class="muted small">{{ count }} so far</span></div>
+    {% for group in groups %}
+    <section class="entry-group">
+      <header><h3>{{ group.name }}</h3><span class="muted small">{{ group.items|length }}</span></header>
+      {% for item in group.items %}
+      {% with expense=item.expense %}
+      <div class="entry expense-row">
+        <div class="name">
+          <span><b>{{ expense.name }}</b> <span class="chip">{{ expense.account.name }}</span> {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}</span>
+          <small>{{ expense.frequency }}{% if item.next_due %} · next due {{ item.next_due|date:"j M Y" }}{% else %} · nothing due{% endif %}{% if item.monthly %} · ≈ {{ item.monthly|money0 }} a month{% endif %}</small>
+        </div>
+        <span class="num"><b>{{ expense.amount|money }}</b></span>
+        <span class="row-actions">
+          <a class="small" href="{% url 'expense-edit' expense.id %}?next={{ request.path|urlencode }}">Edit</a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="expense" value="{{ expense.id }}"><button class="linklike small">Remove</button></form>
+        </span>
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </section>
+    {% empty %}
+    <p class="empty">No expenses yet. Add the first one above.</p>
+    {% endfor %}
+  </section>
+
+  <form method="post" class="sticky-actions">
+    {% csrf_token %}
+    <a class="btn" href="{% url 'setup-accounts' %}">Back</a>
+    <button class="btn primary" name="action" value="next"{% if not count %} disabled{% endif %}>Next: summary</button>
+  </form>
+</div>
+{% endblock %}

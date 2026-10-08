@@ -1,0 +1,117 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Set up · Transfers{% endblock %}
+{% block content %}
+{% include "ledger/setup/_steps.html" with title="Even out the accounts and start" %}
+<div class="stack" style="gap:18px">
+  <p class="lead">Starting today, {{ plan.today|date:"j F Y" }}. Each expense gets what it should have by now, so it saves the same amount every month from here on. What is left over is General Savings. The first month-end is on {{ plan.opening.last_day|date:"j F" }} and pays for {{ plan.start.label }}.</p>
+  {% if missing %}<div class="notice warning"><span>Enter today's balance of {% for account in missing %}{{ account.name }}{% if not forloop.last %}, {% endif %}{% endfor %} in <a href="{% url 'setup-accounts' %}">step 1</a>.</span></div>{% endif %}
+  {% if old_balances %}<div class="notice info"><span>The balances were entered on {{ current_budget.balances_on|date:"j F" }}. If money has moved since, update them in <a href="{% url 'setup-accounts' %}">step 1</a> first.</span></div>{% endif %}
+  {% if errors %}<div class="notice danger">Some amounts could not be read. Check the fields marked below.</div>{% endif %}
+
+  <form method="post" class="stack" style="gap:18px" novalidate>
+    {% csrf_token %}
+    <button class="sr-only" name="action" value="preview" tabindex="-1" aria-hidden="true">Recalculate</button>
+    {% if due_rows %}
+    <section class="entry-group">
+      <header><h3>Already paid or spent in {{ plan.opening.name }}</h3><span class="muted small">So far this month</span></header>
+      <p class="muted small" style="padding:10px 14px 0">Fixed payments due before today are counted as paid. Enter what has been spent so far on the others, for example food, then press Recalculate.</p>
+      {% for row in due_rows %}
+      <div class="entry">
+        <div class="name">
+          <span><label for="{{ row.spent_field.name }}"><b>{{ row.expense.name }}</b></label> <span class="chip">{{ row.expense.account.name }}</span></span>
+          <small>{{ row.expense.amount|money }} due {{ row.due|date:"j M" }}{% if row.expense.is_fixed %} · fixed{% else %} · variable{% endif %}</small>
+        </div>
+        <input type="text" class="amount{% if row.spent_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.spent_field.name }}" name="{{ row.spent_field.name }}" value="{{ row.spent_field.value }}" placeholder="0,00">
+        <span class="after">Left <b class="{{ row.now|tone }}">{{ row.now|money }}</b></span>
+        {% if row.spent_field.error %}<span class="error">{{ row.spent_field.error }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h2>1 · Even out the accounts today</h2>
+      {% if plan.complete %}
+      <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Account</th><th class="num">In the bank</th><th class="num hide-narrow">Expenses need now</th><th class="num">Difference</th></tr></thead>
+        <tbody>
+        {% for item in plan.accounts %}
+          <tr>
+            <td>{{ item.account.name }}{% if item.account.is_nemkonto %} <span class="muted small hide-narrow">keeps its money for the month-end</span>{% elif item.account.holds_general_savings %} <span class="muted small hide-narrow">the rest is General Savings</span>{% endif %}</td>
+            <td class="num">{{ item.bank|money }}</td>
+            <td class="num dim hide-narrow">{% if not item.account.is_nemkonto %}{{ item.expected|money }}{% endif %}</td>
+            <td class="num {{ item.difference|tone }}">{% if not item.account.is_nemkonto %}{{ item.difference|signed }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+          <tr class="total"><td>General Savings</td><td></td><td class="hide-narrow"></td><td class="num {{ plan.general_savings|tone }}">{{ plan.general_savings|money }}</td></tr>
+        </tbody>
+      </table>
+      </div>
+      {% if shortage %}
+        <div class="notice danger">The accounts hold {{ shortage }} less than the expenses should have by now. Check the balances in step 1, or lower what some expenses have set aside below.</div>
+      {% elif plan.moves %}
+        <p><b>Make {{ plan.moves|length|pluralize:"this transfer,these transfers" }} in your bank when you start:</b></p>
+        <div class="transfers">
+          {% for source, target, amount in plan.moves %}
+          <div class="transfer">
+            <span></span>
+            <div><div class="amt">{{ amount|money }}</div><div class="route">{{ source }} → {{ target }}</div></div>
+            <button type="button" class="btn small" data-copy="{{ amount|money_input }}" hidden>Copy</button>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No transfers needed: every account already holds what its expenses need.</p>
+      {% endif %}
+      {% else %}
+      <p class="muted">Enter every account's balance in step 1 first.</p>
+      {% endif %}
+    </section>
+
+    {% if preview %}
+    <section class="card">
+      <h2>2 · Your first month-end, {{ plan.opening.last_day|date:"j F" }}</h2>
+      <p class="muted small">When the income for {{ plan.start.name }} has arrived ({{ preview.income|money0 }} expected), transfer from the NemKonto:</p>
+      <div class="flow">
+        {% for item in first_transfers %}
+        <div><span>{% if item.plan.amount < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}</span><span class="num">{{ item.plan.amount|absolute|money0 }}</span></div>
+        {% endfor %}
+        <div class="total"><span>NemKonto after the transfers</span><span class="num {{ preview.nemkonto_end|tone }}">{{ preview.nemkonto_end|money0 }}</span></div>
+      </div>
+      {% for notice in preview.notices %}{% if notice.level != "info" %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endif %}{% endfor %}
+      <p class="muted small">The amounts stay about the same every month, so they can be standing orders. The month-end checklist works them out each time from what was actually spent.</p>
+    </section>
+    {% endif %}
+
+    <details class="card more"{% if errors %} open{% endif %}>
+      <summary>Adjust what each expense had at the start of {{ plan.opening.name }}</summary>
+      <p class="muted small">The suggestion keeps the monthly amount the same before and after the next payment: a yearly 1.200 due in two months should already have 1.000. A payment due this month must be there in full. Change an amount if you know better, then press Recalculate.</p>
+      <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>Expense</th><th class="num">Suggested</th><th class="num">Set aside 1 {{ plan.opening.name|slice:":3" }}</th><th class="num">Now</th></tr></thead>
+        <tbody>
+        {% for row in plan.rows %}
+          <tr>
+            <td><label for="{{ row.aside_field.name }}">{{ row.expense.name }}</label> <span class="muted small">{{ row.expense.amount|money0 }} · {{ row.expense.frequency|lower }}</span>{% if row.aside_field.error %}<br><span class="neg small">{{ row.aside_field.error }}</span>{% endif %}</td>
+            <td class="num dim">{% if row.suggested is None %}one-off{% else %}{{ row.suggested|money }}{% endif %}</td>
+            <td class="num"><input type="text" class="amount{% if row.aside_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.aside_field.name }}" name="{{ row.aside_field.name }}" value="{{ row.aside_field.value }}" placeholder="0,00"></td>
+            <td class="num {{ row.now|tone }}">{{ row.now|money }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </details>
+
+    <div class="sticky-actions">
+      <a class="btn" href="{% url 'setup-income' %}">Back</a>
+      <span class="actions">
+        <button class="btn" name="action" value="preview">Recalculate</button>
+        <button class="btn primary" name="action" value="start"{% if not plan.complete or shortage %} disabled{% endif %}>{% if started %}Start again{% else %}Start the budget{% endif %}</button>
+      </span>
+    </div>
+  </form>
+</div>
+{% endblock %}

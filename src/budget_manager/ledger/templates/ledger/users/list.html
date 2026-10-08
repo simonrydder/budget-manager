@@ -3,24 +3,27 @@
 {% block content %}
 <div class="page-head"><div>
   <h1>People</h1>
-  <p class="muted">Everyone here can log in, see and change the whole budget.</p>
+  <p class="muted">Everyone here can log in. Each person sees and changes only the budgets they have access to; give access under a budget's Settings.</p>
 </div></div>
 <div class="split">
   <section class="card">
     <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Username</th><th>Name</th><th>Last login</th><th></th></tr></thead>
+      <thead><tr><th>Username</th><th>Name</th><th>Your budgets they use</th><th>Last login</th><th></th></tr></thead>
       <tbody>
-      {% for person in users %}
+      {% for item in people %}
+      {% with person=item.person %}
         <tr>
           <td><b>{{ person.username }}</b>{% if person == user %} <span class="chip">you</span>{% endif %}</td>
           <td>{{ person.first_name }}</td>
+          <td class="dim">{% for budget in item.budgets %}{{ budget.name }}{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}</td>
           <td class="dim">{{ person.last_login|date:"j M Y H:i"|default:"never" }}</td>
           <td class="num"><span class="actions" style="justify-content:flex-end">
             <a class="btn small" href="{% url 'user-password' person.id %}">Change password</a>
             {% if person != user %}<a class="btn small danger" href="{% url 'user-delete' person.id %}">Remove</a>{% endif %}
           </span></td>
         </tr>
+      {% endwith %}
       {% endfor %}
       </tbody>
     </table>

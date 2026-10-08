@@ -16,11 +16,8 @@ from budget_manager.ledger import services
 from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
-    BudgetSettings,
     Decision,
-    Expense,
     IncomeEntry,
-    IncomeSource,
     InterestEntry,
     MonthClose,
     SpendingEntry,
@@ -46,8 +43,12 @@ def _int(value) -> int | None:
 
 def month_end(request):
     """Continue where the checklist was left, or start it."""
-    month = services.next_close_month()
-    draft = services.draft_close(month)
+    budget = request.budget
+    if not services.budget_started(budget):
+        messages.info(request, "Set up the budget first. The month-ends start after that.")
+        return redirect("start")
+    month = services.next_close_month(budget)
+    draft = services.draft_close(budget, month)
     step = draft.step if draft else 1
     name = next(slug for number, slug, _ in STEPS if number == step)
     return redirect(f"month-end-{name}", month=str(month))
@@ -55,15 +56,18 @@ def month_end(request):
 
 def _guard(request, text: str):
     """The month in the URL must be the next month-end. Returns (month, close) or a redirect."""
+    budget = request.budget
     month = parse_month(text)
-    expected = services.next_close_month()
+    if not services.budget_started(budget):
+        return redirect("month-end")
+    expected = services.next_close_month(budget)
     if month != expected:
-        close = MonthClose.objects.filter(month=month.first_day()).first()
+        close = budget.closes.filter(month=month.first_day()).first()
         if close and close.is_closed:
             return redirect("close-detail", month=str(month))
         messages.info(request, f"The next month-end is on {(expected - 1).last_day():%d %B %Y}.")
         return redirect("month-end")
-    close = services.start_draft(month, request.user)
+    close = services.start_draft(budget, month, request.user)
     return month, close
 
 
@@ -118,17 +122,19 @@ def spending(request, month: str):
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
+    budget = request.budget
     previous = month - 1
-    state = services.build_state()
-    config = BudgetSettings.load()
-    first_close = previous < config.opening
-    opening_month = previous < config.start
+    state = services.build_state(budget)
+    first_close = previous < budget.opening
+    opening_month = previous < budget.start
 
     entries = {
         entry.expense_id: entry.amount
-        for entry in SpendingEntry.objects.filter(month=previous.first_day())
+        for entry in SpendingEntry.objects.filter(
+            expense__budget=budget, month=previous.first_day()
+        )
     }
-    expenses = list(Expense.objects.select_related("account", "category"))
+    expenses = list(budget.expenses.select_related("account", "category"))
     ledgers = {ledger.expense.id: ledger for ledger in state.ledgers}
     rows = []
     for expense in expenses:
@@ -166,7 +172,7 @@ def spending(request, month: str):
         return _next(request, month, "spending")
 
     groups: OrderedDict[Account, list] = OrderedDict()
-    for account in Account.objects.exclude(role="nemkonto"):
+    for account in budget.accounts.exclude(role="nemkonto"):
         groups[account] = []
     for row in sorted(rows, key=lambda r: (r["due"] is None, r["expense"].name.lower())):
         groups.setdefault(row["expense"].account, []).append(row)
@@ -179,7 +185,7 @@ def spending(request, month: str):
         groups=[(account, items) for account, items in groups.items() if items],
         first_close=first_close,
         opening_month=opening_month,
-        started_on=config.started_on,
+        started_on=budget.started_on,
         entered=len(entries),
         total=len(rows),
         errors=errors,
@@ -192,11 +198,14 @@ def interest(request, month: str):
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
+    budget = request.budget
     previous = month - 1
-    accounts = list(Account.objects.all())
+    accounts = list(budget.accounts.all())
     entries = {
         entry.account_id: entry.amount
-        for entry in InterestEntry.objects.filter(month=previous.first_day())
+        for entry in InterestEntry.objects.filter(
+            account__budget=budget, month=previous.first_day()
+        )
     }
     errors = {}
     if request.method == "POST":
@@ -223,16 +232,17 @@ def income(request, month: str):
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
-    state = services.build_state()
+    budget = request.budget
+    state = services.build_state(budget)
     expected = services.expected_income_entries(state, month)
     entries = {
         entry.source_id: entry.amount
-        for entry in IncomeEntry.objects.filter(month=month.first_day())
+        for entry in IncomeEntry.objects.filter(source__budget=budget, month=month.first_day())
     }
     show_all = request.GET.get("all") == "1"
     sources = [
         source
-        for source in IncomeSource.objects.all()
+        for source in budget.incomes.all()
         if show_all or expected.get(source.id) or source.id in entries
     ]
     errors = {}
@@ -252,15 +262,15 @@ def income(request, month: str):
         }
         for source in sources
     ]
-    hidden = IncomeSource.objects.count() - len(sources)
+    hidden = budget.incomes.count() - len(sources)
     context = _context(month, close, 3, rows=rows, hidden=hidden, show_all=show_all)
     return render(request, "ledger/month_end/income.html", context)
 
 
-def _plan_context(month: YearMonth, close: MonthClose):
-    state, plan, inputs = services.plan_next_close()
-    accounts = {account.id: account for account in Account.objects.all()}
-    expenses = {expense.id: expense for expense in Expense.objects.select_related("account")}
+def _plan_context(budget, month: YearMonth, close: MonthClose):
+    state, plan, inputs = services.plan_next_close(budget)
+    accounts = {account.id: account for account in budget.accounts.all()}
+    expenses = {expense.id: expense for expense in budget.expenses.select_related("account")}
     nemkonto = next(a for a in accounts.values() if a.is_nemkonto)
     done = set(close.done_accounts or [])
     transfers = [
@@ -279,7 +289,7 @@ def _plan_context(month: YearMonth, close: MonthClose):
     expected = services.expected_income_entries(state, month)
     missing = [
         source
-        for source in IncomeSource.objects.all()
+        for source in budget.incomes.all()
         if expected.get(source.id) and source.id not in inputs.income_entries
     ]
     balances_after = {account_id: 0 for account_id in accounts}
@@ -289,7 +299,7 @@ def _plan_context(month: YearMonth, close: MonthClose):
     balances_after[state.savings_account.id] += plan.general_savings_after
     # Corrections recorded after making this month's transfers apply from the next month-end,
     # but they are part of what the bank shows now.
-    for item in BalanceCorrection.objects.filter(month=month.first_day()):
+    for item in budget.corrections.filter(month=month.first_day()):
         if item.target == BalanceCorrection.Target.NEMKONTO:
             balances_after[nemkonto.id] += item.amount
         else:
@@ -298,7 +308,9 @@ def _plan_context(month: YearMonth, close: MonthClose):
         "state": state,
         "plan": plan,
         "inputs": inputs,
-        "waiting_moves": [item for item in services.balancing(today(), state).moves if item.move],
+        "waiting_moves": [
+            item for item in services.balancing(budget, today(), state).moves if item.move
+        ],
         "transfers": transfers,
         "lines": lines,
         "missing_income": missing,
@@ -317,14 +329,17 @@ def transfers(request, month: str):
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
-    context = _plan_context(month, close)
+    budget = request.budget
+    context = _plan_context(budget, month, close)
     plan = context["plan"]
 
     cover_errors = {}
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "tick":
-            account = get_object_or_404(Account, pk=_int(request.POST.get("account")))
+            account = get_object_or_404(
+                Account, pk=_int(request.POST.get("account")), budget=budget
+            )
             account_id = account.id
             done = set(close.done_accounts or [])
             done.symmetric_difference_update({account_id})
@@ -396,7 +411,7 @@ def check(request, month: str):
     month, close = guarded
     if close.step < 5:
         return redirect("month-end-transfers", month=str(month))
-    context = _plan_context(month, close)
+    context = _plan_context(request.budget, month, close)
     context.update(_context(month, close, 5))
     return render(request, "ledger/month_end/check.html", context)
 
@@ -408,7 +423,7 @@ def finish(request, month: str):
         return guarded
     month, _ = guarded
     try:
-        services.finalize_close(month, request.user)
+        services.finalize_close(request.budget, month, request.user)
     except CloseError as error:
         messages.error(request, str(error))
         return redirect("month-end-transfers", month=str(month))
@@ -424,13 +439,13 @@ def finish(request, month: str):
 
 
 def close_list(request):
-    closes = MonthClose.objects.prefetch_related("transfers")
+    closes = request.budget.closes.prefetch_related("transfers")
     return render(request, "ledger/closes/list.html", {"closes": closes})
 
 
 def close_detail(request, month: str):
     month = parse_month(month)
-    close = get_object_or_404(MonthClose, month=month.first_day())
+    close = get_object_or_404(MonthClose, month=month.first_day(), budget=request.budget)
     if not close.is_closed:
         return redirect("month-end")
     if request.method == "POST":
@@ -445,7 +460,7 @@ def close_detail(request, month: str):
         .exclude(contribution=0, topup=0, cover=0, release=0, expected_spend=0)
         .order_by("expense__account__sort_order", "expense__name")
     )
-    last = services.last_closed()
+    last = services.last_closed(request.budget)
     context = {
         "close": close,
         "month": month,
@@ -459,7 +474,12 @@ def close_detail(request, month: str):
 
 def close_reopen(request, month: str):
     month = parse_month(month)
-    close = get_object_or_404(MonthClose, month=month.first_day(), status=MonthClose.Status.CLOSED)
+    close = get_object_or_404(
+        MonthClose,
+        month=month.first_day(),
+        status=MonthClose.Status.CLOSED,
+        budget=request.budget,
+    )
     if request.method == "POST":
         try:
             services.reopen_close(close)

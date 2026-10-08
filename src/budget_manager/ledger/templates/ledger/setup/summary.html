@@ -1,0 +1,57 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Set up · Summary{% endblock %}
+{% block content %}
+{% include "ledger/setup/_steps.html" with title="What your expenses cost" %}
+<div class="stack" style="gap:18px">
+  <p class="lead">Every expense counted per month: a yearly payment as a twelfth, a savings goal as what is needed each month until it is due. This is what has to be set aside on average.</p>
+
+  <section class="grid cols-3">
+    <div class="card"><span class="label">Expenses a month</span><span class="big">{{ summary.monthly|money0 }}</span></div>
+    <div class="card"><span class="label">A year</span><span class="big">{{ summary.monthly|times:12|money0 }}</span></div>
+    <div class="card"><span class="label">Categories</span><span class="big">{{ summary.groups|length }}</span></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>By category</h2><span class="muted small">Biggest first</span></div>
+    <div class="table-wrap">
+    <table class="table summary-table">
+      <thead><tr><th>Category</th><th class="share-col">Share</th><th class="num">A month</th><th class="num">A year</th></tr></thead>
+      <tbody>
+      {% for group in summary.groups %}
+        <tr class="group">
+          <td>{{ group.name }} <span class="muted small">({{ group.rows|length }})</span></td>
+          <td class="share-col"><span class="bar" style="--share:{{ group.monthly|share_of:summary.monthly }}%"></span> <span class="muted small">{{ group.monthly|share_of:summary.monthly }}%</span></td>
+          <td class="num">{{ group.monthly|money0 }}</td>
+          <td class="num">{{ group.monthly|times:12|money0 }}</td>
+        </tr>
+        {% for expense, monthly in group.rows %}
+        <tr>
+          <td class="sub">{{ expense.name }} <span class="muted small">{{ expense.amount|money0 }} · {{ expense.frequency|lower }}</span></td>
+          <td class="share-col"></td>
+          <td class="num dim">{{ monthly|money0 }}</td>
+          <td class="num dim">{{ monthly|times:12|money0 }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      <tr class="total"><td>Total</td><td class="share-col"></td><td class="num">{{ summary.monthly|money0 }}</td><td class="num">{{ summary.monthly|times:12|money0 }}</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>By account</h2>
+    <p class="muted small">About this much goes from the NemKonto to each account every month.</p>
+    <div class="flow">
+      {% for account, monthly in summary.accounts %}<div><span>{{ account.name }}</span><span class="num">{{ monthly|money0 }} a month</span></div>{% endfor %}
+    </div>
+  </section>
+
+  <form method="post" class="sticky-actions">
+    {% csrf_token %}
+    <a class="btn" href="{% url 'setup-expenses' %}">Back</a>
+    <button class="btn primary">Next: income</button>
+  </form>
+</div>
+{% endblock %}

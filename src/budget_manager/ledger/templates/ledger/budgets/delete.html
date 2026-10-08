@@ -1,0 +1,11 @@
+{% extends "ledger/base.html" %}
+{% block title %}Delete {{ current_budget.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Delete {{ current_budget.name }}?</h1></div></div>
+<form method="post" class="form card flat" novalidate>
+  {% csrf_token %}
+  <div class="notice danger"><span>This deletes the budget <b>{{ current_budget.name }}</b> with all its accounts, expenses, income, month-ends and history, for everyone who uses it. It cannot be undone. Your other budgets are not affected.</span></div>
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions"><button class="btn danger">Delete the budget</button><a class="btn" href="{% url 'settings' %}">Cancel</a></div>
+</form>
+{% endblock %}

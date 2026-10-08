@@ -9,6 +9,7 @@ Build a self-hosted **budget manager** web application.
 - Any storage works, but all data must be stored locally on the machine running the app.
 - Do not display any currency symbol or code. Amounts are shown as plain numbers.
 - Multiple users can log in, but the app must only be reachable from the local network (not exposed to the internet).
+- Several budgets (for example private and a company), each shared with chosen users. A budget can be copied or started from scratch under its own name.
 
 ## Core concepts
 
@@ -71,6 +72,7 @@ Expenses are based on expected costs. Each month the user enters the actual amou
 6. **Forecast:** navigate to future months and see the expected balance of every account and expense.
 7. **Warnings** when General Savings can't cover a shortfall, and a prompt to choose where to take money from if the NemKonto would go below 0.
 8. **Balancing any day:** moves between General Savings and the expenses (filling a new expense, top-ups, returning money no longer needed) and refunds (e.g. a surplus paid back by the insurance company) can be made outside the month-end. The app lists the bank transfers needed; once they are made, the balances update.
+9. **Step-by-step setup** of a budget: today's account balances (and adding accounts), all expenses with their next due date, a summary per category with the monthly total, the expected income, then the transfers that start the budget.
 
 ## Future extension (not needed now)
 

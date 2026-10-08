@@ -1,0 +1,20 @@
+<div class="page-head">
+  <div>
+    <span class="label">Set up {{ current_budget.name }} · step {{ current_step }} of 5</span>
+    <h1>{{ title }}</h1>
+  </div>
+  <div class="actions"><a class="btn small" href="{% url 'budgets' %}">All budgets</a></div>
+</div>
+{% if started %}<div class="notice info"><span>This budget was started on {{ current_budget.started_on|date:"j F Y" }}. You can still change things here until the first month-end. Pressing <b>Start again</b> in step 5 replaces the starting point.</span></div>{% endif %}
+<nav class="steps" aria-label="Setup steps">
+  {% for item in steps %}
+    {% if item.reachable %}
+      <a href="{{ item.url }}" class="{% if item.current %}current{% elif item.done %}done{% endif %}"{% if item.current %} aria-current="step"{% endif %}>
+        <small>{% if item.done %}✓ Done{% else %}Step {{ item.number }}{% endif %}</small>
+        <b>{{ item.label }}</b>
+      </a>
+    {% else %}
+      <span class="step"><small>Step {{ item.number }}</small><b>{{ item.label }}</b></span>
+    {% endif %}
+  {% endfor %}
+</nav>

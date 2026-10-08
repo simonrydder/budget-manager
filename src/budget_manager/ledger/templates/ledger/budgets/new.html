@@ -1,0 +1,11 @@
+{% extends "ledger/base.html" %}
+{% block title %}New budget{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>New budget</h1>
+  <p class="muted">Starts with the usual accounts and categories, and takes you through the setup.</p></div></div>
+<form method="post" class="form card flat" novalidate>
+  {% csrf_token %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <div class="form-actions"><button class="btn primary">Create budget</button><a class="btn" href="{% url 'budgets' %}">Cancel</a></div>
+</form>
+{% endblock %}

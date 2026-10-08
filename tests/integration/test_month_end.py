@@ -4,7 +4,6 @@ import pytest
 
 from budget_manager.ledger.models import (
     Account,
-    BudgetSettings,
     Decision,
     Expense,
     IncomeSource,
@@ -30,29 +29,30 @@ def month_end(client, month: str, *, spending=None, interest=None, income="25.00
     data = {f"spent-{expense(name).id}": value for name, value in (spending or {}).items()}
     response = client.post(base + "spending/", data)
     assert response.status_code == 302, response.content
-    assert response.url == base + "interest/"
+    assert response.url == client.at(base + "interest/")
     data = {
         f"interest-{Account.objects.get(name=name).id}": value
         for name, value in (interest or {}).items()
     }
-    assert client.post(base + "interest/", data).url == base + "income/"
+    assert client.post(base + "interest/", data).url == client.at(base + "income/")
     salary = IncomeSource.objects.get(name="Salary")
-    assert client.post(base + "income/", {f"income-{salary.id}": income}).url == base + "transfers/"
+    response = client.post(base + "income/", {f"income-{salary.id}": income})
+    assert response.url == client.at(base + "transfers/")
     assert client.get(base + "transfers/").status_code == 200
     response = client.post(base + "transfers/", {"action": "continue"})
     if not close:
         return response
-    assert response.url == base + "check/"
+    assert response.url == client.at(base + "check/")
     assert client.get(base + "check/").status_code == 200
     response = client.post(base + "close/")
     assert response.status_code == 302
-    assert response.url == f"/closes/{month}/"
+    assert response.url == client.at(f"/closes/{month}/")
     return response
 
 
 def test_first_month_end_moves_the_surplus_to_general_savings(client, budget):
     response = client.get("/month-end/", follow=True)
-    assert response.redirect_chain[-1][0] == "/month-end/2025-05/spending/"
+    assert response.redirect_chain[-1][0] == client.at("/month-end/2025-05/spending/")
     assert b"Nothing to enter this time" in response.content
 
     month_end(client, "2025-05")
@@ -91,7 +91,7 @@ def test_fixed_expense_costing_more_is_topped_up_and_can_be_reopened(client, bud
     close = MonthClose.objects.get(month=date(2025, 6, 1))
     assert client.get("/closes/2025-06/reopen/").status_code == 200
     response = client.post("/closes/2025-06/reopen/")
-    assert response.url == "/month-end/2025-06/transfers/"
+    assert response.url == client.at("/month-end/2025-06/transfers/")
     close.refresh_from_db()
     assert not close.is_closed
     assert close.lines.count() == 0
@@ -113,10 +113,11 @@ def test_shortfall_below_zero_must_be_covered(client, budget):
     budget.general_savings_opening = 0
     budget.save()
     response = month_end(client, "2025-05", income="5.000", close=False)
-    assert response.url == "/month-end/2025-05/transfers/"
+    assert response.url == client.at("/month-end/2025-05/transfers/")
     page = client.get("/month-end/2025-05/transfers/")
     assert b"Where should the money come from?" in page.content
-    assert client.post("/month-end/2025-05/close/").url == "/month-end/2025-05/transfers/"
+    response = client.post("/month-end/2025-05/close/")
+    assert response.url == client.at("/month-end/2025-05/transfers/")
     assert not MonthClose.objects.filter(status="closed").exists()
 
     covers = {
@@ -174,8 +175,8 @@ def test_wrong_amounts_are_shown_again(client, budget):
 
 def test_visiting_an_old_or_future_month_redirects(client, budget):
     month_end(client, "2025-05")
-    assert client.get("/month-end/2025-05/income/").url == "/closes/2025-05/"
-    assert client.get("/month-end/2025-09/income/").url == "/month-end/"
+    assert client.get("/month-end/2025-05/income/").url == client.at("/closes/2025-05/")
+    assert client.get("/month-end/2025-09/income/").url == client.at("/month-end/")
     assert client.get("/month-end/nonsense/income/").status_code == 404
 
 
@@ -199,20 +200,21 @@ def test_correction_after_the_transfers_counts_from_the_next_month_end(client, b
     assert june.general_savings_before == 1627200 + 10000
 
 
-def test_settings_are_locked_after_the_first_month_end(client, budget):
+def test_settings_change_the_limits_but_not_the_starting_point(client, budget, user):
     month_end(client, "2025-05")
+    page = client.get("/settings/").content.decode()
+    assert "go through the setup again" not in page
     client.post(
         "/settings/",
         {
-            "start_month": "2024-01",
+            "name": "Home",
+            "members": [user.id],
             "nemkonto_min": "1.000",
             "nemkonto_max": "4.000",
-            "nemkonto_opening": "0",
-            "general_savings_opening": "0",
             "forecast_months": "12",
         },
     )
-    config = BudgetSettings.load()
-    assert config.start_month == date(2025, 5, 1)
-    assert config.nemkonto_opening == 300000
-    assert config.nemkonto_max == 400000
+    budget.refresh_from_db()
+    assert (budget.name, budget.nemkonto_max, budget.forecast_months) == ("Home", 400000, 12)
+    assert budget.start_month == date(2025, 5, 1)
+    assert budget.nemkonto_opening == 300000
