@@ -1,7 +1,7 @@
 <div class="field{% if field.errors %} invalid{% endif %}">
   {% if field.widget_type == "checkbox" %}
     <label class="row" style="gap:8px;font-weight:600">{{ field }} {{ field.label }}</label>
-  {% elif field.widget_type == "radioselect" %}
+  {% elif field.widget_type == "radioselect" or field.widget_type == "checkboxselectmultiple" %}
     <fieldset class="choices"><legend>{{ field.label }}</legend>{{ field }}</fieldset>
   {% else %}
     <label for="{{ field.id_for_label }}">{{ field.label }}</label>

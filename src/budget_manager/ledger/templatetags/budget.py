@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from django import template
 from django.utils.html import format_html
@@ -81,6 +81,32 @@ def short_date(value: date | None) -> str:
     if not value:
         return ""
     return f"{value.day} {value:%b} {value.year}"
+
+
+@register.filter
+def times(value, factor):
+    """``value`` multiplied by ``factor`` (whole numbers)."""
+    try:
+        return int(value) * int(factor)
+    except (TypeError, ValueError):
+        return value
+
+
+@register.filter
+def share_of(value, total) -> int:
+    """``value`` as a whole percentage of ``total``."""
+    try:
+        total = int(total)
+        return round(int(value) * 100 / total) if total else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+@register.filter
+def add_days(value: date | None, days) -> date | None:
+    if not value:
+        return value
+    return value + timedelta(days=int(days))
 
 
 @register.filter

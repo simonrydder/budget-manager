@@ -17,9 +17,14 @@ def next_month_start() -> date:
     return (YearMonth.of(today) + 1).first_day()
 
 
-class BudgetSettings(models.Model):
-    """One row with the budget-wide settings."""
+class Budget(models.Model):
+    """One budget with its own accounts, expenses, income and month-ends. People only see the
+    budgets they are members of."""
 
+    name = models.CharField(max_length=80)
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name="budgets", blank=True, verbose_name="People"
+    )
     start_month = models.DateField(
         default=next_month_start,
         help_text="The first month you budget for. Its transfers happen on the last day of the "
@@ -37,14 +42,32 @@ class BudgetSettings(models.Model):
     nemkonto_opening = models.BigIntegerField(default=0)
     general_savings_opening = models.BigIntegerField(default=0)
     forecast_months = models.PositiveSmallIntegerField(default=24)
+    setup_step = models.PositiveSmallIntegerField(
+        default=1, help_text="The furthest step of the setup reached so far."
+    )
+    balances_on = models.DateField(
+        null=True, blank=True, help_text="When the bank balances in the setup were entered."
+    )
+    start_transfers = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Bank transfers that even out the accounts after starting, until done.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name_plural = "budget settings"
+        ordering = ["name", "id"]
 
-    @classmethod
-    def load(cls) -> BudgetSettings:
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+    def __str__(self) -> str:
+        return self.name
+
+    def get_absolute_url(self) -> str:
+        from budget_manager.ledger.scope import budget_url
+
+        return budget_url(self.pk)
 
     @property
     def start(self) -> YearMonth:
@@ -65,18 +88,23 @@ class Account(models.Model):
         (Role.NORMAL.value, "Normal"),
     ]
 
-    name = models.CharField(max_length=60, unique=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="accounts")
+    name = models.CharField(max_length=60)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=Role.NORMAL.value)
     sort_order = models.PositiveIntegerField(default=0)
+    start_balance = models.BigIntegerField(
+        null=True, blank=True, help_text="The bank balance entered when setting up the budget."
+    )
 
     class Meta:
         ordering = ["sort_order", "id"]
         constraints = [
+            models.UniqueConstraint(fields=["budget", "name"], name="account_name_per_budget"),
             models.UniqueConstraint(
-                fields=["role"], condition=Q(role="nemkonto"), name="one_nemkonto"
+                fields=["budget", "role"], condition=Q(role="nemkonto"), name="one_nemkonto"
             ),
             models.UniqueConstraint(
-                fields=["role"], condition=Q(role="savings"), name="one_savings_account"
+                fields=["budget", "role"], condition=Q(role="savings"), name="one_savings_account"
             ),
         ]
 
@@ -93,12 +121,16 @@ class Account(models.Model):
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=60, unique=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="categories")
+    name = models.CharField(max_length=60)
     sort_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["sort_order", "name"]
         verbose_name_plural = "categories"
+        constraints = [
+            models.UniqueConstraint(fields=["budget", "name"], name="category_name_per_budget")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -107,6 +139,7 @@ class Category(models.Model):
 class Expense(models.Model):
     KIND_CHOICES = [(Kind.FIXED.value, "Fixed"), (Kind.VARIABLE.value, "Variable")]
 
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="expenses")
     name = models.CharField(max_length=80)
     category = models.ForeignKey(
         Category, null=True, blank=True, on_delete=models.SET_NULL, related_name="expenses"
@@ -150,7 +183,8 @@ class Expense(models.Model):
 
 
 class IncomeSource(models.Model):
-    name = models.CharField(max_length=80, unique=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="incomes")
+    name = models.CharField(max_length=80)
     amount = models.BigIntegerField(help_text="Expected amount each time it arrives.")
     interval_months = models.PositiveSmallIntegerField(default=1)
     first_month = models.DateField(help_text="The first month this income is for.")
@@ -160,6 +194,9 @@ class IncomeSource(models.Model):
 
     class Meta:
         ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["budget", "name"], name="income_name_per_budget")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -227,6 +264,7 @@ class BalanceCorrection(models.Model):
         NEMKONTO = "nemkonto", "NemKonto"
         GENERAL_SAVINGS = "general_savings", "General Savings"
 
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="corrections")
     target = models.CharField(max_length=20, choices=Target.choices)
     month = models.DateField(help_text="Applies from the month-end after this month.")
     amount = models.BigIntegerField()
@@ -247,7 +285,8 @@ class MonthClose(models.Model):
         DRAFT = "draft", "In progress"
         CLOSED = "closed", "Closed"
 
-    month = models.DateField(unique=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="closes")
+    month = models.DateField()
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     step = models.PositiveSmallIntegerField(default=1)
     done_accounts = models.JSONField(default=list, blank=True)
@@ -275,6 +314,9 @@ class MonthClose(models.Model):
 
     class Meta:
         ordering = ["-month"]
+        constraints = [
+            models.UniqueConstraint(fields=["budget", "month"], name="one_close_per_month")
+        ]
 
     def __str__(self) -> str:
         return f"Month-end {self.transfer_day:%d %b %Y}"
@@ -371,6 +413,7 @@ class Move(models.Model):
         RELEASE = "release", "Return to General Savings"
         REFUND = "refund", "Refund to General Savings"
 
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="moves")
     kind = models.CharField(max_length=10, choices=Type.choices)
     expense = models.ForeignKey(
         Expense, null=True, blank=True, on_delete=models.CASCADE, related_name="moves"

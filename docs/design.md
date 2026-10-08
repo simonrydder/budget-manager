@@ -14,7 +14,8 @@ the budget came from; the requirements are the source of truth.
 | Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
 | Month-end routine | On the last day of a month: enter that month's actual spending, the interest received, next month's income (it arrives at the end of the month), then make the transfers. |
 | Forecast | Uses expected amounts for everything not yet entered. |
-| Users | Everyone who can log in sees and edits the same budget. |
+| Budgets | Several budgets (for example private and a company), each with its own accounts, expenses, income and month-ends. A budget is shared with the people chosen in its settings; they all see and edit the same data. Budgets can be created from scratch or copied. |
+| Setup | A five-step checklist per budget: accounts with today's balances, expenses, a summary of what they cost, income, then the transfers that start the budget. |
 | Interface | English. Amounts as plain numbers like `1.234,56`, no currency. |
 | Layout | The dashboard layout (sidebar, status first) with the month-end as a step-by-step checklist. |
 
@@ -40,16 +41,31 @@ flowchart LR
 | Charts | SVG drawn on the server | No JavaScript chart library; works offline. |
 | JavaScript | One small file | Only for conveniences (drag and drop, live balances, fill buttons, copy). Every page works without it. |
 | Local only | Middleware checks the connecting address against private ranges; login required everywhere | The app refuses the internet even if a port is forwarded by mistake. |
+| Budgets in the address | Every page of a budget lives under `/b/<id>/` (`ledger/scope.py`) | The middleware strips the prefix before Django resolves the URL and sets it as the script prefix, so views and templates are unchanged and every link they build stays in the same budget. Two tabs on two budgets never mix them up. A page opened without a budget goes to the last one used. |
 
-## Starting the budget
+## Setting up a budget
 
-The **Start the budget** page (until the first month-end) takes today's bank balance of every
-account and, per expense, what should be set aside at the start of the current month and what
-has been spent so far this month. The suggestion keeps the monthly amount steady: a yearly 1.200
-due in two months should already hold 1.000; a payment due this month must be there in full.
-Each account's surplus or shortage is evened out through General Savings, and the page lists the
-bank transfers to make. The first month-end then asks for the rest of the current month's
-spending.
+A new budget (or a copy of only the setup) starts with **Set up** in the menu. Each step opens
+once the one before it is done; earlier steps can be changed at any time until the first
+month-end.
+
+1. **Accounts**: today's bank balance of every account, and the NemKonto minimum and maximum.
+   Accounts can be added, renamed or removed here.
+2. **Expenses**: added one at a time with the essentials (amount, frequency, next due date,
+   account, category, fixed or variable). The next one starts with the same account, category
+   and frequency.
+3. **Summary**: what the expenses cost a month, per category and per account. A repeating
+   expense counts as its amount divided by its interval, a one-off goal as its amount spread
+   over the months until it is due.
+4. **Income**: the expected income, compared with the expenses.
+5. **Transfers**: per expense, what should have been set aside at the start of the current
+   month so the monthly amount stays steady (a yearly 1.200 due in two months should already
+   hold 1.000; a payment due this month must be there in full), and what has been spent so far
+   this month. Each account's surplus or shortage is evened out through General Savings; the
+   page lists those bank transfers and previews the first month-end. **Start the budget** saves
+   the starting point, and the overview keeps showing the transfers until they are marked done.
+
+The first month-end then asks for the rest of the current month's spending.
 
 ## The month-end
 
@@ -117,6 +133,10 @@ spending and no interest for everything not yet entered.
 
 ```mermaid
 erDiagram
+  BUDGET ||--o{ ACCOUNT : has
+  BUDGET ||--o{ EXPENSE : has
+  BUDGET ||--o{ MONTH_CLOSE : has
+  BUDGET }o--o{ USER : "shared with"
   ACCOUNT ||--o{ EXPENSE : "holds money for"
   CATEGORY |o--o{ EXPENSE : groups
   EXPENSE ||--o{ SPENDING_ENTRY : "actual per month"
@@ -130,8 +150,8 @@ erDiagram
 
 | Table | Holds |
 |---|---|
-| `BudgetSettings` | First budget month, NemKonto minimum and maximum, starting balances of the NemKonto and General Savings, forecast length. |
-| `Account` | Name and role: `nemkonto`, `savings` (holds General Savings) or `normal`. |
+| `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, starting balances of the NemKonto and General Savings, forecast length, how far the setup has come. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
+| `Account` | Name, role (`nemkonto`, `savings` that holds General Savings, or `normal`) and the bank balance entered in the setup. |
 | `Category` | Name and order. |
 | `Expense` | Amount, first due date, frequency in months (0 = once), end date, fixed/variable, account, category, starting balance, first month with a contribution. |
 | `IncomeSource` | Expected amount, first month, frequency, last month. |

@@ -10,7 +10,7 @@ from budget_manager.engine import FREQUENCIES, YearMonth, format_input, parse_am
 from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
-    BudgetSettings,
+    Budget,
     Category,
     Expense,
     IncomeSource,
@@ -87,6 +87,20 @@ class DateInput(forms.DateInput):
         super().__init__(attrs, format="%Y-%m-%d")
 
 
+class UniqueNameInBudget:
+    """Names are unique within a budget. Checked here so the person gets a clear message."""
+
+    noun = "item"
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        model = type(self.instance)
+        clash = model.objects.filter(budget_id=self.instance.budget_id, name__iexact=name)
+        if clash.exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError(f"There is already {self.noun} called {name}.")
+        return name
+
+
 class ExpenseForm(forms.ModelForm):
     amount = AmountField(
         allow_negative=False,
@@ -135,14 +149,16 @@ class ExpenseForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["account"].queryset = Account.objects.exclude(role="nemkonto")
+        budget = self.instance.budget
+        self.fields["account"].queryset = budget.accounts.exclude(role="nemkonto")
         self.fields["account"].empty_label = None
+        self.fields["category"].queryset = budget.categories.all()
         self.fields["category"].empty_label = "Uncategorised"
         self.fields["category"].required = False
-        if not self.instance.pk:
-            budget = Account.objects.filter(name__iexact="budget").first()
-            if budget:
-                self.fields["account"].initial = budget.pk
+        if not self.instance.pk and "account" not in self.initial:
+            default = budget.accounts.filter(name__iexact="budget").first()
+            if default:
+                self.fields["account"].initial = default.pk
 
     fill_from_savings = forms.BooleanField(
         required=False,
@@ -184,7 +200,7 @@ class ReleaseForm(forms.Form):
 class RefundForm(forms.Form):
     amount = AmountField(allow_negative=False, label="Amount")
     account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.none(),
         empty_label=None,
         label="Arrived on",
         help_text="The account the money came back to.",
@@ -193,6 +209,10 @@ class RefundForm(forms.Form):
         max_length=200, required=False, label="Note", help_text="For example: insurance surplus."
     )
 
+    def __init__(self, *args, budget: Budget, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["account"].queryset = budget.accounts.all()
+
     def clean_amount(self):
         amount = self.cleaned_data["amount"]
         if not amount:
@@ -200,7 +220,9 @@ class RefundForm(forms.Form):
         return amount
 
 
-class IncomeSourceForm(forms.ModelForm):
+class IncomeSourceForm(UniqueNameInBudget, forms.ModelForm):
+    noun = "an income"
+
     amount = AmountField(allow_negative=False, label="Expected amount")
     interval_months = forms.TypedChoiceField(
         choices=FREQUENCY_CHOICES, coerce=int, initial=1, label="Frequency"
@@ -221,7 +243,9 @@ class IncomeSourceForm(forms.ModelForm):
         return data
 
 
-class AccountForm(forms.ModelForm):
+class AccountForm(UniqueNameInBudget, forms.ModelForm):
+    noun = "an account"
+
     holds_general_savings = forms.BooleanField(
         required=False,
         label="This account holds General Savings",
@@ -248,44 +272,79 @@ class AccountForm(forms.ModelForm):
         return value
 
 
-class CategoryForm(forms.ModelForm):
+class CategoryForm(UniqueNameInBudget, forms.ModelForm):
+    noun = "a category"
+
     class Meta:
         model = Category
         fields = ["name"]
 
 
-class SettingsForm(forms.ModelForm):
-    start_month = MonthField(
-        label="First budget month",
-        help_text="Its transfers are made on the last day of the month before.",
-    )
+class PeopleField(forms.ModelMultipleChoiceField):
+    widget = forms.CheckboxSelectMultiple
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("queryset", get_user_model().objects.order_by("username"))
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("label", "People who can use it")
+        super().__init__(**kwargs)
+
+    def label_from_instance(self, obj):
+        return obj.first_name or obj.username
+
+
+class BudgetNameMixin:
+    """Each person sees their budgets by name, so a name is used once per person."""
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        clash = Budget.objects.filter(members=self.user, name__iexact=name)
+        if self.instance.pk:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise forms.ValidationError(f"You already have a budget called {name}.")
+        return name
+
+    def clean_members(self):
+        """You always keep access to a budget you create or change."""
+        members = list(self.cleaned_data.get("members") or [])
+        if self.user not in members:
+            members.append(self.user)
+        return members
+
+
+class BudgetForm(BudgetNameMixin, forms.ModelForm):
+    """A new budget, or a budget's name and the people who can use it."""
+
+    members = PeopleField()
+
+    class Meta:
+        model = Budget
+        fields = ["name", "members"]
+        labels = {"name": "Name"}
+        help_texts = {"name": "For example: Household, Private or My company."}
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if not self.instance.pk:
+            self.initial.setdefault("members", [user.pk])
+
+
+class SettingsForm(BudgetNameMixin, forms.ModelForm):
+    members = PeopleField(help_text="You always keep access yourself.")
     nemkonto_min = AmountField(allow_negative=False, label="NemKonto minimum (X)")
     nemkonto_max = AmountField(allow_negative=False, label="NemKonto maximum (Y)")
-    nemkonto_opening = AmountField(
-        label="NemKonto balance at the start",
-        help_text="What is on the NemKonto before the first income arrives.",
-    )
-    general_savings_opening = AmountField(label="General Savings at the start")
     forecast_months = forms.IntegerField(min_value=3, max_value=120, label="Forecast length")
 
     class Meta:
-        model = BudgetSettings
-        fields = [
-            "start_month",
-            "nemkonto_min",
-            "nemkonto_max",
-            "nemkonto_opening",
-            "general_savings_opening",
-            "forecast_months",
-        ]
+        model = Budget
+        fields = ["name", "members", "nemkonto_min", "nemkonto_max", "forecast_months"]
+        labels = {"name": "Name"}
 
-    def __init__(self, *args, started: bool = False, **kwargs):
+    def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
-        self.started = started
-        if started:
-            for name in ("start_month", "nemkonto_opening", "general_savings_opening"):
-                self.fields[name].disabled = True
-                self.fields[name].help_text = "Locked after the first month-end. Use a correction."
+        self.user = user
 
     def clean(self):
         data = super().clean()
@@ -293,6 +352,44 @@ class SettingsForm(forms.ModelForm):
         if low is not None and high is not None and high < low:
             self.add_error("nemkonto_max", "The maximum must be at least the minimum.")
         return data
+
+
+class CopyBudgetForm(BudgetNameMixin, forms.Form):
+    SETUP = "setup"
+    EVERYTHING = "everything"
+
+    name = forms.CharField(max_length=80, label="Name of the copy")
+    what = forms.ChoiceField(
+        label="What to copy",
+        widget=forms.RadioSelect,
+        initial=SETUP,
+        choices=[
+            (SETUP, "Accounts, categories, expenses and income, then set it up from scratch"),
+            (EVERYTHING, "Everything, including all month-ends and history"),
+        ],
+    )
+    members = PeopleField()
+
+    def __init__(self, *args, user, source: Budget, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        self.instance = Budget()
+        self.initial.setdefault("name", f"Copy of {source.name}")
+        self.initial.setdefault("members", list(source.members.values_list("pk", flat=True)))
+
+
+class DeleteBudgetForm(forms.Form):
+    confirm = forms.CharField(label="Type the name of the budget to delete it")
+
+    def __init__(self, *args, budget: Budget, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.budget = budget
+
+    def clean_confirm(self):
+        value = self.cleaned_data["confirm"].strip()
+        if value != self.budget.name:
+            raise forms.ValidationError(f"Type {self.budget.name} exactly.")
+        return value
 
 
 class CorrectionForm(forms.ModelForm):
@@ -314,7 +411,124 @@ class CorrectionForm(forms.ModelForm):
 
 
 class NewUserForm(UserCreationForm):
+    budgets = forms.ModelMultipleChoiceField(
+        queryset=Budget.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Budgets they can use",
+    )
+
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
         fields = ["username", "first_name"]
         labels = {"first_name": "Name"}
+
+    def __init__(self, *args, budgets=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if budgets is None:
+            del self.fields["budgets"]
+        else:
+            self.fields["budgets"].queryset = budgets
+
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        if commit and "budgets" in self.fields:
+            for budget in self.cleaned_data.get("budgets") or []:
+                budget.members.add(user)
+        return user
+
+
+# --- Setting up a budget --------------------------------------------------------------------
+
+
+class BalancesForm(forms.Form):
+    """Step 1 of the setup: today's balance of every account and the NemKonto limits."""
+
+    nemkonto_min = AmountField(
+        allow_negative=False,
+        label="Keep at least (X)",
+        help_text="After each month-end the NemKonto should hold at least this.",
+    )
+    nemkonto_max = AmountField(
+        allow_negative=False,
+        label="Keep at most (Y)",
+        help_text="More than this is moved to General Savings.",
+    )
+
+    def __init__(self, *args, budget: Budget, accounts, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.budget = budget
+        self.accounts = accounts
+        for account in accounts:
+            self.fields[self.key(account)] = AmountField(
+                label=account.name,
+                initial=account.start_balance,
+                error_messages={"required": "Enter the balance, 0 if the account is empty."},
+                widget=AmountInput(attrs={"placeholder": "0,00"}),
+            )
+        if budget.nemkonto_max:
+            self.fields["nemkonto_min"].initial = budget.nemkonto_min
+            self.fields["nemkonto_max"].initial = budget.nemkonto_max
+
+    @staticmethod
+    def key(account: Account) -> str:
+        return f"balance_{account.pk}"
+
+    def clean(self):
+        data = super().clean()
+        low, high = data.get("nemkonto_min"), data.get("nemkonto_max")
+        if low is not None and high is not None and high < low:
+            self.add_error("nemkonto_max", "The maximum must be at least the minimum.")
+        return data
+
+    def save(self, today: date) -> None:
+        for account in self.accounts:
+            account.start_balance = self.cleaned_data[self.key(account)]
+            account.save(update_fields=["start_balance"])
+        self.budget.nemkonto_min = self.cleaned_data["nemkonto_min"]
+        self.budget.nemkonto_max = self.cleaned_data["nemkonto_max"]
+        self.budget.balances_on = today
+        self.budget.save(update_fields=["nemkonto_min", "nemkonto_max", "balances_on"])
+
+    def keep_typed_balances(self) -> None:
+        """Remember the balances typed so far, e.g. before adding another account."""
+        for account in self.accounts:
+            try:
+                value = self.fields[self.key(account)].clean(self.data.get(self.key(account)))
+            except forms.ValidationError:
+                continue
+            account.start_balance = value
+            account.save(update_fields=["start_balance"])
+
+
+class NewAccountForm(UniqueNameInBudget, forms.ModelForm):
+    noun = "an account"
+
+    class Meta:
+        model = Account
+        fields = ["name"]
+        labels = {"name": "Name of the new account"}
+
+
+class QuickExpenseForm(ExpenseForm):
+    """Step 2 of the setup: the essentials of an expense on one line."""
+
+    starting_balance = None
+    fill_from_savings = None
+    topup = None
+
+    class Meta(ExpenseForm.Meta):
+        fields = ["name", "amount", "interval_months", "first_due", "account", "category", "kind"]
+        labels = {**ExpenseForm.Meta.labels, "first_due": "Next due date"}
+        help_texts = {}
+        widgets = {"first_due": DateInput(), "kind": forms.Select}
+
+
+class QuickIncomeForm(IncomeSourceForm):
+    """Step 4 of the setup: an income on one line."""
+
+    end_month = None
+    first_month = MonthField(label="First month it is for")
+
+    class Meta(IncomeSourceForm.Meta):
+        fields = ["name", "amount", "interval_months", "first_month"]

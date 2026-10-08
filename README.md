@@ -7,7 +7,8 @@ maximum using General Savings, and forecasts every account and expense into the 
 - Runs on one machine at home; you use it from any browser on the same network.
 - Refuses connections from outside the local network.
 - Everything is stored in a single SQLite file on that machine.
-- Several people can log in; everyone sees and edits the same budget.
+- Several budgets, for example one for the household and one for a company. Several people can
+  log in, and each budget is shared with the people you choose.
 - Amounts are plain numbers written like `1.234,56`.
 
 The rules it follows are described in [docs/requirements.md](docs/requirements.md) and
@@ -25,8 +26,8 @@ uv run budget-manager serve
 ```
 
 Then open `http://<the machine's address>:8000` from a browser on your network, for example
-`http://192.168.1.10:8000`. The first visit asks you to create a login; add more people under
-**People** afterwards.
+`http://192.168.1.10:8000`. The first visit asks you to create a login and then takes you
+through setting up your first budget. Add more people under **People** afterwards.
 
 `serve` applies database migrations before it starts. Options:
 
@@ -111,13 +112,19 @@ BUDGET_DATA_DIR=./demo-data uv run budget-manager manage demo
 BUDGET_DATA_DIR=./demo-data uv run budget-manager serve
 ```
 
-This creates a made-up household with three closed month-ends. Log in as `demo` / `demo`.
+This creates a budget called *Demo* with a made-up household and three closed month-ends. Log in
+as `demo` / `demo`. Run it again with `--name Other` for a second budget.
 
 ## How you use it
 
-1. **Once:** check the accounts (NemKonto, Budget, Food and Savings to begin with), set the
-   NemKonto minimum and maximum and the starting balances under **Settings**, then add your
-   expenses and income.
+1. **Once per budget:** follow **Set up** in the menu, five short steps:
+   1. **Accounts:** today's balance of each account (NemKonto, Budget, Food and Savings to begin
+      with; add or rename them if yours are different) and the NemKonto minimum and maximum,
+   2. **Expenses:** every expense with its amount, how often it is paid and when it is due next,
+   3. **Summary:** what the expenses cost a month, per category and in total,
+   4. **Income:** what you expect to arrive, compared with the expenses,
+   5. **Transfers:** what each expense should have by now so it saves the same every month, the
+      bank transfers that even out the accounts today, and your first month-end. Then start.
 2. **Every month-end** (the last day of the month) follow the checklist under **Month-end**:
    1. enter what was actually spent on each expense during the month,
    2. enter the interest each account received,
@@ -131,6 +138,12 @@ This creates a made-up household with three closed month-ends. Log in as `demo` 
 
 The **Overview** shows balances, warnings, upcoming payments and the next 12 months. **Forecast**
 goes further ahead, **History** shows actual spending per year.
+
+**Budgets** lists your budgets. Create a new one, or copy one: either only its accounts,
+categories, expenses and income (then set the copy up from scratch), or everything including
+its history (to try out changes without touching the real budget). The budget's **Settings**
+holds its name, the people who can use it, and deleting it. Every page of a budget lives under
+its own address (`/b/<number>/...`), so two browser tabs can show two budgets side by side.
 
 ## Develop
 

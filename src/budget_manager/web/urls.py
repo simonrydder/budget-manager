@@ -1,13 +1,34 @@
+"""Every page except logging in, the list of budgets and the people is part of a budget and is
+served under ``/b/<id>/`` (see ``budget_manager.ledger.scope``)."""
+
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from budget_manager.ledger.views import admin, balance, home, manage, month_end, reports
+from budget_manager.ledger.scope import budget_free
+from budget_manager.ledger.views import (
+    admin,
+    balance,
+    budgets,
+    home,
+    manage,
+    month_end,
+    reports,
+    setup,
+)
 
 urlpatterns = [
     path("", home.dashboard, name="dashboard"),
-    path("setup/", home.setup, name="setup"),
-    path("login/", home.LoginView.as_view(), name="login"),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("setup/", home.first_login, name="first-login"),
+    path("login/", budget_free(home.LoginView.as_view()), name="login"),
+    path("logout/", budget_free(auth_views.LogoutView.as_view()), name="logout"),
+    path("done-starting/", home.start_transfers_done, name="start-transfers-done"),
+    # Setting up a budget, step by step
+    path("start/", setup.resume, name="start"),
+    path("start/accounts/", setup.accounts, name="setup-accounts"),
+    path("start/expenses/", setup.expenses, name="setup-expenses"),
+    path("start/summary/", setup.summary, name="setup-summary"),
+    path("start/income/", setup.income, name="setup-income"),
+    path("start/transfers/", setup.transfers, name="setup-transfers"),
     # Month-end checklist
     path("month-end/", month_end.month_end, name="month-end"),
     path("month-end/<str:month>/spending/", month_end.spending, name="month-end-spending"),
@@ -53,9 +74,13 @@ urlpatterns = [
     # Reports
     path("forecast/", reports.forecast, name="forecast"),
     path("history/", reports.history, name="history"),
-    # Settings and people
+    # The budget's settings
     path("settings/", admin.settings_view, name="settings"),
-    path("start/", admin.start_budget, name="start"),
+    path("settings/delete/", budgets.budget_delete, name="budget-delete"),
+    # Budgets and people (not part of one budget)
+    path("budgets/", budgets.budget_list, name="budgets"),
+    path("budgets/new/", budgets.budget_new, name="budget-new"),
+    path("budgets/<int:pk>/copy/", budgets.budget_copy, name="budget-copy"),
     path("users/", admin.user_list, name="users"),
     path("users/<int:pk>/password/", admin.user_password, name="user-password"),
     path("users/<int:pk>/delete/", admin.user_delete, name="user-delete"),

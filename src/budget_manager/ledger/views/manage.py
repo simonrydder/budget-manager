@@ -7,8 +7,6 @@ from django.db import transaction
 from django.db.models import Max, ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from budget_manager.engine import Role, YearMonth, format_amount
@@ -30,28 +28,19 @@ from budget_manager.ledger.models import (
     IncomeSource,
     Move,
 )
-from budget_manager.ledger.views.common import today
-
-
-def _safe_next(request, fallback: str) -> str:
-    """The ``next`` field, only if it points back into this app."""
-    target = request.POST.get("next") or request.GET.get("next") or ""
-    if target and url_has_allowed_host_and_scheme(
-        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        return target
-    return reverse(fallback)
+from budget_manager.ledger.views.common import next_value, safe_next, today
 
 
 # --- Accounts -----------------------------------------------------------------------------------
 
 
 def account_list(request):
-    state = services.build_state()
+    budget = request.budget
+    state = services.build_state(budget)
     balances = state.current_expense_balances()
     account_balances = state.current_account_balances()
     rows = []
-    for account in Account.objects.all():
+    for account in budget.accounts.all():
         expenses = [
             {"expense": expense, "balance": balances[expense.id]}
             for expense in account.expenses.select_related("category")
@@ -67,7 +56,7 @@ def account_list(request):
         "rows": rows,
         "nemkonto": state.nemkonto,
         "general_savings": state.general_savings,
-        "corrections": BalanceCorrection.objects.select_related("created_by")[:10],
+        "corrections": budget.corrections.select_related("created_by")[:10],
     }
     return render(request, "ledger/accounts/list.html", context)
 
@@ -75,21 +64,23 @@ def account_list(request):
 def _save_account(form: AccountForm) -> Account:
     with transaction.atomic():
         account = form.save(commit=False)
+        budget = account.budget
         wants_savings = form.cleaned_data.get("holds_general_savings")
         if wants_savings and not account.holds_general_savings:
-            Account.objects.filter(role=Role.SAVINGS.value).update(role=Role.NORMAL.value)
+            budget.accounts.filter(role=Role.SAVINGS.value).update(role=Role.NORMAL.value)
             account.role = Role.SAVINGS.value
         if not account.pk:
-            account.sort_order = (Account.objects.aggregate(m=Max("sort_order"))["m"] or 0) + 1
+            account.sort_order = (budget.accounts.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         account.save()
     return account
 
 
 def account_form(request, pk: int | None = None):
-    account = get_object_or_404(Account, pk=pk) if pk else Account()
+    budget = request.budget
+    account = get_object_or_404(Account, pk=pk, budget=budget) if pk else Account(budget=budget)
     form = AccountForm(request.POST or None, instance=account)
     if request.method == "POST" and form.is_valid():
-        previous_holder = Account.objects.filter(role=Role.SAVINGS.value).first()
+        previous_holder = budget.accounts.filter(role=Role.SAVINGS.value).first()
         saved = _save_account(form)
         if previous_holder and previous_holder.pk != saved.pk and saved.holds_general_savings:
             messages.warning(
@@ -98,12 +89,13 @@ def account_form(request, pk: int | None = None):
                 f"{previous_holder.name} in your bank.",
             )
         messages.success(request, f"Saved {saved.name}.")
-        return redirect("accounts")
-    return render(request, "ledger/accounts/form.html", {"form": form, "account": account})
+        return redirect(safe_next(request, "accounts"))
+    context = {"form": form, "account": account, "next": next_value(request)}
+    return render(request, "ledger/accounts/form.html", context)
 
 
 def account_delete(request, pk: int):
-    account = get_object_or_404(Account, pk=pk)
+    account = get_object_or_404(Account, pk=pk, budget=request.budget)
     blocked = None
     if account.is_nemkonto:
         blocked = "The NemKonto is always needed."
@@ -116,11 +108,11 @@ def account_delete(request, pk: int):
     if request.method == "POST" and not blocked:
         account.delete()
         messages.success(request, f"Deleted {account.name}.")
-        return redirect("accounts")
+        return redirect(safe_next(request, "accounts"))
     return render(
         request,
         "ledger/confirm_delete.html",
-        {"object": account, "blocked": blocked, "kind": "account"},
+        {"object": account, "blocked": blocked, "kind": "account", "next": next_value(request)},
     )
 
 
@@ -137,13 +129,14 @@ def correction(request, target: str):
     after_transfers = (request.POST or request.GET).get("after") == "1"
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
+        item.budget = request.budget
         item.target = target
-        upcoming = services.next_close_month()
+        upcoming = services.next_close_month(request.budget)
         item.month = (upcoming if after_transfers else upcoming - 1).first_day()
         item.created_by = request.user
         item.save()
         messages.success(request, f"{label} corrected.")
-        return redirect(_safe_next(request, "accounts"))
+        return redirect(safe_next(request, "accounts"))
     return render(
         request,
         "ledger/accounts/correction.html",
@@ -160,19 +153,20 @@ def correction(request, target: str):
 
 
 def category_list(request):
-    form = CategoryForm(request.POST or None)
+    budget = request.budget
+    form = CategoryForm(request.POST or None, instance=Category(budget=budget))
     if request.method == "POST" and form.is_valid():
         category = form.save(commit=False)
-        category.sort_order = (Category.objects.aggregate(m=Max("sort_order"))["m"] or 0) + 1
+        category.sort_order = (budget.categories.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         category.save()
         messages.success(request, f"Added {category.name}.")
         return redirect("categories")
-    categories = Category.objects.all()
+    categories = budget.categories.all()
     return render(request, "ledger/categories/list.html", {"form": form, "categories": categories})
 
 
 def category_edit(request, pk: int):
-    category = get_object_or_404(Category, pk=pk)
+    category = get_object_or_404(Category, pk=pk, budget=request.budget)
     form = CategoryForm(request.POST or None, instance=category)
     if request.method == "POST" and form.is_valid():
         form.save()
@@ -182,7 +176,7 @@ def category_edit(request, pk: int):
 
 
 def category_delete(request, pk: int):
-    category = get_object_or_404(Category, pk=pk)
+    category = get_object_or_404(Category, pk=pk, budget=request.budget)
     if request.method == "POST":
         category.delete()
         messages.success(request, f"Deleted {category.name}. Its expenses are now uncategorised.")
@@ -192,8 +186,8 @@ def category_delete(request, pk: int):
 
 @require_POST
 def category_move(request, pk: int, direction: str):
-    get_object_or_404(Category, pk=pk)
-    categories = list(Category.objects.all())
+    get_object_or_404(Category, pk=pk, budget=request.budget)
+    categories = list(request.budget.categories.all())
     index = next(i for i, c in enumerate(categories) if c.pk == pk)
     other = index - 1 if direction == "up" else index + 1
     if 0 <= other < len(categories):
@@ -209,13 +203,14 @@ def category_move(request, pk: int, direction: str):
 
 
 def expense_board(request):
+    budget = request.budget
     group = "account" if request.GET.get("group") == "account" else "category"
-    state = services.build_state()
+    state = services.build_state(budget)
     balances = state.current_expense_balances()
     ledgers = {ledger.expense.id: ledger for ledger in state.ledgers}
     now = today()
     cards = []
-    for expense in Expense.objects.select_related("account", "category"):
+    for expense in budget.expenses.select_related("account", "category"):
         ledger = ledgers[expense.id]
         cards.append(
             {
@@ -228,7 +223,9 @@ def expense_board(request):
     active = [card for card in cards if not card["ended"]]
     if group == "category":
         columns = [{"key": "", "name": "Uncategorised", "cards": []}]
-        columns += [{"key": str(c.pk), "name": c.name, "cards": []} for c in Category.objects.all()]
+        columns += [
+            {"key": str(c.pk), "name": c.name, "cards": []} for c in budget.categories.all()
+        ]
         index = {column["key"]: column for column in columns}
         for card in active:
             index[str(card["expense"].category_id or "")]["cards"].append(card)
@@ -237,7 +234,7 @@ def expense_board(request):
     else:
         columns = [
             {"key": str(a.pk), "name": a.name, "cards": []}
-            for a in Account.objects.exclude(role=Role.NEMKONTO.value)
+            for a in budget.accounts.exclude(role=Role.NEMKONTO.value)
         ]
         index = {column["key"]: column for column in columns}
         for card in active:
@@ -254,16 +251,19 @@ def expense_board(request):
 
 
 def expense_form(request, pk: int | None = None):
-    expense = get_object_or_404(Expense, pk=pk) if pk else Expense()
+    budget = request.budget
+    expense = get_object_or_404(Expense, pk=pk, budget=budget) if pk else Expense(budget=budget)
     initial = {}
     if not pk and request.GET.get("category"):
         initial["category"] = request.GET["category"]
     previous_account = expense.account if pk else None
-    balance = services.build_state().current_expense_balances().get(expense.pk, 0) if pk else 0
+    balance = (
+        services.build_state(budget).current_expense_balances().get(expense.pk, 0) if pk else 0
+    )
     pending = _waiting(expense, Move.Type.TOPUP) if pk else None
     if pending:
         initial["topup"] = pending.amount
-    started = services.budget_started()
+    started = services.budget_started(budget)
     form = ExpenseForm(request.POST or None, instance=expense, initial=initial)
     if not pk:
         del form.fields["topup"]
@@ -276,25 +276,28 @@ def expense_form(request, pk: int | None = None):
             if note:
                 messages.warning(request, note)
         if not item.pk:
-            item.sort_order = (Expense.objects.aggregate(m=Max("sort_order"))["m"] or 0) + 1
+            item.sort_order = (budget.expenses.aggregate(m=Max("sort_order"))["m"] or 0) + 1
         if not item.pk and started:
-            item.start_month = services.next_close_month().first_day()
+            item.start_month = services.next_close_month(budget).first_day()
         item.save()
         if pk:
             _save_waiting(request, item, Move.Type.TOPUP, form.cleaned_data.get("topup"))
         if form.cleaned_data.get("fill_from_savings"):
             _save_fund(request, item)
         messages.success(request, f"Saved {item.name}.")
-        if warning := services.monthly_balance().warning():
+        if warning := services.monthly_balance(budget).warning():
             messages.warning(request, warning)
         if "another" in request.POST:
             return redirect("expense-new")
+        if next_value(request):
+            return redirect(safe_next(request, "expenses"))
         return redirect("expense-detail", pk=item.pk)
     context = {
         "form": form,
         "expense": expense,
-        "budget": services.monthly_balance(),
+        "monthly": services.monthly_balance(budget),
         "balance": balance,
+        "next": next_value(request),
     }
     return render(request, "ledger/expenses/form.html", context)
 
@@ -305,7 +308,7 @@ def _waiting(expense: Expense, kind: str) -> Move | None:
 
 def _save_fund(request, expense: Expense) -> None:
     """Fill a new expense from General Savings up to its steady path."""
-    state = services.build_state()
+    state = services.build_state(expense.budget)
     amount = services.fund_amount(state.ledger(expense.pk), state.month)
     if not amount:
         if state.ledger(expense.pk).expense.suggested_starting_balance() is None:
@@ -324,6 +327,7 @@ def _save_waiting(request, expense: Expense, kind: str, amount: int | None) -> N
     if pending and pending.amount == amount:
         return
     Move.objects.update_or_create(
+        budget=expense.budget,
         expense=expense,
         kind=kind,
         done=False,
@@ -338,10 +342,13 @@ def _save_waiting(request, expense: Expense, kind: str, amount: int | None) -> N
 
 
 def expense_detail(request, pk: int):
-    expense = get_object_or_404(Expense.objects.select_related("account", "category"), pk=pk)
-    state = services.build_state()
+    budget = request.budget
+    expense = get_object_or_404(
+        Expense.objects.select_related("account", "category"), pk=pk, budget=budget
+    )
+    state = services.build_state(budget)
     ledger = state.ledger(expense.id)
-    points = services.forecast(12, state=state)
+    points = services.forecast(budget, 12, state=state)
     balance = state.current_expense_balances()[expense.id]
     history = []
     for line in expense.lines.select_related("close").order_by("close__month"):
@@ -366,7 +373,9 @@ def expense_detail(request, pk: int):
         }
         for point in points
     ]
-    waiting = [item for item in services.balancing(today(), state).moves if item.expense == expense]
+    waiting = [
+        item for item in services.balancing(budget, today(), state).moves if item.expense == expense
+    ]
     pending_release = next((item for item in waiting if item.kind == Move.Type.RELEASE), None)
     context = {
         "expense": expense,
@@ -386,7 +395,7 @@ def expense_detail(request, pk: int):
 
 
 def expense_end(request, pk: int):
-    expense = get_object_or_404(Expense, pk=pk)
+    expense = get_object_or_404(Expense, pk=pk, budget=request.budget)
     form = EndExpenseForm(request.POST or None, initial={"end_date": expense.end_date or today()})
     if request.method == "POST" and form.is_valid():
         expense.end_date = form.cleaned_data["end_date"]
@@ -401,18 +410,18 @@ def expense_end(request, pk: int):
 
 
 def expense_delete(request, pk: int):
-    expense = get_object_or_404(Expense, pk=pk)
+    expense = get_object_or_404(Expense, pk=pk, budget=request.budget)
     blocked = None
     if _has_history(expense):
         blocked = "This expense has history. End it instead, so past months stay correct."
     if request.method == "POST" and not blocked:
         expense.delete()
         messages.success(request, f"Deleted {expense.name}.")
-        return redirect("expenses")
+        return redirect(safe_next(request, "expenses"))
     return render(
         request,
         "ledger/confirm_delete.html",
-        {"object": expense, "blocked": blocked, "kind": "expense"},
+        {"object": expense, "blocked": blocked, "kind": "expense", "next": next_value(request)},
     )
 
 
@@ -425,7 +434,7 @@ def _has_history(expense: Expense) -> bool:
 
 
 def _balance_move_note(expense: Expense, old: Account, new: Account) -> str | None:
-    balance = services.build_state().current_expense_balances().get(expense.id, 0)
+    balance = services.build_state(expense.budget).current_expense_balances().get(expense.id, 0)
     if not balance or old.pk == new.pk:
         return None
     return (
@@ -438,7 +447,8 @@ def _balance_move_note(expense: Expense, old: Account, new: Account) -> str | No
 def expense_move(request, pk: int):
     """Drag and drop: set the category or the account of an expense, and the order of the
     expenses in the column it was dropped in (``order``: comma-separated ids, top first)."""
-    expense = get_object_or_404(Expense, pk=pk)
+    budget = request.budget
+    expense = get_object_or_404(Expense, pk=pk, budget=budget)
     field = request.POST.get("field")
     value = request.POST.get("value", "")
     order = [item for item in request.POST.get("order", "").split(",") if item]
@@ -452,11 +462,13 @@ def expense_move(request, pk: int):
     message = note = None
     if value != current:
         if field == "category":
-            expense.category = get_object_or_404(Category, pk=value) if value else None
+            expense.category = (
+                get_object_or_404(Category, pk=value, budget=budget) if value else None
+            )
             expense.save(update_fields=["category", "updated_at"])
             target = expense.category.name if expense.category else "Uncategorised"
         else:
-            account = get_object_or_404(Account, pk=value)
+            account = get_object_or_404(Account, pk=value, budget=budget)
             if account.is_nemkonto:
                 return JsonResponse(
                     {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
@@ -470,25 +482,25 @@ def expense_move(request, pk: int):
     if order:
         with transaction.atomic():
             for position, expense_id in enumerate(order):
-                Expense.objects.filter(pk=int(expense_id)).update(sort_order=position)
+                budget.expenses.filter(pk=int(expense_id)).update(sort_order=position)
         message = message or "Order saved."
     message = message or "Nothing changed."
     if wants_json:
         return JsonResponse({"ok": True, "message": message})
     (messages.warning if note else messages.success)(request, message)
-    return redirect(_safe_next(request, "expenses"))
+    return redirect(safe_next(request, "expenses"))
 
 
 @require_POST
 def expense_release(request, pk: int):
     """Move (part of) an expense's balance to General Savings."""
-    expense = get_object_or_404(Expense, pk=pk)
+    expense = get_object_or_404(Expense, pk=pk, budget=request.budget)
     if "cancel" in request.POST:
         expense.moves.filter(done=False, kind=Move.Type.RELEASE).delete()
         messages.success(request, "Cancelled.")
         return redirect("expense-detail", pk=pk)
     form = ReleaseForm(request.POST)
-    balance = services.build_state().current_expense_balances()[expense.id]
+    balance = services.build_state(request.budget).current_expense_balances()[expense.id]
     if form.is_valid():
         amount = form.cleaned_data["amount"]
         if not amount or amount > balance:
@@ -504,9 +516,10 @@ def expense_release(request, pk: int):
 
 
 def income_list(request):
-    month = services.next_close_month()
+    budget = request.budget
+    month = services.next_close_month(budget)
     sources = []
-    for source in IncomeSource.objects.all():
+    for source in budget.incomes.all():
         engine_source = services.engine_income(source)
         upcoming = next(
             (month + offset for offset in range(0, 37) if engine_source.expected(month + offset)),
@@ -524,22 +537,28 @@ def income_list(request):
 
 
 def income_form(request, pk: int | None = None):
-    source = get_object_or_404(IncomeSource, pk=pk) if pk else IncomeSource()
-    initial = {} if pk else {"first_month": services.next_close_month().first_day()}
+    budget = request.budget
+    source = (
+        get_object_or_404(IncomeSource, pk=pk, budget=budget) if pk else IncomeSource(budget=budget)
+    )
+    initial = {} if pk else {"first_month": services.next_close_month(budget).first_day()}
     form = IncomeSourceForm(request.POST or None, instance=source, initial=initial)
     if request.method == "POST" and form.is_valid():
         item = form.save()
         messages.success(request, f"Saved {item.name}.")
-        if warning := services.monthly_balance().warning():
+        if warning := services.monthly_balance(budget).warning():
             messages.warning(request, warning)
-        return redirect("income")
-    return render(request, "ledger/income/form.html", {"form": form, "source": source})
+        return redirect(safe_next(request, "income"))
+    context = {"form": form, "source": source, "next": next_value(request)}
+    return render(request, "ledger/income/form.html", context)
 
 
 def income_delete(request, pk: int):
-    source = get_object_or_404(IncomeSource, pk=pk)
+    source = get_object_or_404(IncomeSource, pk=pk, budget=request.budget)
     blocked = None
-    if source.entries.filter(month__lt=services.next_close_month().first_day()).exists():
+    if source.entries.filter(
+        month__lt=services.next_close_month(request.budget).first_day()
+    ).exists():
         blocked = "This income has history. Set a last month instead, so past months stay correct."
     if request.method == "POST" and not blocked:
         try:
@@ -548,9 +567,14 @@ def income_delete(request, pk: int):
             blocked = "This income is still in use."
         else:
             messages.success(request, f"Deleted {source.name}.")
-            return redirect("income")
+            return redirect(safe_next(request, "income"))
     return render(
         request,
         "ledger/confirm_delete.html",
-        {"object": source, "blocked": blocked, "kind": "income source"},
+        {
+            "object": source,
+            "blocked": blocked,
+            "kind": "income source",
+            "next": next_value(request),
+        },
     )

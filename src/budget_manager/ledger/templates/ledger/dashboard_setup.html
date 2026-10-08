@@ -1,0 +1,37 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Set up {{ current_budget.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="label">Budget</span>
+    <h1>Set up {{ current_budget.name }}</h1>
+    <p class="muted">Five short steps. After that, the month-end checklist is all you need.</p>
+  </div>
+  <div class="actions"><a class="btn primary" href="{% url 'start' %}">Continue: {{ next_step.label|lower }}</a></div>
+</div>
+<div class="split">
+  <section class="card hero">
+    <h2>Step {{ reached }} of 5</h2>
+    <ol class="setup-steps">
+      {% for item in steps %}
+      <li class="{% if item.done %}done{% elif item.number == reached %}next{% endif %}">
+        <span class="num-dot">{% if item.done %}✓{% else %}{{ item.number }}{% endif %}</span>
+        <span>{% if item.done or item.number == reached %}<a href="{% url 'setup-'|add:item.slug %}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}
+          <span class="muted small">· {% if item.number == 1 %}today's balance of each account{% elif item.number == 2 %}everything the money is for{% elif item.number == 3 %}what the expenses cost a month{% elif item.number == 4 %}what comes in{% else %}even out the accounts and start{% endif %}</span></span>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="actions"><a class="btn primary" href="{% url 'start' %}">Continue the setup</a></div>
+  </section>
+  <section class="card">
+    <h2>So far</h2>
+    <div class="flow">
+      <div><span>Accounts</span><span class="num">{{ counts.accounts }}</span></div>
+      <div><span>Expenses</span><span class="num">{{ counts.expenses }}</span></div>
+      <div><span>Income</span><span class="num">{{ counts.incomes }}</span></div>
+    </div>
+    <p class="muted small">Want a second budget, for example for a company? Create or copy one under <a href="{% url 'budgets' %}">Budgets</a>.</p>
+  </section>
+</div>
+{% endblock %}

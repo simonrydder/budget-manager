@@ -12,7 +12,7 @@
       <small><a href="{% url 'month-end-income' month %}">Enter income</a></small>
     </div>
     {% endif %}
-    {% if waiting_moves %}<div class="notice warning">{{ waiting_moves|length }} move{{ waiting_moves|length|pluralize }} to or from General Savings {{ waiting_moves|length|pluralize:"is,are" }} still waiting. Make {{ waiting_moves|length|pluralize:"it,them" }} (or cancel {{ waiting_moves|length|pluralize:"it,them" }}) under <a href="{% url 'balance' %}">Balance</a> before closing.</div>{% endif %}
+    {% if waiting_moves %}<div class="notice warning"><span>{{ waiting_moves|length }} move{{ waiting_moves|length|pluralize }} to or from General Savings {{ waiting_moves|length|pluralize:"is,are" }} still waiting. Make {{ waiting_moves|length|pluralize:"it,them" }} (or cancel {{ waiting_moves|length|pluralize:"it,them" }}) under <a href="{% url 'balance' %}">Balance</a> before closing.</span></div>{% endif %}
     {% if plan.notices %}
     <div class="notices">
       {% for notice in plan.notices %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endfor %}

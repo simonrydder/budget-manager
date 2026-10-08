@@ -8,6 +8,7 @@
 </div></div>
 <form method="post" class="form card flat" novalidate>
   {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
   {% if form.non_field_errors %}<div class="notice danger">{{ form.non_field_errors|join:" " }}</div>{% endif %}
   {% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}
   <div class="form-row">
@@ -46,14 +47,14 @@
   </section>
   {% endif %}
   <p class="muted small">
-    The budget now: expected income {{ budget.income|money0 }} a month, set aside {{ budget.expenses|money0 }} a month.
-    {% if budget.shortfall %}<span class="neg">Already {{ budget.shortfall|money0 }} short each month.</span>
-    {% else %}Room for {{ budget.difference|money0 }} more a month{% if expense.pk %} (this expense included){% endif %}.{% endif %}
+    The budget now: expected income {{ monthly.income|money0 }} a month, set aside {{ monthly.expenses|money0 }} a month.
+    {% if monthly.shortfall %}<span class="neg">Already {{ monthly.shortfall|money0 }} short each month.</span>
+    {% else %}Room for {{ monthly.difference|money0 }} more a month{% if expense.pk %} (this expense included){% endif %}.{% endif %}
   </p>
   <div class="form-actions">
     <button class="btn primary">Save</button>
-    {% if not expense.pk %}<button class="btn" name="another" value="1">Save and add another</button>{% endif %}
-    <a class="btn" href="{% if expense.pk %}{% url 'expense-detail' expense.pk %}{% else %}{% url 'expenses' %}{% endif %}">Cancel</a>
+    {% if not expense.pk and not next %}<button class="btn" name="another" value="1">Save and add another</button>{% endif %}
+    <a class="btn" href="{% if next %}{{ next }}{% elif expense.pk %}{% url 'expense-detail' expense.pk %}{% else %}{% url 'expenses' %}{% endif %}">Cancel</a>
   </div>
 </form>
 {% endblock %}

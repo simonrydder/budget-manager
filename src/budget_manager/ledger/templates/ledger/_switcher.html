@@ -1,0 +1,9 @@
+{% if current_budget %}
+<details class="switcher">
+  <summary><span class="label">Budget</span><b>{{ current_budget.name }}</b></summary>
+  <div class="switcher-menu">
+    {% for item in my_budgets %}<a href="{{ item.get_absolute_url }}"{% if item.pk == current_budget.pk %} aria-current="true"{% endif %}>{{ item.name }}</a>{% endfor %}
+    <a class="more" href="{% url 'budgets' %}">All budgets, new or copy</a>
+  </div>
+</details>
+{% endif %}

@@ -10,11 +10,7 @@ from budget_manager.engine import YearMonth
 from budget_manager.ledger import services
 from budget_manager.ledger.charts import trend_cards
 from budget_manager.ledger.models import (
-    Account,
-    BudgetSettings,
-    Category,
     ContributionLine,
-    Expense,
     MonthClose,
     SpendingEntry,
 )
@@ -22,9 +18,9 @@ from budget_manager.ledger.views.common import today
 
 
 def forecast(request):
-    config = BudgetSettings.load()
-    state = services.build_state()
-    points = services.forecast(config.forecast_months, state=state)
+    budget = request.budget
+    state = services.build_state(budget)
+    points = services.forecast(budget, budget.forecast_months, state=state)
     index = 0
     if selected := request.GET.get("month"):
         try:
@@ -34,8 +30,8 @@ def forecast(request):
         index = next((i for i, p in enumerate(points) if p.month == wanted), 0)
     point = points[index]
 
-    accounts = list(Account.objects.all())
-    expenses = list(Expense.objects.select_related("category"))
+    accounts = list(budget.accounts.all())
+    expenses = list(budget.expenses.select_related("category"))
     groups = []
     for account in accounts:
         items = [
@@ -78,11 +74,14 @@ def forecast(request):
 
 
 def history(request):
+    budget = request.budget
     now = today()
-    config = BudgetSettings.load()
     years = sorted(
-        {config.start.year, now.year}
-        | {d.year for d in SpendingEntry.objects.dates("month", "year")}
+        {budget.start.year, now.year}
+        | {
+            d.year
+            for d in SpendingEntry.objects.filter(expense__budget=budget).dates("month", "year")
+        }
     )
     try:
         year = int(request.GET.get("year", now.year))
@@ -92,26 +91,27 @@ def history(request):
     if by not in {"expense", "category", "account"}:
         by = "category"
 
-    spending = services.spending_by_month(year)
+    spending = services.spending_by_month(budget, year)
     expected: dict[int, int] = defaultdict(int)
-    counted = services.completed_spending_months(year)
+    counted = services.completed_spending_months(budget, year)
     for line in ContributionLine.objects.filter(
+        close__budget=budget,
         close__status=MonthClose.Status.CLOSED,
         close__month__year=year,
         close__month__month__in=counted,
     ).values("expense_id", "expected_spend"):
         expected[line["expense_id"]] += line["expected_spend"]
 
-    expenses = list(Expense.objects.select_related("category", "account"))
+    expenses = list(budget.expenses.select_related("category", "account"))
     if by == "expense":
         keys = {e.id: (e.name, e) for e in expenses}
         key_of = {e.id: e.id for e in expenses}
     elif by == "category":
-        keys = {c.id: (c.name, c) for c in Category.objects.all()}
+        keys = {c.id: (c.name, c) for c in budget.categories.all()}
         keys[None] = ("Uncategorised", None)
         key_of = {e.id: e.category_id for e in expenses}
     else:
-        keys = {a.id: (a.name, a) for a in Account.objects.all()}
+        keys = {a.id: (a.name, a) for a in budget.accounts.all()}
         key_of = {e.id: e.account_id for e in expenses}
 
     rows: dict = {}

@@ -8,17 +8,20 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
 
 from budget_manager.engine import Kind, YearMonth
-from budget_manager.ledger import services
+from budget_manager.ledger import budgets, services
 from budget_manager.ledger.charts import trend_cards
 from budget_manager.ledger.forms import NewUserForm
-from budget_manager.ledger.models import Account, BudgetSettings, Expense, IncomeSource
+from budget_manager.ledger.scope import budget_free, budget_reverse
 from budget_manager.ledger.views.common import today
+from budget_manager.ledger.views.setup import STEPS as SETUP_STEPS
 
 
+@budget_free
 @login_not_required
-def setup(request):
+def first_login(request):
     """Create the first login. Only available while there are no users at all."""
     User = get_user_model()
     if User.objects.exists():
@@ -27,8 +30,9 @@ def setup(request):
     if request.method == "POST" and form.is_valid():
         user = form.save()
         login(request, user)
-        messages.success(request, "Welcome! Start by checking your accounts and settings.")
-        return redirect("dashboard")
+        budget = budgets.give_access(user)
+        messages.success(request, "Welcome! Set up your budget step by step.")
+        return redirect(budget_reverse(budget.pk, "start"))
     return render(request, "registration/setup.html", {"form": form})
 
 
@@ -39,7 +43,7 @@ class LoginView(auth_views.LoginView):
     @method_decorator(login_not_required)
     def dispatch(self, request, *args, **kwargs):
         if not get_user_model().objects.exists():
-            return redirect("setup")
+            return redirect("first-login")
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -64,8 +68,8 @@ def upcoming_payments(state, balances, days: int = 60) -> list[dict]:
     return sorted(rows, key=lambda row: (row["date"], row["expense"].name))
 
 
-def budget_warning(state) -> list[dict]:
-    warning = services.monthly_balance(state).warning()
+def budget_warning(budget, state) -> list[dict]:
+    warning = services.monthly_balance(budget, state).warning()
     if not warning:
         return []
     return [{"level": "warning", "message": warning, "when": None, "is_next": True}]
@@ -110,35 +114,25 @@ def attention(points, state, balances) -> list[dict]:
 
 
 def dashboard(request):
-    state = services.build_state()
-    points = services.forecast(12, state=state)
+    budget = request.budget
+    if not services.budget_started(budget):
+        return _setup_overview(request, budget)
+    state = services.build_state(budget)
+    points = services.forecast(budget, 12, state=state)
     preview = points[0].close
     balances = state.current_expense_balances()
     account_balances = state.current_account_balances()
-    accounts = list(Account.objects.all())
+    accounts = list(budget.accounts.all())
     expenses_by_account = {}
-    for expense in Expense.objects.select_related("category"):
+    for expense in budget.expenses.select_related("category"):
         expenses_by_account.setdefault(expense.account_id, []).append(
             {"expense": expense, "balance": balances[expense.id]}
         )
     month = state.month
     transfer_day = (month - 1).last_day()
-    draft = services.draft_close(month)
-    last = services.last_closed()
+    draft = services.draft_close(budget, month)
+    last = services.last_closed(budget)
     open_transfers = last.transfers.filter(done=False).count() if last else 0
-    config = BudgetSettings.load()
-
-    checklist = [
-        ("Set the NemKonto minimum and maximum", config.nemkonto_max > 0, "settings"),
-        ("Add your expenses", Expense.objects.exists(), "expense-new"),
-        ("Add your income", IncomeSource.objects.exists(), "income-new"),
-        (
-            "Start the budget with today's account balances",
-            config.started_on is not None or last is not None,
-            "start",
-        ),
-        ("Do your first month-end", last is not None, "month-end"),
-    ]
     context = {
         "state": state,
         "preview": preview,
@@ -164,11 +158,40 @@ def dashboard(request):
         "nemkonto": state.nemkonto,
         "set_aside": sum(balances.values()),
         "upcoming": upcoming_payments(state, balances),
-        "attention": budget_warning(state) + attention(points, state, balances),
+        "attention": budget_warning(budget, state) + attention(points, state, balances),
         "trends": trend_cards(points, accounts),
-        "checklist": checklist,
-        "setup_done": all(done for _, done, _ in checklist),
-        "balancing": services.balancing(today(), state),
+        "start_transfers": budget.start_transfers,
+        "balancing": services.balancing(budget, today(), state),
         "transfer_total": sum(t.amount for t in preview.transfers.values() if t.amount > 0),
     }
     return render(request, "ledger/dashboard.html", context)
+
+
+def _setup_overview(request, budget):
+    """Until the budget is started, the overview shows how far the setup has come."""
+    reached = min(budget.setup_step, 5)
+    steps = [
+        {"number": number, "label": label, "slug": slug, "done": number < reached}
+        for number, slug, label, _ in SETUP_STEPS
+    ]
+    context = {
+        "steps": steps,
+        "reached": reached,
+        "next_step": steps[reached - 1],
+        "counts": {
+            "accounts": budget.accounts.count(),
+            "expenses": budget.expenses.count(),
+            "incomes": budget.incomes.count(),
+        },
+    }
+    return render(request, "ledger/dashboard_setup.html", context)
+
+
+@require_POST
+def start_transfers_done(request):
+    """The bank transfers that even out the accounts after starting have been made."""
+    budget = request.budget
+    budget.start_transfers = []
+    budget.save(update_fields=["start_transfers"])
+    messages.success(request, "Good. The accounts now match the budget.")
+    return redirect("dashboard")

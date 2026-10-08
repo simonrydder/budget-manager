@@ -1,0 +1,12 @@
+{% extends "ledger/base.html" %}
+{% block title %}Copy {{ source.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Copy {{ source.name }}</h1>
+  <p class="muted">The copy is a separate budget: changing one never changes the other.</p></div></div>
+<form method="post" class="form card flat" novalidate>
+  {% csrf_token %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <p class="muted small">Copying only the setup leaves out ended expenses and income, and you go through the setup with today's balances. Copying everything gives an exact copy, useful to try out changes without touching the real budget.</p>
+  <div class="form-actions"><button class="btn primary">Copy</button><a class="btn" href="{% url 'budgets' %}">Cancel</a></div>
+</form>
+{% endblock %}

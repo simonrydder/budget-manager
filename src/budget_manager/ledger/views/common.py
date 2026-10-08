@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 
 from django.http import Http404
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from budget_manager.engine import YearMonth, parse_amount
 
@@ -16,6 +18,21 @@ def parse_month(text: str) -> YearMonth:
 
 def today() -> date:
     return date.today()
+
+
+def next_value(request) -> str:
+    """The ``next`` address to return to, if it points back into this app."""
+    target = request.POST.get("next") or request.GET.get("next") or ""
+    if target and url_has_allowed_host_and_scheme(
+        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return target
+    return ""
+
+
+def safe_next(request, fallback: str) -> str:
+    """The ``next`` address if there is one, else ``fallback`` (a URL name)."""
+    return next_value(request) or reverse(fallback)
 
 
 def read_amounts(post, prefix: str, ids) -> tuple[dict[int, int | None], dict[int, str]]:

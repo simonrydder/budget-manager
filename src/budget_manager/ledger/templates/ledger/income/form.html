@@ -7,6 +7,7 @@
 </div></div>
 <form method="post" class="form card flat" novalidate>
   {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
   {% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}
   <div class="form-row">
     {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
@@ -19,8 +20,8 @@
   {% with field=form.notes %}{% include "ledger/_field.html" %}{% endwith %}
   <div class="form-actions">
     <button class="btn primary">Save</button>
-    <a class="btn" href="{% url 'income' %}">Cancel</a>
-    {% if source.pk %}<a class="btn danger" style="margin-left:auto" href="{% url 'income-delete' source.id %}">Delete</a>{% endif %}
+    <a class="btn" href="{% if next %}{{ next }}{% else %}{% url 'income' %}{% endif %}">Cancel</a>
+    {% if source.pk %}<a class="btn danger" style="margin-left:auto" href="{% url 'income-delete' source.id %}{% if next %}?next={{ next|urlencode }}{% endif %}">Delete</a>{% endif %}
   </div>
 </form>
 {% endblock %}

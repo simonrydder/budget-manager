@@ -1,0 +1,50 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Set up · Accounts{% endblock %}
+{% block content %}
+{% include "ledger/setup/_steps.html" with title="What is on your accounts today?" %}
+<div class="checklist">
+  <p class="lead">Look up today's balance of each account in your bank. If your accounts are different, add, rename or remove them here. Money for an expense lives on the account you link the expense to.</p>
+  <form method="post" class="stack" style="gap:16px" novalidate>
+    {% csrf_token %}
+    <button class="sr-only" name="action" value="save" tabindex="-1" aria-hidden="true">Next</button>
+    {% if form.errors %}<div class="notice danger">Check the fields marked below.</div>{% endif %}
+    <section class="entry-group" id="balances">
+      <header><h3>Balance today</h3><span class="muted small">{{ today|date:"j F Y" }}</span></header>
+      {% for row in rows %}
+      <div class="entry">
+        <div class="name">
+          <span><label for="{{ row.field.id_for_label }}"><b>{{ row.account.name }}</b></label>
+            {% if row.account.is_nemkonto %}<span class="chip">income</span>{% elif row.account.holds_general_savings %}<span class="chip fixed">General Savings</span>{% endif %}</span>
+          <small>{% if row.account.is_nemkonto %}Salary and other income arrive here.{% elif row.account.holds_general_savings %}Savings goals and General Savings.{% else %}For the expenses you link to it.{% endif %}
+            · <a href="{% url 'account-edit' row.account.id %}?next={{ request.path|urlencode }}">Rename</a>{% if not row.account.is_nemkonto and not row.account.holds_general_savings and not row.expenses %} · <a href="{% url 'account-delete' row.account.id %}?next={{ request.path|urlencode }}">Remove</a>{% endif %}</small>
+        </div>
+        {{ row.field }}
+        <span></span>
+        {% for error in row.field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      </div>
+      {% endfor %}
+      <div class="entry add-row">
+        <div class="name"><label for="{{ new.name.id_for_label }}"><b>Add an account</b></label><small>For example a separate account for the car.</small></div>
+        {{ new.name }}
+        <button class="btn" name="action" value="add">Add account</button>
+        {% for error in new.name.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      </div>
+    </section>
+
+    <section class="card flat">
+      <h2>How much should stay on the NemKonto?</h2>
+      <p class="muted small">After each month-end the NemKonto keeps between these two amounts, as a buffer. More is moved to General Savings; less is taken from it.</p>
+      <div class="form-row">
+        {% with field=form.nemkonto_min %}{% include "ledger/_field.html" %}{% endwith %}
+        {% with field=form.nemkonto_max %}{% include "ledger/_field.html" %}{% endwith %}
+      </div>
+    </section>
+
+    <div class="sticky-actions">
+      <span class="muted small">Step 1 of 5 · {{ rows|length }} accounts</span>
+      <button class="btn primary" name="action" value="save">Next: expenses</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
