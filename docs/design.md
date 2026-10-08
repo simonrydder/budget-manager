@@ -60,10 +60,12 @@ month-end.
 4. **Income**: the expected income, compared with the expenses.
 5. **Transfers**: per expense, what should have been set aside at the start of the current
    month so the monthly amount stays steady (a yearly 1.200 due in two months should already
-   hold 1.000; a payment due this month must be there in full), and what has been spent so far
-   this month. Each account's surplus or shortage is evened out through General Savings; the
-   page lists those bank transfers and previews the first month-end. **Start the budget** saves
-   the starting point, and the overview keeps showing the transfers until they are marked done.
+   hold 1.000; a payment due this month must be there in full). Fixed payments follow their due
+   dates (due before today: paid; later: still on the account); only variable expenses, like
+   food, ask what has been spent so far this month. Each account's surplus or shortage is
+   evened out through General Savings; the page lists those bank transfers and previews the
+   first month-end. **Start the budget** saves the starting point, and the overview keeps
+   showing the transfers until they are marked done.
 
 The first month-end then asks for the rest of the current month's spending.
 
