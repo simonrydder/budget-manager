@@ -17,8 +17,9 @@ class Role(StrEnum):
 
 
 class Kind(StrEnum):
-    FIXED = "fixed"
-    VARIABLE = "variable"
+    FIXED = "fixed"  # the same amount, paid on its due date (rent, insurance)
+    VARIABLE = "variable"  # paid on its due date, the amount varies (power, heating)
+    RUNNING = "running"  # spent bit by bit through the month (food, fuel, everyday spending)
 
 
 @dataclass(frozen=True)

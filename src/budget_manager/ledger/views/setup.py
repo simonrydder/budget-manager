@@ -6,7 +6,7 @@ from __future__ import annotations
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
@@ -14,11 +14,12 @@ from budget_manager.engine import CloseError, format_amount, format_input
 from budget_manager.ledger import services
 from budget_manager.ledger.forms import (
     BalancesForm,
+    CategoryForm,
     NewAccountForm,
     QuickExpenseForm,
     QuickIncomeForm,
 )
-from budget_manager.ledger.models import Account, Expense, IncomeSource
+from budget_manager.ledger.models import Account, Category, Expense, IncomeSource
 from budget_manager.ledger.views.common import read_amounts, today
 
 STEPS = [
@@ -158,6 +159,25 @@ def expenses(request):
             "added": expense.name,
         }
         return redirect(f"{reverse('setup-expenses')}?{urlencode(keep)}#add")
+    category_form = CategoryForm(
+        request.POST if action == "add_category" else None,
+        prefix="category",
+        instance=Category(budget=budget),
+    )
+    if action == "add_category" and category_form.is_valid():
+        category = category_form.save(commit=False)
+        category.sort_order = (budget.categories.aggregate(m=Max("sort_order"))["m"] or 0) + 1
+        category.save()
+        messages.success(request, f"Added the category {category.name}.")
+        return redirect(reverse("setup-expenses") + "#categories")
+    if action == "remove_category":
+        category = budget.categories.filter(pk=_int(request.POST.get("category"))).first()
+        if category is not None:
+            moved = category.expenses.count()
+            category.delete()
+            note = f" Its {moved} expense{'s are' if moved != 1 else ' is'} now uncategorised."
+            messages.success(request, f"Removed {category.name}.{note if moved else ''}")
+        return redirect(reverse("setup-expenses") + "#categories")
     if action == "remove":
         expense = budget.expenses.filter(pk=_int(request.POST.get("expense"))).first()
         if expense is None:
@@ -193,6 +213,7 @@ def expenses(request):
     added = request.GET.get("added", "")
     if added and not form.is_bound:
         form.fields["name"].widget.attrs["autofocus"] = True
+    categories = budget.categories.annotate(used=Count("expenses"))
     context = _context(
         request,
         2,
@@ -200,6 +221,8 @@ def expenses(request):
         groups=groups,
         count=sum(len(g["items"]) for g in groups),
         added=added,
+        categories=categories,
+        category_form=category_form,
     )
     return render(request, "ledger/setup/expenses.html", context)
 
@@ -328,8 +351,9 @@ def transfers(request):
         row.aside_field = field(f"aside-{row.expense.id}", row.set_aside)
         row.spent_field = field(f"spent-{row.expense.id}", row.spent or None)
     missing = [item.account for item in plan.accounts if item.bank is None]
-    fixed_due = sorted(
-        (row for row in plan.rows if row.due and row.expense.is_fixed), key=lambda row: row.due
+    bills_due = sorted(
+        (row for row in plan.rows if row.due and not row.expense.is_running),
+        key=lambda row: row.due,
     )
     preview = services.preview_first_close(budget, plan) if not errors else None
     accounts_by_id = {account.pk: account for account in items}
@@ -348,9 +372,9 @@ def transfers(request):
         first_transfers=first_transfers,
         missing=missing,
         errors=errors,
-        variable_rows=[row for row in plan.rows if row.due and not row.expense.is_fixed],
-        paid_rows=[row for row in fixed_due if row.spent],
-        unpaid_rows=[row for row in fixed_due if not row.spent],
+        running_rows=[row for row in plan.rows if row.due and row.expense.is_running],
+        paid_rows=[row for row in bills_due if row.spent],
+        unpaid_rows=[row for row in bills_due if not row.spent],
         old_balances=budget.balances_on and budget.balances_on != now,
         shortage=format_amount(-plan.general_savings)
         if plan.complete and plan.general_savings < 0

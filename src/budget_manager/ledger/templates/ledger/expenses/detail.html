@@ -7,7 +7,7 @@
     <span class="label">{{ expense.category.name|default:"Uncategorised" }} · {{ expense.account.name }}</span>
     <h1>{{ expense.name }}</h1>
     <p class="row" style="gap:6px">
-      {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}
+      {% include "ledger/_kind.html" %}
       <span class="muted">{{ expense.amount|money }} · {{ expense.frequency|lower }}{% if expense.end_date %} · {% if ended %}ended{% else %}ends{% endif %} {{ expense.end_date|date:"j M Y" }}{% endif %}</span>
     </p>
   </div>

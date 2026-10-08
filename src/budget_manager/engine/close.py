@@ -12,7 +12,9 @@ For budget month *B* the close happens on the last day of *B − 1*:
    it, the NemKonto may go below X, and if it would go below 0 the person has to choose which
    expenses to take the money from (``covers``).
 
-All transfers are netted so the NemKonto sends (or receives) one amount per account.
+All transfers are netted so the NemKonto sends (or receives) one amount per account. Money for
+running budgets that live on the NemKonto itself (everyday spending) stays there: it is set aside
+on the NemKonto without a transfer, and the minimum and maximum apply to what is left besides it.
 """
 
 from __future__ import annotations
@@ -239,7 +241,9 @@ def plan_close(
         if account.role is not Role.NEMKONTO
     }
     for line in lines.values():
-        transfer = transfers[line.account_id]
+        transfer = transfers.get(line.account_id)
+        if transfer is None:
+            continue  # set aside on the NemKonto itself: nothing to transfer
         transfer.contributions += line.contribution
         transfer.covers += line.cover
         transfer.releases += line.release
@@ -297,7 +301,8 @@ def plan_close(
         line.topup = min(line.topup_needed, max(0, pool))
         line.funding = min(line.funding_requested, line.topup)
         pool -= line.topup
-        transfers[line.account_id].topups += line.topup
+        if line.account_id in transfers:
+            transfers[line.account_id].topups += line.topup
         name = names[line.expense_id]
         if line.funding:
             notices.append(
@@ -345,7 +350,7 @@ def plan_close(
     kinds = {ledger.expense.id: ledger.expense.kind for ledger in state.ledgers}
     for line in lines.values():
         if (
-            kinds[line.expense_id] is Kind.VARIABLE
+            kinds[line.expense_id] is not Kind.FIXED
             and line.balance_before < 0
             and line.balance_before + line.topup < 0
         ):
@@ -354,7 +359,7 @@ def plan_close(
                     "info",
                     "variable_below_zero",
                     f"{names[line.expense_id]} is at {format_amount(line.balance_before)}. "
-                    "It is a variable expense, so adjust its amount if this keeps happening.",
+                    "Its amount varies, so adjust it if this keeps happening.",
                     -line.balance_before,
                     line.expense_id,
                 )

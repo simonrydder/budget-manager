@@ -35,7 +35,7 @@
         </span>
         <span class="meta">
           {% if group == "category" %}<span class="chip">{{ expense.account.name }}</span>{% else %}<span class="chip">{{ expense.category.name|default:"Uncategorised" }}</span>{% endif %}
-          {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}
+          {% include "ledger/_kind.html" %}
           <span class="{{ card.balance|tone }}">Balance {{ card.balance|money }}</span>
         </span>
       </a>

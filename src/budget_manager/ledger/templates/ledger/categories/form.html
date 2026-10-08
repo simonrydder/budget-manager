@@ -4,7 +4,8 @@
 <div class="page-head"><div><h1>Rename {{ category.name }}</h1></div></div>
 <form method="post" class="form card flat">
   {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
   {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
-  <div class="form-actions"><button class="btn primary">Save</button><a class="btn" href="{% url 'categories' %}">Cancel</a></div>
+  <div class="form-actions"><button class="btn primary">Save</button><a class="btn" href="{% if next %}{{ next }}{% else %}{% url 'categories' %}{% endif %}">Cancel</a></div>
 </form>
 {% endblock %}

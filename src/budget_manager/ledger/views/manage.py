@@ -171,8 +171,9 @@ def category_edit(request, pk: int):
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Renamed.")
-        return redirect("categories")
-    return render(request, "ledger/categories/form.html", {"form": form, "category": category})
+        return redirect(safe_next(request, "categories"))
+    context = {"form": form, "category": category, "next": next_value(request)}
+    return render(request, "ledger/categories/form.html", context)
 
 
 def category_delete(request, pk: int):
@@ -232,13 +233,12 @@ def expense_board(request):
         if not columns[0]["cards"]:
             columns[0]["hint"] = "Drop expenses here to remove their category."
     else:
-        columns = [
-            {"key": str(a.pk), "name": a.name, "cards": []}
-            for a in budget.accounts.exclude(role=Role.NEMKONTO.value)
-        ]
+        columns = [{"key": str(a.pk), "name": a.name, "cards": []} for a in budget.accounts.all()]
         index = {column["key"]: column for column in columns}
         for card in active:
             index[str(card["expense"].account_id)]["cards"].append(card)
+        nemkonto = budget.accounts.get(role=Role.NEMKONTO.value)
+        index[str(nemkonto.pk)]["hint"] = "Only running budgets, like everyday spending."
     for column in columns:
         column["monthly"] = sum(card["expense"].monthly_equivalent for card in column["cards"])
     context = {
@@ -469,9 +469,14 @@ def expense_move(request, pk: int):
             target = expense.category.name if expense.category else "Uncategorised"
         else:
             account = get_object_or_404(Account, pk=value, budget=budget)
-            if account.is_nemkonto:
+            if account.is_nemkonto and not expense.is_running:
                 return JsonResponse(
-                    {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
+                    {
+                        "ok": False,
+                        "error": "Only running budgets, like everyday spending, can use the "
+                        "NemKonto.",
+                    },
+                    status=400,
                 )
             previous = expense.account
             expense.account = account

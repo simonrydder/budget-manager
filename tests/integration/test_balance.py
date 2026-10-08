@@ -81,7 +81,7 @@ def test_top_up_chosen_while_editing_a_variable_expense(client, budget, accounts
         "amount": "4.000",
         "interval_months": "1",
         "first_due": "2025-05-01",
-        "kind": "variable",
+        "kind": "running",
         "account": accounts["Food"].id,
         "topup": "500",
     }

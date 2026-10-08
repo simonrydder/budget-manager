@@ -44,7 +44,7 @@
     <h2>By account</h2>
     <p class="muted small">About this much goes from the NemKonto to each account every month.</p>
     <div class="flow">
-      {% for account, monthly in summary.accounts %}<div><span>{{ account.name }}</span><span class="num">{{ monthly|money0 }} a month</span></div>{% endfor %}
+      {% for account, monthly in summary.accounts %}<div><span>{{ account.name }}{% if account.is_nemkonto %} <span class="muted small">stays on it, for its running budgets</span>{% endif %}</span><span class="num">{{ monthly|money0 }} a month</span></div>{% endfor %}
     </div>
   </section>
 

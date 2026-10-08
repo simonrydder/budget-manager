@@ -534,7 +534,9 @@ class StartPlan:
 
     @property
     def nemkonto(self) -> int | None:
-        return next(a.bank for a in self.accounts if a.account.is_nemkonto)
+        """The NemKonto's free part: what its own running budgets do not need."""
+        item = next(a for a in self.accounts if a.account.is_nemkonto)
+        return None if item.bank is None else item.bank - item.expected
 
     @property
     def general_savings(self) -> int | None:
@@ -588,7 +590,9 @@ def plan_start(
         )
         suggested = model.suggested_starting_balance()
         due = model.schedule.due_in(opening)
-        default_spent = expense.amount if expense.is_fixed and due and due <= today else 0
+        # A bill due before today has been paid; what a running budget has used so far is asked.
+        paid = not expense.is_running and due and due <= today
+        default_spent = expense.amount if paid else 0
         chosen = set_aside.get(expense.id)
         if again and expense.start_month is None:
             default_spent = entered.get(expense.id, 0)
@@ -814,6 +818,12 @@ def undo_move(move: Move) -> None:
 # --- The setup: what the budget costs a month, and how its first month-end will look ------------
 
 
+def first_running_month(budget: Budget, today: date) -> YearMonth:
+    """The first month a new running budget covers: during the setup the current month (its
+    money is already on the account), later the month of the next month-end."""
+    return next_close_month(budget) if budget_started(budget) else YearMonth.of(today)
+
+
 def setup_start_month(budget: Budget, today: date) -> YearMonth:
     """The first budget month when starting today (its transfers are made at this month's end)."""
     return budget.start if budget.started_on else YearMonth.of(today) + 1
@@ -877,8 +887,10 @@ def setup_summary(budget: Budget, today: date) -> SetupSummary:
             groups.append(SummaryGroup(category.name if category else "Uncategorised", rows))
     groups.sort(key=lambda group: -group.monthly)
     accounts = [
-        (account, sum(needs[e.pk] for e in expenses if e.account_id == account.pk))
-        for account in budget.accounts.exclude(role=Role.NEMKONTO.value)
+        (account, monthly)
+        for account in budget.accounts.all()
+        if (monthly := sum(needs[e.pk] for e in expenses if e.account_id == account.pk))
+        or not account.is_nemkonto
     ]
     income = 0
     for source in budget.incomes.all():

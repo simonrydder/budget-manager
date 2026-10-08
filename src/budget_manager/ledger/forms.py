@@ -15,6 +15,7 @@ from budget_manager.ledger.models import (
     Expense,
     IncomeSource,
 )
+from budget_manager.ledger.services import first_running_month
 
 FREQUENCY_CHOICES = [(value, label) for value, label in FREQUENCIES.items()]
 
@@ -101,11 +102,26 @@ class UniqueNameInBudget:
         return name
 
 
+KIND_CHOICES = [
+    ("fixed", "Fixed: the same amount each time"),
+    ("variable", "Variable: a bill whose amount varies"),
+    ("running", "Running: spent bit by bit through the month"),
+]
+
+
 class ExpenseForm(forms.ModelForm):
     amount = AmountField(
         allow_negative=False,
         label="Amount",
-        help_text="The expected amount each time it is due.",
+        help_text="The expected amount each time it is due; for a running budget, a month.",
+    )
+    kind = forms.ChoiceField(
+        choices=KIND_CHOICES,
+        initial="fixed",
+        widget=forms.RadioSelect,
+        label="Type",
+        help_text="Running budgets, like food or everyday spending, are monthly and available "
+        "from the 1st, so they need no due date. Only they can use the NemKonto.",
     )
     starting_balance = AmountField(
         required=False,
@@ -150,15 +166,16 @@ class ExpenseForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         budget = self.instance.budget
-        self.fields["account"].queryset = budget.accounts.exclude(role="nemkonto")
+        self.fields["account"].queryset = budget.accounts.all()
         self.fields["account"].empty_label = None
+        self.fields["first_due"].required = False
         self.fields["category"].queryset = budget.categories.all()
         self.fields["category"].empty_label = "Uncategorised"
         self.fields["category"].required = False
-        if not self.instance.pk and "account" not in self.initial:
+        if not self.instance.pk and not self.initial.get("account"):
             default = budget.accounts.filter(name__iexact="budget").first()
             if default:
-                self.fields["account"].initial = default.pk
+                self.initial["account"] = default.pk
 
     fill_from_savings = forms.BooleanField(
         required=False,
@@ -179,6 +196,22 @@ class ExpenseForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
+        account = data.get("account")
+        if data.get("kind") == "running":
+            # Monthly, available from the first of the month.
+            data["interval_months"] = 1
+            first = data.get("first_due") or self.instance.first_due
+            if first is None:
+                first = first_running_month(self.instance.budget, date.today()).first_day()
+            data["first_due"] = first.replace(day=1)
+        else:
+            if not data.get("first_due") and "first_due" not in self.errors:
+                self.add_error("first_due", "Enter the date it is due next.")
+            if account and account.is_nemkonto:
+                self.add_error(
+                    "account",
+                    "Only running budgets, like everyday spending, can use the NemKonto.",
+                )
         first_due, end_date = data.get("first_due"), data.get("end_date")
         if first_due and end_date and end_date < first_due:
             self.add_error("end_date", "The end date must be on or after the first due date.")
@@ -521,7 +554,11 @@ class QuickExpenseForm(ExpenseForm):
         fields = ["name", "amount", "interval_months", "first_due", "account", "category", "kind"]
         labels = {**ExpenseForm.Meta.labels, "first_due": "Next due date"}
         help_texts = {}
-        widgets = {"first_due": DateInput(), "kind": forms.Select}
+        widgets = {"first_due": DateInput()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["kind"].widget = forms.Select(choices=KIND_CHOICES)
 
 
 class QuickIncomeForm(IncomeSourceForm):

@@ -13,18 +13,42 @@
     {% if added %}<div class="notice success"><span>Added <b>{{ added }}</b>. Add the next one, or continue at the bottom.</span></div>{% endif %}
     <div class="quick-grid">
       <div class="wide">{% with field=form.name %}{% include "ledger/_field.html" %}{% endwith %}</div>
-      {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
-      {% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}
-      {% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}
-      {% with field=form.account %}{% include "ledger/_field.html" %}{% endwith %}
-      {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
       {% with field=form.kind %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.amount %}{% include "ledger/_field.html" %}{% endwith %}
+      {% with field=form.account %}{% include "ledger/_field.html" %}{% endwith %}
+      <div data-hide-when-running>{% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}</div>
+      <div data-hide-when-running>{% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}</div>
+      {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
     </div>
     <div class="form-actions">
       <button class="btn primary">Add expense</button>
-      <span class="muted small"><b>Fixed</b>: a stable amount like insurance. <b>Variable</b>: it varies, like food or fuel. For a savings goal, choose <i>Once</i> and the date the money must be ready.</span>
+      <span class="muted small"><b>Fixed</b>: the same amount each time, like insurance. <b>Variable</b>: a bill whose amount varies, like power or heating. <b>Running</b>: spent bit by bit through the month, like food or everyday spending from the NemKonto; it is monthly and needs no due date. For a savings goal, choose <i>Once</i> and the date the money must be ready.</span>
     </div>
   </form>
+
+  <section class="card" id="categories">
+    <div class="card-head"><h2>Categories</h2><span class="muted small">They group the expenses in the summary</span></div>
+    <div class="category-list">
+      {% for category in categories %}
+      <span class="category-item">
+        <b>{{ category.name }}</b> <span class="muted small">{{ category.used }}</span>
+        <a class="small" href="{% url 'category-edit' category.id %}?next={{ request.path|urlencode }}%23categories" aria-label="Rename {{ category.name }}">Rename</a>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove_category"><input type="hidden" name="category" value="{{ category.id }}"><button class="linklike small" aria-label="Remove {{ category.name }}">Remove</button></form>
+      </span>
+      {% empty %}
+      <p class="muted small">No categories yet. Expenses without one are listed as Uncategorised.</p>
+      {% endfor %}
+    </div>
+    <form method="post" class="row" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_category">
+      <label class="sr-only" for="{{ category_form.name.id_for_label }}">New category</label>
+      <input type="text" name="{{ category_form.name.html_name }}" id="{{ category_form.name.id_for_label }}" maxlength="60" placeholder="New category" value="{{ category_form.name.value|default:'' }}" class="category-input{% if category_form.name.errors %} invalid{% endif %}">
+      <button class="btn small">Add category</button>
+      {% for error in category_form.name.errors %}<span class="error small">{{ error }}</span>{% endfor %}
+    </form>
+    <p class="muted small">Removing a category keeps its expenses; they become uncategorised.</p>
+  </section>
 
   <section class="stack">
     <div class="spread"><h2>Your expenses</h2><span class="muted small">{{ count }} so far</span></div>
@@ -35,7 +59,7 @@
       {% with expense=item.expense %}
       <div class="entry expense-row">
         <div class="name">
-          <span><b>{{ expense.name }}</b> <span class="chip">{{ expense.account.name }}</span> {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}</span>
+          <span><b>{{ expense.name }}</b> <span class="chip">{{ expense.account.name }}</span> {% include "ledger/_kind.html" %}</span>
           <small>{{ expense.frequency }}{% if item.next_due %} · next due {{ item.next_due|date:"j M Y" }}{% else %} · nothing due{% endif %}{% if item.monthly %} · ≈ {{ item.monthly|money0 }} a month{% endif %}</small>
         </div>
         <span class="num"><b>{{ expense.amount|money }}</b></span>

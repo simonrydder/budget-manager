@@ -10,7 +10,8 @@ the budget came from; the requirements are the source of truth.
 |---|---|
 | Accounts | Customisable. Four to start with: **NemKonto**, **Budget**, **Food** and **Savings**. The NemKonto always exists and cannot be deleted. |
 | General Savings | Not a separate bank account: it is the part of the **savings account** not set aside for a savings goal. Exactly one account holds it (Savings by default; it can be moved). |
-| Expenses | Defined in the app: name, amount, first due date and frequency, fixed or variable, category and account. They can be dragged between categories (or accounts) on the expenses board. A food budget is just an expense linked to the Food account. |
+| Expenses | Defined in the app: name, amount, first due date and frequency, type, category and account. They can be dragged between categories (or accounts) on the expenses board. A food budget is just a running expense linked to the Food account. |
+| Expense types | **Fixed**: the same amount on its due date (rent, insurance). **Variable**: a bill on its due date whose amount varies (power, heating). **Running**: spent bit by bit through the month (food, fuel, everyday spending); monthly from the 1st, no due date. Only fixed expenses are topped up automatically. Only running expenses can live on the NemKonto: their money stays there without a transfer, and the NemKonto minimum and maximum apply to the rest. |
 | Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
 | Month-end routine | On the last day of a month: enter that month's actual spending, the interest received, next month's income (it arrives at the end of the month), then make the transfers. |
 | Forecast | Uses expected amounts for everything not yet entered. |
@@ -52,7 +53,8 @@ month-end.
 1. **Accounts**: today's bank balance of every account, and the NemKonto minimum and maximum.
    Accounts can be added, renamed or removed here.
 2. **Expenses**: added one at a time with the essentials (amount, frequency, next due date,
-   account, category, fixed or variable). The next one starts with the same account, category
+   account, category, type). Categories can be added, renamed and removed on the same page. The
+   next one starts with the same account, category
    and frequency.
 3. **Summary**: what the expenses cost a month, per category and per account. A repeating
    expense counts as its amount divided by its interval, a one-off goal as its amount spread
@@ -61,7 +63,7 @@ month-end.
 5. **Transfers**: per expense, what should have been set aside at the start of the current
    month so the monthly amount stays steady (a yearly 1.200 due in two months should already
    hold 1.000; a payment due this month must be there in full). Fixed payments follow their due
-   dates (due before today: paid; later: still on the account); only variable expenses, like
+   dates (due before today: paid; later: still on the account); only running expenses, like
    food, ask what has been spent so far this month. Each account's surplus or shortage is
    evened out through General Savings; the page lists those bank transfers and previews the
    first month-end. **Start the budget** saves the starting point, and the overview keeps
@@ -155,7 +157,7 @@ erDiagram
 | `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, starting balances of the NemKonto and General Savings, forecast length, how far the setup has come. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
 | `Account` | Name, role (`nemkonto`, `savings` that holds General Savings, or `normal`) and the bank balance entered in the setup. |
 | `Category` | Name and order. |
-| `Expense` | Amount, first due date, frequency in months (0 = once), end date, fixed/variable, account, category, starting balance, first month with a contribution. |
+| `Expense` | Amount, first due date, frequency in months (0 = once), end date, type (fixed, variable or running), account, category, starting balance, first month with a contribution. |
 | `IncomeSource` | Expected amount, first month, frequency, last month. |
 | `SpendingEntry`, `IncomeEntry`, `InterestEntry` | What actually happened, one row per month. |
 | `MonthClose` | One per budget month: status (in progress or closed), the NemKonto and General Savings flow, notices. |
