@@ -1,0 +1,98 @@
+{% extends "ledger/base.html" %}
+{% load budget %}
+{% block title %}Balance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Balance</h1>
+    <p class="muted">Money moved between General Savings and your expenses, any day of the month. Nothing changes until you have made the bank transfers and pressed <b>Transfers made</b>.</p>
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack" style="gap:16px">
+    <section class="card">
+      <div class="card-head"><h2>Waiting to be moved</h2>{% if plan.moves %}<span class="chip">{{ plan.moves|length }}</span>{% endif %}</div>
+      {% if plan.moves %}
+      <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>What</th><th>Account</th><th class="num">General Savings</th><th></th></tr></thead>
+        <tbody>
+        {% for item in plan.moves %}
+          <tr>
+            <td>{% if item.expense %}<a href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td class="dim">{{ item.account.name }}</td>
+            <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
+            <td class="num">{% if item.move %}<form method="post" action="{% url 'move-cancel' item.move.id %}">{% csrf_token %}<button class="linklike small">Cancel</button></form>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+      <p class="empty">Nothing is waiting. Fill a new expense, top one up, return money from an expense or add a refund, and it shows up here.</p>
+      {% endif %}
+    </section>
+
+    {% if plan.moves %}
+    <section class="stack">
+      <h2>Bank transfers to make</h2>
+      <div class="transfers">
+        {% for move in plan.bank_moves %}
+        <div class="transfer">
+          <span></span>
+          <div>
+            <div class="amt">{{ move.amount|money }}</div>
+            <div class="route">{{ move.source.name }} → {{ move.target.name }}</div>
+          </div>
+          <button type="button" class="btn small" data-copy="{{ move.amount|money_input }}" hidden>Copy</button>
+        </div>
+        {% empty %}
+        <p class="muted">No bank transfer needed: everything stays on {{ plan.savings.name }}.</p>
+        {% endfor %}
+      </div>
+      <p class="muted small">General Savings goes from {{ plan.general_savings|money }} to <b class="{{ plan.general_savings_after|tone }}">{{ plan.general_savings_after|money }}</b>.</p>
+      {% if started %}
+      <form method="post" action="{% url 'balance-made' %}" class="form-actions">
+        {% csrf_token %}
+        <button class="btn primary"{% if plan.general_savings_after < 0 %} disabled{% endif %}>Transfers made</button>
+        <span class="muted small">Updates the balances of the expenses and General Savings.</span>
+      </form>
+      {% else %}
+      <p class="notice info">Start the budget before moving money. <a href="{% url 'start' %}">Start the budget</a></p>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+
+  <div class="stack" style="gap:16px">
+    <section class="card">
+      <h2>Add a refund</h2>
+      <p class="muted small">Money you got back, for example a surplus from your insurance company. It goes to General Savings.</p>
+      <form method="post" class="form" novalidate>
+        {% csrf_token %}
+        {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+        <div class="form-actions"><button class="btn">Add</button></div>
+      </form>
+    </section>
+
+    {% if recent %}
+    <section class="card">
+      <h2>Made recently</h2>
+      <table class="table compact">
+        <tbody>
+        {% for move in recent %}
+          <tr>
+            <td class="dim nowrap">{{ move.done_at|date:"j M" }}</td>
+            <td>{% if move.expense %}{{ move.expense.name }}{% else %}Refund{% if move.note %} · {{ move.note }}{% endif %}{% endif %}<br><span class="muted small">{{ move.get_kind_display }}</span></td>
+            <td class="num {{ move.to_general_savings|tone }}">{{ move.to_general_savings|signed }}</td>
+            <td class="num">{% if move.month == next_month.first_day %}<form method="post" action="{% url 'move-undo' move.id %}">{% csrf_token %}<button class="linklike small">Undo</button></form>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

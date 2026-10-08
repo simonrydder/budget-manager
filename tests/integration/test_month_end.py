@@ -179,25 +179,6 @@ def test_visiting_an_old_or_future_month_redirects(client, budget):
     assert client.get("/month-end/nonsense/income/").status_code == 404
 
 
-def test_release_moves_an_ended_expense_to_general_savings(client, budget, accounts):
-    old = Expense.objects.create(
-        name="Old subscription",
-        amount=8900,
-        interval_months=1,
-        first_due=date(2025, 1, 5),
-        end_date=date(2025, 4, 30),
-        starting_balance=15000,
-        account=accounts["Budget"],
-    )
-    client.post(f"/expenses/{old.id}/release/", {"amount": "150"})
-    assert Decision.objects.get(kind="release").amount == 15000
-    month_end(client, "2025-05")
-    close = MonthClose.objects.get(month=date(2025, 5, 1))
-    assert close.lines.get(expense=old).release == 15000
-    assert close.general_savings_after == 1627200 + 15000
-    assert transfers("2025-05")["Budget"] == 1000000 - 15000
-
-
 def test_nemkonto_correction_changes_the_next_month_end(client, budget):
     response = client.post("/accounts/correct/nemkonto/", {"amount": "-25,00", "note": "Fee"})
     assert response.status_code == 302
@@ -235,31 +216,3 @@ def test_settings_are_locked_after_the_first_month_end(client, budget):
     assert config.start_month == date(2025, 5, 1)
     assert config.nemkonto_opening == 300000
     assert config.nemkonto_max == 400000
-
-
-def test_top_up_chosen_while_editing_a_variable_expense(client, budget, accounts):
-    month_end(client, "2025-05")
-    month_end(client, "2025-06", spending={"Groceries": "8.500"})  # balance -500
-    groceries = expense("Groceries")
-    page = client.get(f"/expenses/{groceries.id}/edit/")
-    assert b"To bring it back to 0, top it up with 500,00" in page.content
-    form = {
-        "name": "Groceries",
-        "amount": "4.000",
-        "interval_months": "1",
-        "first_due": "2025-05-01",
-        "kind": "variable",
-        "account": accounts["Food"].id,
-        "topup": "500",
-    }
-    assert client.post(f"/expenses/{groceries.id}/edit/", form).status_code == 302
-    assert Decision.objects.get(kind="topup").amount == 50000
-    month_end(client, "2025-07")
-    line = MonthClose.objects.get(month=date(2025, 7, 1)).lines.get(expense=groceries)
-    assert line.topup == 50000
-    assert line.balance_after == 400000
-
-    # Saving without a top-up removes a planned one.
-    client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": "100"})
-    client.post(f"/expenses/{groceries.id}/edit/", {**form, "topup": ""})
-    assert not Decision.objects.filter(kind="topup", close__status="draft").exists()

@@ -34,6 +34,7 @@ def run_forecast(
     covers: dict[YearMonth, dict[int, int]] | None = None,
     releases: dict[YearMonth, dict[int, int]] | None = None,
     topups: dict[YearMonth, dict[int, int]] | None = None,
+    funding: dict[YearMonth, dict[int, int]] | None = None,
 ) -> list[ForecastMonth]:
     """Forecast ``months`` month-ends, starting with the next close.
 
@@ -48,12 +49,19 @@ def run_forecast(
     covers = covers or {}
     releases = releases or {}
     topups = topups or {}
+    funding = funding or {}
     result: list[ForecastMonth] = []
     for _ in range(months):
         month = state.month
         previous = month - 1
         for ledger in state.ledgers:
-            if previous not in ledger.spending:
+            expense = ledger.expense
+            if expense.opening <= previous < expense.start_month:
+                # The month the budget was started in: payments still due come on top of what
+                # was entered as spent so far.
+                due = expense.amount if expense.schedule.due_in(previous) else 0
+                ledger.spending[previous] = max(ledger.spending.get(previous, 0), due)
+            elif previous not in ledger.spending:
                 line = ledger.lines.get(previous)
                 if line and line.expected_spend:
                     ledger.spending[previous] = line.expected_spend
@@ -64,6 +72,7 @@ def run_forecast(
             covers=covers.get(month),
             releases=releases.get(month),
             topups=topups.get(month),
+            funding=funding.get(month),
         )
         apply_close(state, plan)
         result.append(

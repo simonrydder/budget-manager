@@ -87,6 +87,7 @@ def test_requests_from_the_internet_are_refused(client):
         "/settings/",
         "/users/",
         "/closes/",
+        "/balance/",
         "/accounts/correct/nemkonto/",
     ],
 )
@@ -299,3 +300,32 @@ def test_warning_when_expenses_exceed_income(client, budget, accounts):
 def test_no_warning_when_income_covers_expenses(client, budget):
     response = client.get("/", follow=True)
     assert "more than your expected income" not in response.content.decode()
+
+
+def test_expenses_can_be_reordered_within_a_category(client, budget, accounts):
+    house = Category.objects.get(name="House")
+    rent = Expense.objects.get(name="Rent")
+    water = Expense.objects.create(
+        name="Water",
+        amount=30000,
+        first_due=date(2025, 5, 1),
+        account=accounts["Budget"],
+        category=house,
+        sort_order=5,
+    )
+    json = {"HTTP_ACCEPT": "application/json"}
+    response = client.post(
+        f"/expenses/{water.id}/move/",
+        {"field": "category", "value": house.id, "order": f"{water.id},{rent.id}"},
+        **json,
+    )
+    assert response.json() == {"ok": True, "message": "Order saved."}
+    assert list(house.expenses.values_list("name", flat=True)) == ["Water", "Rent"]
+    board = client.get("/expenses/").content.decode()
+    assert board.index(">Water<") < board.index(">Rent<")
+    bad = client.post(
+        f"/expenses/{water.id}/move/",
+        {"field": "category", "value": house.id, "order": "x"},
+        **json,
+    )
+    assert bad.status_code == 400

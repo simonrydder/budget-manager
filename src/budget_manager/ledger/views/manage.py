@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Max, ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,9 +26,9 @@ from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
     Category,
-    Decision,
     Expense,
     IncomeSource,
+    Move,
 )
 from budget_manager.ledger.views.common import today
 
@@ -260,26 +260,30 @@ def expense_form(request, pk: int | None = None):
         initial["category"] = request.GET["category"]
     previous_account = expense.account if pk else None
     balance = services.build_state().current_expense_balances().get(expense.pk, 0) if pk else 0
-    draft = services.draft_close() if pk else None
-    pending = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
-    )
+    pending = _waiting(expense, Move.Type.TOPUP) if pk else None
     if pending:
         initial["topup"] = pending.amount
+    started = services.budget_started()
     form = ExpenseForm(request.POST or None, instance=expense, initial=initial)
     if not pk:
         del form.fields["topup"]
+    if pk or not started:
+        del form.fields["fill_from_savings"]
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
         if previous_account and previous_account.pk != item.account_id:
             note = _balance_move_note(item, previous_account, item.account)
             if note:
                 messages.warning(request, note)
-        if not item.pk and services.last_closed() is not None:
+        if not item.pk:
+            item.sort_order = (Expense.objects.aggregate(m=Max("sort_order"))["m"] or 0) + 1
+        if not item.pk and started:
             item.start_month = services.next_close_month().first_day()
         item.save()
         if pk:
-            _save_topup(request, item, form.cleaned_data.get("topup"))
+            _save_waiting(request, item, Move.Type.TOPUP, form.cleaned_data.get("topup"))
+        if form.cleaned_data.get("fill_from_savings"):
+            _save_fund(request, item)
         messages.success(request, f"Saved {item.name}.")
         if warning := services.monthly_balance().warning():
             messages.warning(request, warning)
@@ -291,31 +295,46 @@ def expense_form(request, pk: int | None = None):
         "expense": expense,
         "budget": services.monthly_balance(),
         "balance": balance,
-        "transfer_day": (services.next_close_month() - 1).last_day(),
     }
     return render(request, "ledger/expenses/form.html", context)
 
 
-def _save_topup(request, expense: Expense, amount: int | None) -> None:
-    """Remember (or drop) a top-up from General Savings for the next month-end."""
-    month = services.next_close_month()
-    if amount:
-        close = services.start_draft(month, request.user)
-        Decision.objects.update_or_create(
-            close=close, expense=expense, kind=Decision.Type.TOPUP, defaults={"amount": amount}
-        )
-        messages.info(
-            request,
-            f"{format_amount(amount)} moves from General Savings to {expense.name} at the "
-            f"month-end on {(month - 1).last_day():%d %B}.",
-        )
-    else:
-        Decision.objects.filter(
-            close__month=month.first_day(),
-            close__status="draft",
-            expense=expense,
-            kind=Decision.Type.TOPUP,
-        ).delete()
+def _waiting(expense: Expense, kind: str) -> Move | None:
+    return expense.moves.filter(done=False, kind=kind).first()
+
+
+def _save_fund(request, expense: Expense) -> None:
+    """Fill a new expense from General Savings up to its steady path."""
+    state = services.build_state()
+    amount = services.fund_amount(state.ledger(expense.pk), state.month)
+    if not amount:
+        if state.ledger(expense.pk).expense.suggested_starting_balance() is None:
+            messages.info(request, "A one-off goal has no steady amount, so nothing is filled.")
+        return
+    _save_waiting(request, expense, Move.Type.FUND, amount)
+
+
+def _save_waiting(request, expense: Expense, kind: str, amount: int | None) -> None:
+    """Remember (or drop) money to move between General Savings and an expense."""
+    pending = _waiting(expense, kind)
+    if not amount:
+        if pending:
+            pending.delete()
+        return
+    if pending and pending.amount == amount:
+        return
+    Move.objects.update_or_create(
+        expense=expense,
+        kind=kind,
+        done=False,
+        defaults={"amount": amount, "account": expense.account, "created_by": request.user},
+    )
+    direction = "to" if kind != Move.Type.RELEASE else "from"
+    messages.info(
+        request,
+        f"{format_amount(amount)} is waiting to move {direction} {expense.name}. Make the bank "
+        "transfer any day under Balance (or at the month-end).",
+    )
 
 
 def expense_detail(request, pk: int):
@@ -347,15 +366,8 @@ def expense_detail(request, pk: int):
         }
         for point in points
     ]
-    draft = services.draft_close()
-    pending_topup = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.TOPUP).first() if draft else None
-    )
-    pending_release = (
-        draft.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).first()
-        if draft
-        else None
-    )
+    waiting = [item for item in services.balancing(today(), state).moves if item.expense == expense]
+    pending_release = next((item for item in waiting if item.kind == Move.Type.RELEASE), None)
     context = {
         "expense": expense,
         "balance": balance,
@@ -363,10 +375,11 @@ def expense_detail(request, pk: int):
         "upcoming": upcoming,
         "plan_rows": plan_rows,
         "next_contribution": points[0].close.lines[expense.id].contribution,
+        "waiting": [item for item in waiting if item is not pending_release],
         "pending_release": pending_release,
-        "pending_topup": pending_topup,
+        "moves": expense.moves.filter(done=True),
         "release_form": ReleaseForm(initial={"amount": max(0, balance)}),
-        "can_delete": not expense.lines.exists() and not expense.spending.exists(),
+        "can_delete": not _has_history(expense),
         "ended": expense.is_ended(today()),
     }
     return render(request, "ledger/expenses/detail.html", context)
@@ -378,7 +391,11 @@ def expense_end(request, pk: int):
     if request.method == "POST" and form.is_valid():
         expense.end_date = form.cleaned_data["end_date"]
         expense.save(update_fields=["end_date", "updated_at"])
-        messages.success(request, f"{expense.name} ends on {expense.end_date:%d %b %Y}.")
+        messages.success(
+            request,
+            f"{expense.name} ends on {expense.end_date:%d %b %Y}. Once it has ended and its last "
+            "payment is entered, what is left on it returns to General Savings under Balance.",
+        )
         return redirect("expense-detail", pk=expense.pk)
     return render(request, "ledger/expenses/end.html", {"form": form, "expense": expense})
 
@@ -386,7 +403,7 @@ def expense_end(request, pk: int):
 def expense_delete(request, pk: int):
     expense = get_object_or_404(Expense, pk=pk)
     blocked = None
-    if expense.lines.exists() or expense.spending.exists():
+    if _has_history(expense):
         blocked = "This expense has history. End it instead, so past months stay correct."
     if request.method == "POST" and not blocked:
         expense.delete()
@@ -396,6 +413,14 @@ def expense_delete(request, pk: int):
         request,
         "ledger/confirm_delete.html",
         {"object": expense, "blocked": blocked, "kind": "expense"},
+    )
+
+
+def _has_history(expense: Expense) -> bool:
+    return (
+        expense.lines.exists()
+        or expense.spending.exists()
+        or expense.moves.filter(done=True).exists()
     )
 
 
@@ -411,72 +436,65 @@ def _balance_move_note(expense: Expense, old: Account, new: Account) -> str | No
 
 @require_POST
 def expense_move(request, pk: int):
-    """Drag and drop: set the category or the account of an expense."""
+    """Drag and drop: set the category or the account of an expense, and the order of the
+    expenses in the column it was dropped in (``order``: comma-separated ids, top first)."""
     expense = get_object_or_404(Expense, pk=pk)
     field = request.POST.get("field")
     value = request.POST.get("value", "")
-    if value and not value.isdigit():
+    order = [item for item in request.POST.get("order", "").split(",") if item]
+    wants_json = request.headers.get("Accept", "").startswith("application/json")
+    if (value and not value.isdigit()) or not all(item.isdigit() for item in order):
         return JsonResponse({"ok": False, "error": "Unknown target."}, status=400)
-    if field == "category":
-        expense.category = get_object_or_404(Category, pk=value) if value else None
-        expense.save(update_fields=["category", "updated_at"])
-        target = expense.category.name if expense.category else "Uncategorised"
-    elif field == "account":
-        account = get_object_or_404(Account, pk=value)
-        if account.is_nemkonto:
-            return JsonResponse(
-                {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
-            )
-        previous = expense.account
-        expense.account = account
-        expense.save(update_fields=["account", "updated_at"])
-        target = account.name
-        note = _balance_move_note(expense, previous, account)
-        if note:
-            if request.headers.get("Accept", "").startswith("application/json"):
-                return JsonResponse({"ok": True, "message": note})
-            messages.warning(request, note)
-    else:
+    if field not in {"category", "account"}:
         return JsonResponse({"ok": False, "error": "Unknown field."}, status=400)
-    if request.headers.get("Accept", "").startswith("application/json"):
-        return JsonResponse({"ok": True, "message": f"{expense.name} moved to {target}."})
-    messages.success(request, f"{expense.name} moved to {target}.")
+
+    current = str(getattr(expense, f"{field}_id") or "")
+    message = note = None
+    if value != current:
+        if field == "category":
+            expense.category = get_object_or_404(Category, pk=value) if value else None
+            expense.save(update_fields=["category", "updated_at"])
+            target = expense.category.name if expense.category else "Uncategorised"
+        else:
+            account = get_object_or_404(Account, pk=value)
+            if account.is_nemkonto:
+                return JsonResponse(
+                    {"ok": False, "error": "Expenses cannot use the NemKonto."}, status=400
+                )
+            previous = expense.account
+            expense.account = account
+            expense.save(update_fields=["account", "updated_at"])
+            target = account.name
+            note = _balance_move_note(expense, previous, account)
+        message = note or f"{expense.name} moved to {target}."
+    if order:
+        with transaction.atomic():
+            for position, expense_id in enumerate(order):
+                Expense.objects.filter(pk=int(expense_id)).update(sort_order=position)
+        message = message or "Order saved."
+    message = message or "Nothing changed."
+    if wants_json:
+        return JsonResponse({"ok": True, "message": message})
+    (messages.warning if note else messages.success)(request, message)
     return redirect(_safe_next(request, "expenses"))
 
 
 @require_POST
 def expense_release(request, pk: int):
-    """Move (part of) an expense's balance to General Savings at the next month-end."""
+    """Move (part of) an expense's balance to General Savings."""
     expense = get_object_or_404(Expense, pk=pk)
-    month = services.next_close_month()
-    close = services.start_draft(month, request.user)
     if "cancel" in request.POST:
-        close.decisions.filter(expense=expense, kind=Decision.Type.RELEASE).delete()
+        expense.moves.filter(done=False, kind=Move.Type.RELEASE).delete()
         messages.success(request, "Cancelled.")
         return redirect("expense-detail", pk=pk)
     form = ReleaseForm(request.POST)
-    state = services.build_state()
-    balance = state.current_expense_balances()[expense.id]
+    balance = services.build_state().current_expense_balances()[expense.id]
     if form.is_valid():
         amount = form.cleaned_data["amount"]
         if not amount or amount > balance:
             messages.error(request, "Enter an amount up to the current balance.")
         else:
-            try:
-                Decision.objects.update_or_create(
-                    close=close,
-                    expense=expense,
-                    kind=Decision.Type.RELEASE,
-                    defaults={"amount": amount},
-                )
-            except IntegrityError:
-                messages.error(request, "Could not save. Try again.")
-            else:
-                messages.success(
-                    request,
-                    f"The amount moves to General Savings at the month-end on "
-                    f"{(month - 1).last_day():%d %b %Y}.",
-                )
+            _save_waiting(request, expense, Move.Type.RELEASE, amount)
     else:
         messages.error(request, " ".join(form.errors.get("amount", ["Enter an amount."])))
     return redirect("expense-detail", pk=pk)

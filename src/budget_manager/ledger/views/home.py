@@ -129,9 +129,14 @@ def dashboard(request):
     config = BudgetSettings.load()
 
     checklist = [
-        ("Set the NemKonto limits and start balances", config.nemkonto_max > 0, "settings"),
+        ("Set the NemKonto minimum and maximum", config.nemkonto_max > 0, "settings"),
         ("Add your expenses", Expense.objects.exists(), "expense-new"),
         ("Add your income", IncomeSource.objects.exists(), "income-new"),
+        (
+            "Start the budget with today's account balances",
+            config.started_on is not None or last is not None,
+            "start",
+        ),
         ("Do your first month-end", last is not None, "month-end"),
     ]
     context = {
@@ -163,6 +168,7 @@ def dashboard(request):
         "trends": trend_cards(points, accounts),
         "checklist": checklist,
         "setup_done": all(done for _, done, _ in checklist),
+        "balancing": services.balancing(today(), state),
         "transfer_total": sum(t.amount for t in preview.transfers.values() if t.amount > 0),
     }
     return render(request, "ledger/dashboard.html", context)

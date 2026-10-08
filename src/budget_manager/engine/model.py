@@ -42,6 +42,44 @@ class Expense:
     schedule: Schedule
     start_month: YearMonth  # first budget month that receives a contribution
     starting_balance: int = 0
+    # The month ``starting_balance`` refers to the start of. Normally the start month; when the
+    # budget is started mid-month it is the current month, whose payments come out of it.
+    opening_month: YearMonth | None = None
+
+    @property
+    def opening(self) -> YearMonth:
+        return min(self.opening_month or self.start_month, self.start_month)
+
+    def due_before_start(self) -> int:
+        """Payments due between the opening month and the start month, paid from the
+        starting balance."""
+        total = 0
+        month = self.opening
+        while month < self.start_month:
+            if self.schedule.due_in(month):
+                total += self.amount
+            month += 1
+        return total
+
+    def suggested_starting_balance(self) -> int | None:
+        """What should already be set aside at the start of the opening month so the monthly
+        contribution is the same before and after the next payment ("top up all").
+
+        Payments due in the opening month must be there in full. ``None`` for one-off goals,
+        which have no steady amount.
+        """
+        due = self.schedule.next_due(self.opening)
+        if due is None:
+            return 0
+        due_month = YearMonth.of(due)
+        if due_month < self.start_month:
+            return self.amount
+        interval = self.schedule.interval_months
+        if not interval:
+            return None
+        rate = _round_up(self.amount, interval)
+        transfers = self.start_month.months_until(due_month) + 1
+        return max(0, self.amount - rate * transfers)
 
     def expected_spend(self, month: YearMonth) -> int:
         if month < self.start_month:
@@ -112,15 +150,34 @@ class Line:
     topup: int = 0  # added from General Savings because a fixed expense went below zero
     cover: int = 0  # taken to the NemKonto; later contributions rebuild it
     release: int = 0  # moved to General Savings; not rebuilt
+    funding: int = 0  # part of ``topup`` that fills a new expense up to its steady path
+
+
+@dataclass(frozen=True)
+class Adjustment:
+    """Money moved between General Savings and an expense between two month-ends."""
+
+    month: YearMonth  # budget month of the next month-end after the move
+    amount: int  # positive: into the expense
+    planned: bool = False  # counts towards the plan (filling a new expense)
 
 
 @dataclass
 class ExpenseLedger:
-    """An expense with its closed months and its actual spending."""
+    """An expense with its closed months, its actual spending and the money moved to or from
+    it between month-ends."""
 
     expense: Expense
     lines: dict[YearMonth, Line] = field(default_factory=dict)
     spending: dict[YearMonth, int] = field(default_factory=dict)
+    adjustments: list[Adjustment] = field(default_factory=list)
+
+    def _adjusted(self, until: YearMonth, *, planned_only: bool = False) -> int:
+        return sum(
+            item.amount
+            for item in self.adjustments
+            if item.month <= until and (item.planned or not planned_only)
+        )
 
     def planned_balance_before(self, month: YearMonth) -> int:
         """The balance the plan expects before the transfer for ``month``.
@@ -128,11 +185,17 @@ class ExpenseLedger:
         It assumes every payment cost exactly the expected amount, so actual deviations never
         change the contributions. Money taken to cover the NemKonto is rebuilt.
         """
-        total = self.expense.starting_balance
+        total = self.expense.starting_balance - self.expense.due_before_start()
         for line_month, line in self.lines.items():
             if line_month < month:
-                total += line.contribution - line.expected_spend - line.cover
-        return total
+                total += line.contribution - line.expected_spend - line.cover + line.funding
+        return total + self._adjusted(month, planned_only=True)
+
+    def planned_at_cycle_start(self, month: YearMonth) -> int:
+        """The planned balance a saving period starting at ``month`` begins with, including any
+        filling from General Savings made at that month-end."""
+        line = self.lines.get(month)
+        return self.planned_balance_before(month) + (line.funding if line else 0)
 
     def balance_after_close(self, month: YearMonth) -> int:
         """Actual balance right after the transfer for ``month`` (spending up to the month before)."""
@@ -143,11 +206,13 @@ class ExpenseLedger:
         for spend_month, spent in self.spending.items():
             if spend_month < month:
                 total -= spent
-        return total
+        return total + self._adjusted(month)
 
     def balance_end_of(self, month: YearMonth) -> int:
-        """Actual balance at the end of ``month``, after its spending, before the next transfer."""
-        return self.balance_after_close(month) - self.spending.get(month, 0)
+        """Actual balance at the end of ``month``, after its spending and the moves made since
+        the transfer, before the next transfer."""
+        moved = sum(item.amount for item in self.adjustments if item.month == month + 1)
+        return self.balance_after_close(month) - self.spending.get(month, 0) + moved
 
 
 @dataclass

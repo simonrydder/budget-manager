@@ -12,6 +12,7 @@ from budget_manager.engine.close import (
 from budget_manager.engine.forecast import ForecastMonth, run_forecast
 from budget_manager.engine.model import (
     Account,
+    Adjustment,
     BudgetState,
     Expense,
     ExpenseLedger,
@@ -27,6 +28,7 @@ from budget_manager.engine.schedule import FREQUENCIES, MonthSchedule, Schedule,
 __all__ = [
     "FREQUENCIES",
     "Account",
+    "Adjustment",
     "BudgetState",
     "CloseError",
     "ClosePlan",

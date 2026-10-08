@@ -20,6 +20,8 @@
     {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
   </div>
   {% with field=form.kind %}{% include "ledger/_field.html" %}{% endwith %}
+  {% if form.fill_from_savings %}{% with field=form.fill_from_savings %}{% include "ledger/_field.html" %}{% endwith %}
+  <p class="muted small" style="margin-top:-10px">Example: 600 a year, due in two months. Filled: 500 now, then 50 a month. Not filled: 300, 300, then 50 a month.</p>{% endif %}
   <div class="notice info small">
     <span><b>Fixed</b>: a stable amount, like insurance. If it costs more than expected, General Savings covers the difference and the expected amount is raised.</span>
     <span><b>Variable</b>: it varies, like parking or groceries. The balance may go below zero or build up; you adjust the amount yourself.</span>
@@ -38,7 +40,7 @@
     <div class="field{% if form.topup.errors %} invalid{% endif %}">
       <label for="{{ form.topup.id_for_label }}">{{ form.topup.label }}</label>
       {{ form.topup }}
-      <span class="help">Moved at the month-end on {{ transfer_day|date:"j F" }}. Leave empty for no top-up. General Savings lives on the savings account, so the money arrives as part of that month's transfers.</span>
+      <span class="help">Leave empty for no top-up. It waits under <a href="{% url 'balance' %}">Balance</a> until you make the bank transfer from the savings account, any day.</span>
       {% for error in form.topup.errors %}<span class="error">{{ error }}</span>{% endfor %}
     </div>
   </section>

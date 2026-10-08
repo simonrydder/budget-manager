@@ -63,6 +63,38 @@ WantedBy=multi-user.target
 
 Then `sudo systemctl enable --now budget-manager`.
 
+### Run it on Windows (updated every night)
+
+`scripts/windows` starts the app on Windows from the newest commit of the `prod` branch.
+
+1. Install [Git](https://git-scm.com/download/win) and [uv](https://docs.astral.sh/uv/)
+   (`winget install Git.Git astral-sh.uv`).
+2. Clone a copy that is only for running the app. The script throws away local changes in it.
+
+   ```bat
+   git clone https://github.com/simonrydder/budget-manager.git %USERPROFILE%\budget-manager
+   ```
+
+3. Double-click `scripts\windows\start-budget.cmd`. It stops a running copy, backs up the
+   database, updates to the newest `prod`, installs the dependencies and starts the server on
+   port 8000. Keep the window open. If the new version does not start, it goes back to the
+   version that ran before.
+4. To run it in the background instead, open PowerShell with **Run as administrator** and run:
+
+   ```powershell
+   cd $env:USERPROFILE\budget-manager\scripts\windows
+   powershell -ExecutionPolicy Bypass -File .\install-nightly-task.ps1
+   ```
+
+   This adds a scheduled task called *Budget Manager* that starts the app when Windows starts and
+   updates and restarts it every night at 03:30, and opens the port in the firewall for private
+   networks. Options: `-At 04:00`, `-Port 8080`, `-Branch <name>`. Remove it again with
+   `-Uninstall`.
+
+The data lives in `%USERPROFILE%\BudgetManagerData` (`-DataDir` to change it), outside the
+code, so updates never touch it. Every start keeps a copy of the database in `backups` (the 30
+newest) and the server log in `logs\server.log`.
+
 ### Back up
 
 The whole budget is one file. Copy it safely while the app runs with:
@@ -92,6 +124,10 @@ This creates a made-up household with three closed month-ends. Log in as `demo` 
    3. enter the income that arrived for next month,
    4. make the transfers it lists and tick them off,
    5. optionally compare the balances with the bank, then close the month-end.
+3. **Any day:** under **Balance**, move money between General Savings and your expenses: filling
+   a new expense, a top-up, money an expense no longer needs (an ended expense returns what is
+   left by itself) or a refund. It lists the bank transfers to make; press **Transfers made**
+   once they are done and the balances update.
 
 The **Overview** shows balances, warnings, upcoming payments and the next 12 months. **Forecast**
 goes further ahead, **History** shows actual spending per year.

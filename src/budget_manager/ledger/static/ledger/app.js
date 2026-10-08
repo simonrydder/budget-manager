@@ -184,10 +184,19 @@
         event.preventDefault();
         column.classList.remove("over");
         const card = dragged;
-        if (!card || card.parentElement === column.querySelector(".cards")) return;
+        if (!card) return;
+        const list = column.querySelector(".cards");
         const origin = card.parentElement;
-        column.querySelector(".cards").prepend(card);
-        const body = new URLSearchParams({ field: field, value: column.dataset.value });
+        const originNext = card.nextElementSibling;
+        // Drop above the first card whose middle is below the pointer.
+        const after = [...list.querySelectorAll(".xcard")].find((other) => {
+          if (other === card) return false;
+          const box = other.getBoundingClientRect();
+          return event.clientY < box.top + box.height / 2;
+        });
+        list.insertBefore(card, after || null);
+        const order = [...list.querySelectorAll(".xcard")].map((item) => item.dataset.id).join(",");
+        const body = new URLSearchParams({ field: field, value: column.dataset.value, order: order });
         try {
           const response = await fetch(card.dataset.move, {
             method: "POST",
@@ -199,7 +208,7 @@
           toast(data.message);
           board.querySelectorAll(".column").forEach(refreshCount);
         } catch (error) {
-          origin.prepend(card);
+          origin.insertBefore(card, originNext);
           toast(error.message);
         }
       });

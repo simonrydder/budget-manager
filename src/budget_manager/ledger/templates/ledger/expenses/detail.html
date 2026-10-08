@@ -42,19 +42,19 @@
   </section>
   <div class="stack" style="gap:16px">
     {% if expense.notes %}<section class="card"><h2>Notes</h2><p>{{ expense.notes|linebreaksbr }}</p></section>{% endif %}
-    {% if pending_topup %}
+    {% for item in waiting %}
     <section class="card">
-      <h2>Top-up planned</h2>
-      <p>{{ pending_topup.amount|money }} moves from General Savings to {{ expense.name }} at the coming month-end. <a href="{% url 'expense-edit' expense.id %}">Change it</a></p>
+      <h2>Waiting to move</h2>
+      <p>{{ item.amount|money }} moves from General Savings to {{ expense.name }} ({{ item.label|lower }}). <a href="{% url 'balance' %}">Make the transfer</a></p>
     </section>
-    {% endif %}
+    {% endfor %}
     <section class="card">
       <h2>Move money to General Savings</h2>
       {% if pending_release %}
-        <p>{{ pending_release.amount|money }} moves to General Savings at the coming month-end.</p>
-        <form method="post" action="{% url 'expense-release' expense.id %}">{% csrf_token %}<button class="btn small" name="cancel" value="1">Cancel</button></form>
+        <p>{{ pending_release.amount|money }} is waiting to move to General Savings{% if not pending_release.move %} because the expense has ended{% endif %}. <a href="{% url 'balance' %}">Make the transfer</a></p>
+        {% if pending_release.move %}<form method="post" action="{% url 'expense-release' expense.id %}">{% csrf_token %}<button class="btn small" name="cancel" value="1">Cancel</button></form>{% endif %}
       {% elif balance > 0 %}
-        <p class="muted small">For money this expense no longer needs, for example after ending it. It is moved at the coming month-end.</p>
+        <p class="muted small">For money this expense no longer needs. It waits under Balance until you make the bank transfer, any day.</p>
         <form method="post" action="{% url 'expense-release' expense.id %}" class="row">
           {% csrf_token %}
           <label class="sr-only" for="id_amount">Amount to move</label>
@@ -65,6 +65,18 @@
         <p class="muted small">Nothing to move: the balance is {{ balance|money }}.</p>
       {% endif %}
     </section>
+    {% if moves %}
+    <section class="card">
+      <h2>Moved between month-ends</h2>
+      <table class="table compact">
+        <tbody>
+        {% for move in moves %}
+          <tr><td class="dim nowrap">{{ move.done_at|date:"j M Y" }}</td><td>{{ move.get_kind_display }}</td><td class="num {{ move.to_expense|tone }}">{{ move.to_expense|money }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
   </div>
 </div>
 

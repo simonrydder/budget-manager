@@ -144,11 +144,18 @@ class ExpenseForm(forms.ModelForm):
             if budget:
                 self.fields["account"].initial = budget.pk
 
+    fill_from_savings = forms.BooleanField(
+        required=False,
+        label="Fill from General Savings",
+        help_text="Moves in what a steady monthly amount would already have saved, so it saves "
+        "the same every month. Without it, the first payment is split over the months left. "
+        "The transfer waits under Balance until you make it.",
+    )
     topup = AmountField(
         required=False,
         allow_negative=False,
         label="Top up from General Savings",
-        help_text="Moves this amount from General Savings to the expense at the next month-end.",
+        help_text="Moves this amount from General Savings to the expense.",
     )
 
     def clean_starting_balance(self):
@@ -172,6 +179,25 @@ class EndExpenseForm(forms.Form):
 
 class ReleaseForm(forms.Form):
     amount = AmountField(allow_negative=False, label="Amount to move")
+
+
+class RefundForm(forms.Form):
+    amount = AmountField(allow_negative=False, label="Amount")
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        empty_label=None,
+        label="Arrived on",
+        help_text="The account the money came back to.",
+    )
+    note = forms.CharField(
+        max_length=200, required=False, label="Note", help_text="For example: insurance surplus."
+    )
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if not amount:
+            raise forms.ValidationError("Enter an amount above 0.")
+        return amount
 
 
 class IncomeSourceForm(forms.ModelForm):

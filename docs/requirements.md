@@ -41,7 +41,7 @@ An expense is a planned cost that money is set aside for. Each expense has:
   - **One-off savings goal**, e.g. a boarding-school stay in 2030. The app calculates the required monthly contribution.
   - **Recurring savings goal**, e.g. a summer holiday needing 30,000 by March 1st every year.
 - An optional **starting balance**, meaning money already in the linked account for this expense.
-- An optional **end date**. Ending an expense (e.g. cancelling Disney+) stops contributions from then on.
+- An optional **end date**. Ending an expense (e.g. cancelling Disney+) stops contributions from then on, and the money left on it returns to General Savings.
 - An **expense type**, either fixed or variable (see below).
 
 **Changes over time:** if an expense's amount changes, the monthly contribution is recalculated so the shortfall is covered by the due date. Example: a yearly payment of 500 has 250 saved after 6 months, then it turns out to be 600. The contribution for the remaining 6 months must rise so the balance reaches 600 on the due date.
@@ -70,6 +70,7 @@ Expenses are based on expected costs. Each month the user enters the actual amou
 5. **History:** actual spending per year and average per month, broken down by expense, category and account.
 6. **Forecast:** navigate to future months and see the expected balance of every account and expense.
 7. **Warnings** when General Savings can't cover a shortfall, and a prompt to choose where to take money from if the NemKonto would go below 0.
+8. **Balancing any day:** moves between General Savings and the expenses (filling a new expense, top-ups, returning money no longer needed) and refunds (e.g. a surplus paid back by the insurance company) can be made outside the month-end. The app lists the bank transfers needed; once they are made, the balances update.
 
 ## Future extension (not needed now)
 

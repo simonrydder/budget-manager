@@ -4,7 +4,15 @@ from datetime import date
 
 import pytest
 
-from budget_manager.engine import CloseError, Kind, Line, YearMonth, apply_close, plan_close
+from budget_manager.engine import (
+    Adjustment,
+    CloseError,
+    Kind,
+    Line,
+    YearMonth,
+    apply_close,
+    plan_close,
+)
 
 from .helpers import BUDGET, FOOD, MAY, NEM, SAVINGS, expense, kr, state
 
@@ -259,3 +267,68 @@ def test_chosen_top_up_is_limited_by_general_savings():
     assert plan.general_savings_after == 0
     assert "savings_cannot_cover_fixed" in [n.code for n in plan.notices]
     assert_consistent(budget, plan)
+
+
+def test_filling_a_new_expense_keeps_the_steady_monthly_amount():
+    # A new insurance of 600 a year, due in two months: fill 500 now, then 50 a month.
+    budget = household()
+    insurance = expense(7, 600, date(2025, 6, 7), 12, name="Insurance")
+    budget.ledgers.append(insurance)
+    assert insurance.expense.suggested_starting_balance() == kr(500)
+    plan = plan_close(budget, income=kr(25000), funding={7: kr(500)})
+    assert plan.lines[7].contribution == kr(50)
+    assert plan.lines[7].funding == kr(500)
+    assert plan.lines[7].balance_after == kr(550)
+    assert amounts(plan)[BUDGET] == kr(10000 + 500 + 50)
+    assert "funded" in [n.code for n in plan.notices]
+    assert_consistent(budget, plan)
+    apply_close(budget, plan)
+    contributions = []
+    for _ in range(13):
+        plan = plan_close(budget, income=kr(25000))
+        contributions.append(plan.lines[7].contribution)
+        apply_close(budget, plan)
+        previous = budget.month - 1
+        line = insurance.lines[previous]
+        if line.expected_spend:
+            insurance.spending[previous] = line.expected_spend
+    assert set(contributions) == {kr(50)}
+
+
+def test_without_filling_the_new_expense_is_split_over_the_months_left():
+    budget = household()
+    budget.ledgers.append(expense(7, 600, date(2025, 6, 7), 12, name="Insurance"))
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[7].contribution == kr(300)
+
+
+def test_filling_between_month_ends_keeps_the_steady_monthly_amount():
+    # The same insurance, filled from General Savings right away instead of at the month-end.
+    budget = household(general_savings=9500)
+    insurance = expense(7, 600, date(2025, 6, 7), 12, name="Insurance")
+    insurance.adjustments.append(Adjustment(MAY, kr(500), planned=True))
+    budget.ledgers.append(insurance)
+    assert budget.current_expense_balances()[7] == kr(500)
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[7].balance_before == kr(500)
+    assert plan.lines[7].contribution == kr(50)
+    assert plan.lines[7].balance_after == kr(550)
+    assert_consistent(budget, plan)
+
+
+def test_money_moved_between_month_ends_does_not_change_the_plan():
+    budget = household()
+    rent = budget.ledger(1)
+    rent.adjustments.append(Adjustment(MAY, kr(700)))  # topped up
+    groceries = budget.ledger(2)
+    groceries.lines[APRIL] = Line(contribution=kr(4000), expected_spend=kr(4000))
+    groceries.spending[APRIL] = kr(2500)
+    groceries.adjustments.append(Adjustment(MAY, kr(-1000)))  # left over, returned
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[1].balance_before == kr(700)
+    assert plan.lines[1].contribution == kr(10000)
+    assert plan.lines[2].balance_before == kr(500)
+    assert plan.lines[2].contribution == kr(4000)
+    apply_close(budget, plan)
+    assert rent.balance_after_close(MAY) == kr(10700)
+    assert rent.balance_end_of(APRIL) == kr(700)

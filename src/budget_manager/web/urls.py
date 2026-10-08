@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from budget_manager.ledger.views import admin, home, manage, month_end, reports
+from budget_manager.ledger.views import admin, balance, home, manage, month_end, reports
 
 urlpatterns = [
     path("", home.dashboard, name="dashboard"),
@@ -19,6 +19,11 @@ urlpatterns = [
     path("closes/", month_end.close_list, name="closes"),
     path("closes/<str:month>/", month_end.close_detail, name="close-detail"),
     path("closes/<str:month>/reopen/", month_end.close_reopen, name="close-reopen"),
+    # Moving money between month-ends
+    path("balance/", balance.balance, name="balance"),
+    path("balance/made/", balance.balance_made, name="balance-made"),
+    path("balance/<int:pk>/cancel/", balance.move_cancel, name="move-cancel"),
+    path("balance/<int:pk>/undo/", balance.move_undo, name="move-undo"),
     # Management
     path("accounts/", manage.account_list, name="accounts"),
     path("accounts/new/", manage.account_form, name="account-new"),
@@ -50,6 +55,7 @@ urlpatterns = [
     path("history/", reports.history, name="history"),
     # Settings and people
     path("settings/", admin.settings_view, name="settings"),
+    path("start/", admin.start_budget, name="start"),
     path("users/", admin.user_list, name="users"),
     path("users/<int:pk>/password/", admin.user_password, name="user-password"),
     path("users/<int:pk>/delete/", admin.user_delete, name="user-delete"),
