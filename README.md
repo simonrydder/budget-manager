@@ -120,7 +120,9 @@ as `demo` / `demo`. Run it again with `--name Other` for a second budget.
 1. **Once per budget:** follow **Set up** in the menu, five short steps:
    1. **Accounts:** today's balance of each account (NemKonto, Budget, Food and Savings to begin
       with; add or rename them if yours are different) and the NemKonto minimum and maximum,
-   2. **Expenses:** every expense with its amount, how often it is paid and when it is due next,
+   2. **Expenses:** every expense with its amount, how often it is paid and when it is due next
+      (fixed, variable bills, or running budgets like food that need no due date), and the
+      categories they belong to,
    3. **Summary:** what the expenses cost a month, per category and in total,
    4. **Income:** what you expect to arrive, compared with the expenses,
    5. **Transfers:** what each expense should have by now so it saves the same every month, the

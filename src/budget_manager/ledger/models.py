@@ -137,7 +137,11 @@ class Category(models.Model):
 
 
 class Expense(models.Model):
-    KIND_CHOICES = [(Kind.FIXED.value, "Fixed"), (Kind.VARIABLE.value, "Variable")]
+    KIND_CHOICES = [
+        (Kind.FIXED.value, "Fixed"),
+        (Kind.VARIABLE.value, "Variable"),
+        (Kind.RUNNING.value, "Running"),
+    ]
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="expenses")
     name = models.CharField(max_length=80)
@@ -172,6 +176,12 @@ class Expense(models.Model):
     @property
     def is_fixed(self) -> bool:
         return self.kind == Kind.FIXED
+
+    @property
+    def is_running(self) -> bool:
+        """Spent bit by bit through the month (food, fuel, everyday spending), rather than paid
+        on a due date like a bill."""
+        return self.kind == Kind.RUNNING
 
     def is_ended(self, on: date | None = None) -> bool:
         return self.end_date is not None and self.end_date < (on or date.today())

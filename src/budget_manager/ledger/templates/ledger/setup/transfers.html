@@ -12,14 +12,14 @@
   <form method="post" class="stack" style="gap:18px" novalidate>
     {% csrf_token %}
     <button class="sr-only" name="action" value="preview" tabindex="-1" aria-hidden="true">Recalculate</button>
-    {% if variable_rows or paid_rows or unpaid_rows %}
+    {% if running_rows or paid_rows or unpaid_rows %}
     <section class="entry-group">
       <header><h3>{{ plan.opening.name }} so far</h3><span class="muted small">Today, {{ plan.today|date:"j F" }}</span></header>
       <div class="muted small stack" style="gap:4px;padding:10px 14px">
-        <span>Fixed payments follow their due dates.{% if paid_rows %} Already paid: {% for row in paid_rows %}{{ row.expense.name }} ({{ row.due|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}{% if unpaid_rows %} Still to pay this month, so the money is still on the account: {% for row in unpaid_rows %}{{ row.expense.name }} ({{ row.due|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</span>
-        {% if variable_rows %}<span><b>Variable expenses</b> have no fixed payment, so enter what has been spent on them so far this month, then press Recalculate.</span>{% endif %}
+        <span>Bills follow their due dates.{% if paid_rows %} Already paid: {% for row in paid_rows %}{{ row.expense.name }} ({{ row.due|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}{% if unpaid_rows %} Still to pay this month, so the money is still on the account: {% for row in unpaid_rows %}{{ row.expense.name }} ({{ row.due|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</span>
+        {% if running_rows %}<span><b>Running budgets</b> are spent bit by bit, so enter what has been spent from them so far this month, then press Recalculate.</span>{% endif %}
       </div>
-      {% for row in variable_rows %}
+      {% for row in running_rows %}
       <div class="entry">
         <div class="name">
           <span><label for="{{ row.spent_field.name }}"><b>{{ row.expense.name }}</b></label> <span class="chip">{{ row.expense.account.name }}</span></span>
@@ -42,9 +42,9 @@
         <tbody>
         {% for item in plan.accounts %}
           <tr>
-            <td>{{ item.account.name }}{% if item.account.is_nemkonto %} <span class="muted small hide-narrow">keeps its money for the month-end</span>{% elif item.account.holds_general_savings %} <span class="muted small hide-narrow">the rest is General Savings</span>{% endif %}</td>
+            <td>{{ item.account.name }}{% if item.account.is_nemkonto %} <span class="muted small hide-narrow">{% if item.expected %}the other {{ plan.nemkonto|money }} {% endif %}waits for the month-end</span>{% elif item.account.holds_general_savings %} <span class="muted small hide-narrow">the rest is General Savings</span>{% endif %}</td>
             <td class="num">{{ item.bank|money }}</td>
-            <td class="num dim hide-narrow">{% if not item.account.is_nemkonto %}{{ item.expected|money }}{% endif %}</td>
+            <td class="num dim hide-narrow">{% if not item.account.is_nemkonto or item.expected %}{{ item.expected|money }}{% endif %}</td>
             <td class="num {{ item.difference|tone }}">{% if not item.account.is_nemkonto %}{{ item.difference|signed }}{% endif %}</td>
           </tr>
         {% endfor %}

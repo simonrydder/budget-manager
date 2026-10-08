@@ -44,7 +44,13 @@ def assert_consistent(budget, plan):
     assert after == before + plan.income + plan.interest_total
     sent = sum(amounts(plan).values())
     nem_interest = plan.interest.get(NEM, 0)
-    assert plan.nemkonto_end == budget.nemkonto + plan.income + nem_interest - sent
+    # Money of running budgets on the NemKonto stays on it, next to the free part.
+    kept = sum(
+        line.balance_after - line.balance_before
+        for line in plan.lines.values()
+        if line.account_id == NEM
+    )
+    assert plan.nemkonto_end + kept == budget.nemkonto + plan.income + nem_interest - sent
 
 
 def test_surplus_above_maximum_goes_to_general_savings():
@@ -332,3 +338,28 @@ def test_money_moved_between_month_ends_does_not_change_the_plan():
     apply_close(budget, plan)
     assert rent.balance_after_close(MAY) == kr(10700)
     assert rent.balance_end_of(APRIL) == kr(700)
+
+
+def test_running_budget_on_the_nemkonto_stays_there():
+    budget = household()
+    everyday = expense(8, 3000, date(2025, 5, 1), account=NEM, kind=Kind.RUNNING, name="Everyday")
+    budget.ledgers.append(everyday)
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[8].contribution == kr(3000)
+    assert NEM not in plan.transfers
+    # Rent, groceries and the holiday are transferred; the 3.000 stays on the NemKonto.
+    assert plan.nemkonto_after_transfers == kr(3000 + 25000 - 16728 - 3000)
+    assert plan.nemkonto_end == kr(5000)  # the free part is kept at its maximum
+    assert amounts(plan) == {BUDGET: kr(10000), FOOD: kr(4000), SAVINGS: kr(2728 + 3272)}
+    assert_consistent(budget, plan)
+    apply_close(budget, plan)
+    # In the bank the NemKonto holds the free part and what the budget has left.
+    assert budget.account_balances_after_close(MAY)[NEM] == kr(5000 + 3000)
+
+    # Overspending a running budget is not topped up: its amount is adjusted instead.
+    everyday.spending[MAY] = kr(3400)
+    plan = plan_close(budget, income=kr(25000))
+    assert plan.lines[8].balance_before == kr(-400)
+    assert plan.lines[8].topup == 0
+    assert "variable_below_zero" in [notice.code for notice in plan.notices]
+    assert_consistent(budget, plan)

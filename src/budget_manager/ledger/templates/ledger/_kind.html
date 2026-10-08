@@ -1,0 +1,1 @@
+<span class="chip{% if expense.is_fixed %} fixed{% elif expense.is_running %} running{% endif %}">{{ expense.get_kind_display|lower }}</span>

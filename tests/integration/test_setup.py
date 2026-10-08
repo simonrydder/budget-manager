@@ -46,9 +46,7 @@ def walk_to_transfers(client, accounts):
     add_expense(client, accounts, "Insurance", "1.200", "2026-12-01", 12)
     add_expense(client, accounts, "Phone", "199", "2026-10-20")
     add_expense(client, accounts, "Rent", "10.000", "2026-10-01")
-    add_expense(
-        client, accounts, "Groceries", "5.500", "2026-10-01", account="Food", kind="variable"
-    )
+    add_expense(client, accounts, "Groceries", "5.500", "", account="Food", kind="running")
     client.post("/start/expenses/", {"action": "next"})
     client.post("/start/summary/")
     client.post(
@@ -261,3 +259,28 @@ def test_old_balances_are_pointed_out(client, household, accounts):
     with freeze_time("2026-10-09"):
         page = client.get("/start/transfers/")
     assert b"The balances were entered on 7 October" in page.content
+
+
+def test_categories_can_be_added_renamed_and_removed_in_the_setup(client, household, accounts):
+    client.post("/start/accounts/", balances(accounts))
+    response = client.post("/start/expenses/", {"action": "add_category", "category-name": "Pets"})
+    assert response.url == client.at("/start/expenses/") + "#categories"
+    pets = household.categories.get(name="Pets")
+    form = client.get("/start/expenses/").context["form"]
+    assert pets in form.fields["category"].queryset
+    duplicate = client.post("/start/expenses/", {"action": "add_category", "category-name": "pets"})
+    assert b"There is already a category called pets." in duplicate.content
+
+    add_expense(client, accounts, "Vet", "1.500", "2027-02-01", 12)
+    Expense.objects.filter(name="Vet").update(category=pets)
+    setup = client.at("/start/expenses/")
+    response = client.post(
+        f"/categories/{pets.id}/edit/", {"name": "Animals", "next": setup + "#categories"}
+    )
+    assert response.url == setup + "#categories"
+    response = client.post(
+        "/start/expenses/", {"action": "remove_category", "category": pets.id}, follow=True
+    )
+    assert b"Removed Animals. Its 1 expense is now uncategorised." in response.content
+    assert Expense.objects.get(name="Vet").category is None
+    assert not household.categories.filter(pk=pets.pk).exists()

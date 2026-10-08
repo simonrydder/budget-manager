@@ -119,6 +119,12 @@ def test_expense_pages_render(client, budget):
         assert client.get(path).status_code == 200
 
 
+def test_new_expenses_start_on_the_budget_account(client, budget, accounts):
+    for path in ("/expenses/new/", "/start/expenses/"):
+        form = client.get(path).context["form"]
+        assert form["account"].value() == accounts["Budget"].id
+
+
 def test_add_expense_with_danish_amounts(client, budget, accounts):
     response = client.post(
         "/expenses/new/",

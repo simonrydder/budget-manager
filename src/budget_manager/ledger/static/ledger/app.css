@@ -59,6 +59,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg);
@@ -106,6 +107,7 @@ small, .small { font-size: 0.85rem; }
 .sidebar .who { margin-top: auto; padding: 10px; font-size: 0.85rem; color: var(--muted); display: grid; gap: 4px; }
 .sidebar .who form { display: inline; }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linklike.small { font-size: 0.85rem; }
 .topbar { display: none; }
 .main { min-width: 0; padding: 28px 32px 56px; display: grid; gap: 22px; align-content: start; max-width: 1240px; width: 100%; }
 
@@ -173,6 +175,7 @@ small, .small { font-size: 0.85rem; }
   padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); white-space: nowrap;
 }
 .chip.fixed { background: var(--accent-soft); color: var(--accent); }
+.chip.running { background: var(--pos-soft); color: var(--pos); }
 .chip.ok { background: var(--pos-soft); color: var(--pos); }
 .chip.bad { background: var(--neg-soft); color: var(--neg); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
@@ -202,7 +205,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 
 /* ---- Forms ---- */
 form.form { display: grid; gap: 16px; max-width: 640px; }
-.field { display: grid; gap: 5px; }
+.field { display: grid; gap: 5px; align-content: start; }
 .field > label, .field legend { font-weight: 600; font-size: 0.92rem; }
 .field .help { color: var(--muted); font-size: 0.84rem; }
 .field .error, .errorlist { color: var(--neg); font-size: 0.86rem; margin: 0; padding: 0; list-style: none; }
@@ -381,3 +384,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .setup-steps li.next .num-dot { background: var(--accent); color: var(--accent-ink); }
 .budget-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 @media (max-width: 600px) { .hide-narrow { display: none; } }
+.category-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-item {
+  display: inline-flex; align-items: baseline; gap: 8px; padding: 5px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--sunk);
+}
+.category-item form { display: inline; }
+.category-input { max-width: 260px; }

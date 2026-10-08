@@ -29,8 +29,8 @@
       {% with expense=row.expense %}
       <div class="entry{% if row.due %} due{% endif %}">
         <label class="name" for="spent-{{ expense.id }}">
-          <span><b>{{ expense.name }}</b> {% if expense.is_fixed %}<span class="chip fixed">fixed</span>{% else %}<span class="chip">variable</span>{% endif %}</span>
-          <small>{% if row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}</small>
+          <span><b>{{ expense.name }}</b> {% include "ledger/_kind.html" %}</span>
+          <small>{% if expense.is_running and row.due %}Spent during {{ previous.name }} · budget {{ row.expected|money }}{% elif row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}</small>
         </label>
         <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
                id="spent-{{ expense.id }}" name="spent-{{ expense.id }}" placeholder="0,00"

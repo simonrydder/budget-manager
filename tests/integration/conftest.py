@@ -83,7 +83,7 @@ def budget(household, accounts):
         interval_months=1,
         first_due=date(2025, 5, 1),
         account=accounts["Food"],
-        kind="variable",
+        kind="running",
     )
     Expense.objects.create(
         budget=household,

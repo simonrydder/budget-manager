@@ -136,6 +136,20 @@
     input.addEventListener("input", update);
   });
 
+  // Running budgets are monthly from the 1st: hide the frequency and due date for them.
+  document.querySelectorAll("form").forEach((form) => {
+    const choices = form.querySelectorAll("[name=kind]");
+    const fields = form.querySelectorAll("[data-hide-when-running]");
+    if (!choices.length || !fields.length) return;
+    const update = () => {
+      const chosen = form.querySelector("select[name=kind], input[name=kind]:checked");
+      const running = chosen && chosen.value === "running";
+      fields.forEach((field) => { field.hidden = running; });
+    };
+    choices.forEach((choice) => choice.addEventListener("change", update));
+    update();
+  });
+
   // Forms that submit as soon as a control changes.
   document.querySelectorAll("[data-autosubmit]").forEach((control) => {
     control.addEventListener("change", () => control.form.requestSubmit());
