@@ -104,7 +104,9 @@ function Start-Server {
     }
     $env:BUDGET_DATA_DIR = $DataDir
     $command = "`"$Uv`" run --no-dev budget-manager serve --host 0.0.0.0 --port $Port >> `"$serverLog`" 2>&1"
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $command `
+    # cmd.exe /c strips the first and the last quote of the command line, so the whole
+    # command gets one extra pair of quotes around it.
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$command`"" `
         -WorkingDirectory $RepoDir -NoNewWindow -PassThru
     Set-Content -Path $PidFile -Value $process.Id
     $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
