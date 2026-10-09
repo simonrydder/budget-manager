@@ -167,7 +167,7 @@ if ($Stop) {
 Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
 
 if (Test-Path $Database) {
-    $backup = Join-Path $BackupDir ("budget-{0:yyyy-MM-dd-HHmm}.sqlite3" -f (Get-Date))
+    $backup = Join-Path $BackupDir ("budget-{0:yyyy-MM-dd-HHmmss}.sqlite3" -f (Get-Date))
     Copy-Item $Database $backup -Force
     Write-Log "Backed up the database to $backup"
     Get-ChildItem $BackupDir -Filter "budget-*.sqlite3" | Sort-Object Name -Descending |
