@@ -10,7 +10,7 @@
   <div class="actions"><a class="btn primary" href="{% url 'account-new' %}">Add account</a></div>
 </div>
 
-<div class="grid cols-2">
+<div class="grid cols-2" style="align-items:start">
   {% for row in rows %}
   {% with account=row.account %}
   <section class="card account-card">
@@ -33,11 +33,18 @@
         <div><span>Free money on the NemKonto</span><span class="num {{ nemkonto|tone }}">{{ nemkonto|money }}</span></div>
         <div class="muted small"><span><a href="{% url 'correction' 'nemkonto' %}">Correct the NemKonto balance</a> (e.g. a bank fee)</span></div>
       {% endif %}
-      {% for item in row.expenses %}
-        <div><span><a href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a></span><span class="num {{ item.balance|tone }}">{{ item.balance|money }}</span></div>
-      {% empty %}
-        {% if not account.is_nemkonto %}<div class="muted"><span>No expenses linked.</span></div>{% endif %}
-      {% endfor %}
+      {% if row.expenses %}
+      <details class="expense-list"{% if row.expenses|length <= 8 %} open{% endif %} data-remember="account-{{ account.id }}">
+        <summary><span>{{ row.expenses|length }} expense{{ row.expenses|length|pluralize }}</span><span class="num {{ row.expenses_total|tone }}">{{ row.expenses_total|money }}</span></summary>
+        <div class="rows">
+        {% for item in row.expenses %}
+          <div><span><a class="item" href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a></span><span class="num {{ item.balance|tone }}">{{ item.balance|money }}</span></div>
+        {% endfor %}
+        </div>
+      </details>
+      {% elif not account.is_nemkonto %}
+        <div class="muted"><span>No expenses linked.</span></div>
+      {% endif %}
       {% if account.holds_general_savings %}
         <div class="gs-line"><span><b>General Savings</b></span><span class="num {{ general_savings|tone }}"><b>{{ general_savings|money }}</b></span></div>
         <div class="muted small"><span><a href="{% url 'correction' 'general_savings' %}">Correct General Savings</a></span></div>

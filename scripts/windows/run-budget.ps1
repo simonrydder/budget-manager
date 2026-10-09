@@ -37,10 +37,15 @@ param(
     [int]$StartTimeoutSeconds = 120,
     [int]$CheckMinutes = 5,
     [switch]$NoUpdate,
-    [switch]$Stop
+    [switch]$Stop,
+    # Set when an older launcher hands over to the updated one: the commit that ran before.
+    [string]$PreviousCommit = ""
 )
 
 $ErrorActionPreference = "Stop"
+# PowerShell keeps running the script as it was read at the start, so an update of this file
+# only takes effect when it is run again (see below).
+$LauncherText = Get-Content -Raw -Path $PSCommandPath
 $RepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $LogDir = Join-Path $DataDir "logs"
 $BackupDir = Join-Path $DataDir "backups"
@@ -192,6 +197,10 @@ if (Test-Path $Database) {
 
 $previous = (& $Git -C $RepoDir rev-parse HEAD).Trim()
 $previousVersion = Get-Version
+if ($PreviousCommit) {
+    $previous = $PreviousCommit
+    $previousVersion = $PreviousCommit.Substring(0, 7)
+}
 $updated = $false
 $target = $null
 if (-not $NoUpdate) {
@@ -202,6 +211,15 @@ if (-not $NoUpdate) {
         Update-Code "origin/$Branch"
         $current = (& $Git -C $RepoDir rev-parse HEAD).Trim()
         $updated = $current -ne $previous
+        if ($updated -and (Get-Content -Raw -Path $PSCommandPath) -ne $LauncherText) {
+            # This launcher was updated too: let the new one start the app, so its changes
+            # (for example new checks or settings for the app) apply right away.
+            Write-Log "The launcher itself was updated. Handing over to the new launcher."
+            & $PSCommandPath -Branch $Branch -Port $Port -DataDir $DataDir `
+                -KeepBackups $KeepBackups -StartTimeoutSeconds $StartTimeoutSeconds `
+                -CheckMinutes $CheckMinutes -PreviousCommit $previous
+            exit $LASTEXITCODE
+        }
         if ($updated) {
             Write-Log "Updated from $previousVersion to $(Get-Version)."
         } else {

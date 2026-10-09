@@ -250,11 +250,14 @@
         const list = column.querySelector(".cards");
         const origin = card.parentElement;
         const originNext = card.nextElementSibling;
-        // Drop above the first card whose middle is below the pointer.
+        // The cards flow in rows: drop before the first card on a lower row, or on the same row
+        // whose middle is right of the pointer. A collapsed group gets it at the end.
         const after = [...list.querySelectorAll(".xcard")].find((other) => {
           if (other === card) return false;
           const box = other.getBoundingClientRect();
-          return event.clientY < box.top + box.height / 2;
+          if (!box.height) return false;
+          if (event.clientY < box.top) return true;
+          return event.clientY <= box.bottom && event.clientX < box.left + box.width / 2;
         });
         list.insertBefore(card, after || null);
         const order = [...list.querySelectorAll(".xcard")].map((item) => item.dataset.id).join(",");

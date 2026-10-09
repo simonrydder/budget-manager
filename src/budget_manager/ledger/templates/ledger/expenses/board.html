@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Expenses</h1>
-    <p class="muted">{{ count }} active expense{{ count|pluralize }}. Drag a card to another {{ group }} to move it, or up and down to change the order.</p>
+    <p class="muted">{{ count }} active expense{{ count|pluralize }}{% if monthly_total %}, ≈ {{ monthly_total|money0 }} a month{% endif %}. Drag a card to another {{ group }} to move it, or within one to change the order. <button type="button" class="linklike" data-toggle-groups="#board">Collapse all</button></p>
   </div>
   <div class="actions">
     <nav class="seg" aria-label="Group by">
@@ -18,14 +18,14 @@
 </div>
 
 {% csrf_token %}
-<div class="board" data-board="{{ group }}">
+<div class="board" id="board" data-board="{{ group }}">
   {% for column in columns %}
-  <section class="column" data-value="{{ column.key }}" aria-label="{{ column.name }}">
-    <header>
+  <details class="column" open data-value="{{ column.key }}" data-remember="board-{{ group }}-{{ column.key|default:'none' }}" aria-label="{{ column.name }}">
+    <summary>
       <h3>{{ column.name }} <span class="muted small">(<span data-count>{{ column.cards|length }}</span>)</span></h3>
-      {% if column.monthly %}<span class="muted small" title="On average a month: a yearly payment as a twelfth, a one-off goal spread over the months until it is due">≈ {{ column.monthly|money0 }}/mo</span>{% endif %}
-    </header>
-    <div class="cards stack" style="gap:8px">
+      <span class="muted small" title="On average a month: a yearly payment as a twelfth, a one-off goal spread over the months until it is due">{% if column.monthly %}≈ <b>{{ column.monthly|money0 }}</b> a month{% endif %}</span>
+    </summary>
+    <div class="cards">
       {% for card in column.cards %}
       {% with expense=card.expense %}
       <a class="xcard" href="{% url 'expense-detail' expense.id %}" draggable="true" data-id="{{ expense.id }}" data-move="{% url 'expense-move' expense.id %}">
@@ -54,8 +54,8 @@
       {% endfor %}
     </div>
     <p class="hint"{% if column.cards %} hidden{% endif %}>{% if column.hint %}{{ column.hint }}{% else %}Drop an expense here.{% endif %}</p>
-    {% if group == "category" and column.key %}<a class="small" href="{% url 'expense-new' %}?category={{ column.key }}">+ Add to {{ column.name }}</a>{% endif %}
-  </section>
+    {% if group == "category" and column.key %}<a class="small add-to" href="{% url 'expense-new' %}?category={{ column.key }}">+ Add to {{ column.name }}</a>{% endif %}
+  </details>
   {% endfor %}
 </div>
 
@@ -67,7 +67,7 @@
     <thead><tr><th>Expense</th><th>Ended</th><th>Account</th><th class="num">Balance left</th></tr></thead>
     <tbody>
     {% for card in ended %}
-      <tr><td><a href="{% url 'expense-detail' card.expense.id %}">{{ card.expense.name }}</a></td><td class="dim">{{ card.expense.end_date|date:"j M Y" }}</td><td class="dim">{{ card.expense.account.name }}</td><td class="num {{ card.balance|tone }}">{{ card.balance|money }}</td></tr>
+      <tr><td><a class="item" href="{% url 'expense-detail' card.expense.id %}">{{ card.expense.name }}</a></td><td class="dim">{{ card.expense.end_date|date:"j M Y" }}</td><td class="dim">{{ card.expense.account.name }}</td><td class="num {{ card.balance|tone }}">{{ card.balance|money }}</td></tr>
     {% endfor %}
     </tbody>
   </table>

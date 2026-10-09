@@ -447,3 +447,45 @@ def test_coming_up_is_only_short_when_the_month_ends_do_not_cover_it(client, bud
     assert rows["Car service"]["status"] == ("warn", "short 1.000")
     assert rows["Car service"]["available"] == 1100000
     assert "<i>On track</i>: the month-end transfers before the due date" in page.content.decode()
+
+
+def test_long_lists_fold_away(client, budget, accounts):
+    """With many expenses: the board groups fold, an account lists its expenses folded, the
+    overview shows the first ten payments and the month-end hides what is not due."""
+    for number in range(12):
+        Expense.objects.create(
+            budget=budget,
+            name=f"Bill {number:02}",
+            amount=10000,
+            interval_months=1,
+            first_due=date(2025, 6, 10),
+            account=accounts["Budget"],
+        )
+    board = client.get("/expenses/").content.decode()
+    assert '<details class="column" open data-value=' in board
+    assert "≈ <b>" in board and 'data-toggle-groups="#board"' in board
+
+    page = client.get("/accounts/").content.decode()
+    assert '<details class="expense-list" data-remember=' in page  # 13 on Budget: folded
+    assert "13 expenses" in page
+    assert '<details class="expense-list" open data-remember=' in page  # Food: 1, open
+    assert 'class="item" href=' in page  # names are quiet links
+
+    with freeze_time("2025-05-20"):
+        response = client.get("/")
+    upcoming = len(response.context["upcoming"])
+    assert upcoming > 10
+    assert f"Show {upcoming - 10} more" in response.content.decode()
+
+    month_end(client, "2025-05")
+    spending = client.get("/month-end/2025-06/spending/").content.decode()
+    assert "12 more, not due in May" in spending  # the bills are due in June
+    assert spending.index("Rent") < spending.index("12 more, not due in May")
+
+
+def test_menu_groups_the_pages(client, budget):
+    menu = client.get("/").content.decode()
+    order = [menu.index(f">{name}") for name in ("Overview", "Month-end", "Balance")]
+    order += [menu.index(f">{name}</a>") for name in ("Expenses", "Income", "Accounts")]
+    order += [menu.index(f">{name}</a>") for name in ("Forecast", "History", "Settings")]
+    assert order == sorted(order)

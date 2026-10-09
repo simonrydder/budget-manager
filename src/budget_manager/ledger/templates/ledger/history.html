@@ -35,7 +35,7 @@
     <tbody>
     {% for row in table %}
       <tr>
-        <td class="nowrap">{% if by == "expense" %}<a href="{% url 'expense-detail' row.object.id %}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+        <td class="nowrap">{% if by == "expense" %}<a class="item" href="{% url 'expense-detail' row.object.id %}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
         {% for cell in row.cells %}<td class="num{% if not cell.counted %} dim{% endif %}">{% if cell.amount %}{{ cell.amount|money0 }}{% endif %}</td>{% endfor %}
         <td class="num"><b>{{ row.total|money0 }}</b></td>
         <td class="num">{% if row.average is not None %}{{ row.average|money0 }}{% endif %}</td>
