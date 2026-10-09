@@ -671,10 +671,12 @@ def plan_start(
         # A bill due before today has been paid; what a running budget has used so far is asked.
         paid = not expense.is_running and due and due <= today
         default_spent = model.amount_on(due) if paid else 0
-        if again and expense.start_month is None:
+        if again and expense.start_month is None and expense.is_running:
+            # What was typed for a running budget the first time. A bill always follows its
+            # current due date: one moved since the first start may no longer be paid yet.
             default_spent = entered.get(expense.id, 0)
         chosen = suggested if suggested is not None else expense.starting_balance
-        used = spent.get(expense.id)
+        used = spent.get(expense.id) if expense.is_running else None
         rows.append(
             StartRow(expense, suggested, chosen, default_spent if used is None else used, due)
         )
