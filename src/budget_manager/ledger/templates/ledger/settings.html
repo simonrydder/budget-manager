@@ -43,7 +43,7 @@
 <section class="card flat" style="max-width:640px" id="version">
   <h2>App version</h2>
   {% if updater %}
-  <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. The launcher on the computer updates the app each time it starts, every night with the scheduled task. <i>Update now</i> gets the newest version right away and restarts the app, which takes a minute or two; it can be pressed from any device.</p>
+  <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. {% if check_minutes %}The launcher on the computer checks for a new version every {{ check_minutes }} minute{{ check_minutes|pluralize }} and restarts the app with it.{% else %}The launcher on the computer updates the app each time it starts.{% endif %} <i>Update now</i> gets the newest version right away, which takes a minute or two; it can be pressed from any device.</p>
   {% if update_waiting %}
   <div class="notice info"><span>An update is on its way. Reload this page in a minute.</span></div>
   {% else %}

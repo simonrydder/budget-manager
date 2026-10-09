@@ -1,19 +1,23 @@
 <#
 .SYNOPSIS
-    Run Budget Manager in the background: start it when Windows starts and update and restart
-    it every night. Run this once from a PowerShell window opened with "Run as administrator".
+    Run Budget Manager in the background: start it when Windows starts. While it runs it checks
+    for a new version every -CheckMinutes minutes and restarts with it. Run this once from a
+    PowerShell window opened with "Run as administrator".
 
 .EXAMPLE
     .\install-nightly-task.ps1
 .EXAMPLE
-    .\install-nightly-task.ps1 -At 04:00 -Branch prod -Port 8000
+    .\install-nightly-task.ps1 -Branch prod -Port 8000 -CheckMinutes 10
+.EXAMPLE
+    .\install-nightly-task.ps1 -At 03:30     # also restart every night at 03:30
 .EXAMPLE
     .\install-nightly-task.ps1 -Uninstall
 #>
 [CmdletBinding()]
 param(
-    [string]$At = "03:30",
+    [string]$At = "",
     [string]$Branch = "prod",
+    [int]$CheckMinutes = 5,
     [int]$Port = 8000,
     [string]$DataDir = (Join-Path $env:USERPROFILE "BudgetManagerData"),
     [string]$TaskName = "Budget Manager",
@@ -40,19 +44,19 @@ if ($Uninstall) {
 
 $script = Join-Path $PSScriptRoot "run-budget.ps1"
 $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`" " +
-    "-Branch $Branch -Port $Port -DataDir `"$DataDir`""
+    "-Branch $Branch -Port $Port -CheckMinutes $CheckMinutes -DataDir `"$DataDir`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments `
     -WorkingDirectory $PSScriptRoot
-$triggers = @(
-    (New-ScheduledTaskTrigger -Daily -At $At),
-    (New-ScheduledTaskTrigger -AtStartup)
-)
+$triggers = @(New-ScheduledTaskTrigger -AtStartup)
+if ($At) {
+    $triggers += New-ScheduledTaskTrigger -Daily -At $At
+}
 # S4U: runs whether or not you are logged in, without storing your password.
 $principal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType S4U -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
     -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5) -StartWhenAvailable `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-# The nightly run stops the running server and starts the updated one ("Stop existing").
+# Starting the task again stops the running launcher and starts a new one ("Stop existing").
 $settings.CimInstanceProperties.Item("MultipleInstances").Value = 3
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
@@ -70,6 +74,8 @@ if (-not (Get-NetFirewallRule -DisplayName $TailscaleRule -ErrorAction SilentlyC
 }
 
 Start-ScheduledTask -TaskName $TaskName
-Write-Host "Installed. Budget Manager starts with Windows and updates from '$Branch' every day at $At."
+$schedule = if ($At) { " and restarts every day at $At" } else { "" }
+Write-Host ("Installed. Budget Manager starts with Windows$schedule, and checks '$Branch' for a " +
+    "new version every $CheckMinutes minutes.")
 Write-Host "It is starting now; logs are in $(Join-Path $DataDir 'logs')."
 Write-Host "Port $Port is open for private (home) networks and Tailscale (100.64.0.0/10) only."

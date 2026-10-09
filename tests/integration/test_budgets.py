@@ -239,7 +239,10 @@ def test_update_now_asks_the_launcher_to_update(client, household, settings, tmp
     assert not request_file.exists()
 
     settings.UPDATER = True
-    assert "Update now</button>" in client.get("/settings/").content.decode()
+    settings.CHECK_MINUTES = 5
+    page = client.get("/settings/").content.decode()
+    assert "Update now</button>" in page
+    assert "checks for a new version every 5 minutes" in page
     assert client.get("/settings/update/").status_code == 405  # only by pressing the button
     response = client.post("/settings/update/", follow=True)
     assert "alex" in request_file.read_text()

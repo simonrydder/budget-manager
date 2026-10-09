@@ -4,6 +4,14 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.1.0 (2026-10-09)
+
+- The Windows launcher checks `prod` for a new commit every 5 minutes (`-CheckMinutes`) and
+  restarts the app with it, instead of updating only at night. A version that does not start is
+  rolled back and skipped until a newer commit arrives (for example a revert).
+- The scheduled task now only starts the app with Windows; `-At` adds a nightly restart if
+  wanted. Re-run `install-nightly-task.ps1` to drop the old nightly trigger.
+
 ## 1.0.0 (2026-10-09)
 
 The first numbered version. It contains everything built so far:

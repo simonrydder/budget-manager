@@ -34,6 +34,7 @@ def settings_view(request):
         "updater": settings.UPDATER,
         "version": settings.VERSION,
         "commit": settings.COMMIT,
+        "check_minutes": settings.CHECK_MINUTES,
         "update_waiting": _update_waiting(),
     }
     return render(request, "ledger/settings.html", context)

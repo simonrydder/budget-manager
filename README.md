@@ -64,9 +64,10 @@ WantedBy=multi-user.target
 
 Then `sudo systemctl enable --now budget-manager`.
 
-### Run it on Windows (updated every night)
+### Run it on Windows (updates itself)
 
-`scripts/windows` starts the app on Windows from the newest commit of the `prod` branch.
+`scripts/windows` runs the app on Windows from the newest commit of the `prod` branch, and
+restarts it with every new commit merged into `prod`.
 
 1. Install [Git](https://git-scm.com/download/win) and [uv](https://docs.astral.sh/uv/)
    (`winget install Git.Git astral-sh.uv`).
@@ -78,8 +79,7 @@ Then `sudo systemctl enable --now budget-manager`.
 
 3. Double-click `scripts\windows\start-budget.cmd`. It stops a running copy, backs up the
    database, updates to the newest `prod`, installs the dependencies and starts the server on
-   port 8000. Keep the window open. If the new version does not start, it goes back to the
-   version that ran before.
+   port 8000. Keep the window open.
 4. To run it in the background instead, open PowerShell with **Run as administrator** and run:
 
    ```powershell
@@ -87,16 +87,19 @@ Then `sudo systemctl enable --now budget-manager`.
    powershell -ExecutionPolicy Bypass -File .\install-nightly-task.ps1
    ```
 
-   This adds a scheduled task called *Budget Manager* that starts the app when Windows starts and
-   updates and restarts it every night at 03:30, and opens the port in the firewall for private
-   networks and for Tailscale (the rule *Budget Manager (Tailscale)*, only `100.64.0.0/10`). Options: `-At 04:00`, `-Port 8080`, `-Branch <name>`. Remove it again with
-   `-Uninstall`.
+   This adds a scheduled task called *Budget Manager* that starts the app when Windows starts,
+   and opens the port in the firewall for private networks and for Tailscale (the rule
+   *Budget Manager (Tailscale)*, only `100.64.0.0/10`). Options: `-CheckMinutes 10`,
+   `-Port 8080`, `-Branch <name>`, `-At 03:30` to also restart every night. Remove it again
+   with `-Uninstall`.
 
-To get the newest version right away instead of waiting for the night, press **Update now**
-under **Settings → App version**, from any device that can open the app (an iPad too), or
-double-click `scripts\windows\update-now.cmd` on the computer. The running launcher notices the
-request within seconds, backs up the database, updates and restarts the app, which takes a minute
-or two. If the new version does not start, it goes back to the one that ran before.
+While it runs, the launcher checks `prod` for a new commit every 5 minutes (`-CheckMinutes`, 0
+to turn it off). When there is one, it backs up the database, updates and restarts the app,
+which takes a minute or two. If the new version does not start, it goes back to the one that
+ran before and skips that commit until a newer one arrives, so reverting the merge on GitHub is
+enough to recover. To update right away, press **Update now** under **Settings → App
+version**, from any device that can open the app (an iPad too), or double-click
+`scripts\windows\update-now.cmd` on the computer.
 
 The data lives in `%USERPROFILE%\BudgetManagerData` (`-DataDir` to change it), outside the
 code, so updates never touch it. Every start keeps a copy of the database in `backups` (the 30
