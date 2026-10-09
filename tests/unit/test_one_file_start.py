@@ -18,3 +18,11 @@ def test_it_installs_the_newest_prod_and_only_accepts_this_computer():
     assert 'set "BUDGET_ALLOWED_NETWORKS=127.0.0.0/8,::1/128"' in text
     assert "budget-manager serve --host 127.0.0.1" in text
     assert "%USERPROFILE%\\BudgetManager" in text
+
+
+def test_it_needs_no_login_and_asks_before_a_major_update():
+    text = SCRIPT.read_text()
+    assert 'set "BUDGET_LOCAL_ONLY=1"' in text
+    assert "budget-manager check-update" in text
+    assert "if errorlevel 4 goto ask" in text
+    assert 'choice /C YN /M "Install this major update now"' in text

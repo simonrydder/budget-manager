@@ -10,4 +10,4 @@
 <div class="nav-sep"></div>
 <a href="{% url 'settings' %}"{% current 'settings' 'budget-delete' %}>Settings</a>
 <a href="{% url 'budgets' %}"{% current 'budgets' 'budget-new' 'budget-copy' %}>Budgets</a>
-<a href="{% url 'users' %}"{% current 'user' %}>People</a>
+{% if not local_only %}<a href="{% url 'users' %}"{% current 'user' %}>People</a>{% endif %}

@@ -9,6 +9,9 @@ Environment variables:
 - ``BUDGET_ALLOWED_HOSTS``: comma-separated host names (default: ``*``; the network check
   above is what keeps the app off the internet).
 - ``BUDGET_DEBUG``: set to ``1`` during development.
+- ``BUDGET_LOCAL_ONLY``: set to ``1`` when the app only serves the computer it runs on (the
+  one-file start, BudgetManager.cmd): there is no login, requests from this computer are signed
+  in automatically.
 - ``BUDGET_UPDATER``: set to ``1`` by the Windows launcher, which updates and restarts the app
   when the *Update now* button in Settings asks for it.
 - ``BUDGET_CHECK_MINUTES``: how often the Windows launcher checks for a new version (0: never).
@@ -45,6 +48,7 @@ def _list(name: str, default: str) -> list[str]:
 
 SECRET_KEY = _secret_key()
 DEBUG = os.environ.get("BUDGET_DEBUG") == "1"
+LOCAL_ONLY = os.environ.get("BUDGET_LOCAL_ONLY") == "1"
 
 # The Windows launcher watches for this file and then updates to the newest version and
 # restarts the app (scripts/windows/run-budget.ps1).
@@ -77,6 +81,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "budget_manager.web.middleware.ThisComputerLoginMiddleware",
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "budget_manager.ledger.scope.BudgetMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -123,7 +128,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
+# Each device stays logged in for a year, so a phone or tablet only asks once. The app is only
+# reachable from the home network and Tailscale.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 365
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 X_FRAME_OPTIONS = "DENY"
