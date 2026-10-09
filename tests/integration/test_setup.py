@@ -368,23 +368,23 @@ def test_starting_makes_the_setup_the_ground_truth(client, household, accounts):
     assert client.get("/balance/").context["plan"].moves == []
 
 
-def test_step_five_explains_a_first_month_end_above_the_usual(client, household, accounts):
+def test_starting_again_sets_aside_the_steady_amount(client, household, accounts):
+    """The money moved when starting is what keeps every transfer the same from the first
+    month-end on, also when starting again after an earlier start set aside less."""
     walk_to_transfers(client, accounts)
+    groceries = Expense.objects.get(name="Groceries")
+    client.post("/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"})
     insurance = Expense.objects.get(name="Insurance")
-    page = client.post("/start/transfers/", {"action": "preview"})
-    budget_line = next(t for t in page.context["first_transfers"] if t["account"].name == "Budget")
-    # Insurance 100, phone 199 and rent 10.000: the steady amounts, nothing extra.
-    assert (budget_line["usual"], budget_line["extra"]) == (1029900, 0)
-    assert "Usually about 10.299 a month" in page.content.decode()
+    Expense.objects.filter(pk=insurance.pk).update(starting_balance=0)  # e.g. an older start
 
-    # Nothing set aside for the insurance due 1 December: 1.200 over two month-ends.
-    page = client.post("/start/transfers/", {"action": "preview", f"aside-{insurance.id}": "0"})
+    page = client.get("/start/transfers/")
+    assert b"Adjust what each expense had" not in page.content
+    rows = {row.expense.name: row for row in page.context["plan"].rows}
+    assert rows["Insurance"].set_aside == rows["Insurance"].suggested == 100000
     budget_line = next(t for t in page.context["first_transfers"] if t["account"].name == "Budget")
-    assert budget_line["plan"].contributions == 60000 + 19900 + 1000000
-    assert budget_line["extra"] == 50000
-    text = page.content.decode()
-    assert "500 more this time</span> while expenses with less set aside catch up" in text
-    assert 'title="Usually about 100 a month">600</td>' in text
-    # Recalculating only previews: the expense is changed by Start.
+    # Insurance 100, phone 199 and rent 10.000: the transfer is the usual monthly amount.
+    assert budget_line["plan"].contributions == budget_line["usual"] == 1029900
+    assert "Usually about 10.299 a month" in page.content.decode()
+    client.post("/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"})
     insurance.refresh_from_db()
-    assert insurance.starting_balance == 0 and household.started_on is None
+    assert insurance.starting_balance == 100000

@@ -35,6 +35,7 @@
 
     <section class="card">
       <h2>1 · Even out the accounts today</h2>
+      <p class="muted small">Each expense gets what keeps its monthly amount the same from the first month-end on: a yearly 1.200 due in two months needs 1.000 now, a payment due this month all of it, a savings goal what is already saved for it. That way the month-end transfers never have to catch up.</p>
       {% if plan.complete %}
       <div class="table-wrap">
       <table class="table">
@@ -53,7 +54,7 @@
       </table>
       </div>
       {% if shortage %}
-        <div class="notice danger">The accounts hold {{ shortage }} less than the expenses should have by now. Check the balances in step 1, or lower what some expenses have set aside below.</div>
+        <div class="notice danger">The accounts hold {{ shortage }} less than the expenses should have by now. Check the balances in step 1 and the expenses in step 2.</div>
       {% elif plan.moves %}
         <p><b>Make {{ plan.moves|length|pluralize:"this transfer,these transfers" }} in your bank when you start:</b></p>
         <div class="transfers">
@@ -82,7 +83,7 @@
         {% for item in first_transfers %}
         <div>
           <span>{% if item.plan.amount < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}
-            <br><small class="muted">{% if item.plan.contributions %}{% if item.plan.general_savings %}{{ item.plan.contributions|money0 }} for expenses, usually{% else %}Usually{% endif %} about {{ item.usual|money0 }} a month{% if item.extra %}; <span class="warn-text">{{ item.extra|money0 }} more this time</span> while expenses with less set aside catch up{% endif %}{% endif %}{% if item.plan.general_savings > 0 %}{% if item.plan.contributions %}, and {% endif %}{{ item.plan.general_savings|money0 }} to General Savings{% elif item.plan.general_savings < 0 %}{% if item.plan.contributions %}, and {% endif %}{{ item.plan.general_savings|absolute|money0 }} from General Savings{% endif %}</small>
+            <br><small class="muted">{% if item.plan.contributions %}{% if item.plan.general_savings %}{{ item.plan.contributions|money0 }} for expenses, usually{% else %}Usually{% endif %} about {{ item.usual|money0 }} a month{% endif %}{% if item.plan.general_savings > 0 %}{% if item.plan.contributions %}, and {% endif %}{{ item.plan.general_savings|money0 }} to General Savings{% elif item.plan.general_savings < 0 %}{% if item.plan.contributions %}, and {% endif %}{{ item.plan.general_savings|absolute|money0 }} from General Savings{% endif %}</small>
           </span>
           <span class="num">{{ item.plan.amount|absolute|money0 }}</span>
         </div>
@@ -90,30 +91,10 @@
         <div class="total"><span>NemKonto after the transfers</span><span class="num {{ preview.nemkonto_end|tone }}">{{ preview.nemkonto_end|money0 }}</span></div>
       </div>
       {% for notice in preview.notices %}{% if notice.level != "info" %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endif %}{% endfor %}
-      <p class="muted small">The amounts stay about the same every month, so they can be standing orders. The month-end checklist works them out each time from what was actually spent.{% if plan_extra %} Setting more aside now lowers the extra: see the last column under <i>Adjust what each expense had</i> below.{% endif %}</p>
+      <p class="muted small">The amounts stay about the same every month, so they can be standing orders. The month-end checklist works them out each time from what was actually spent.</p>
     </section>
     {% endif %}
 
-    <details class="card more"{% if errors %} open{% endif %}>
-      <summary>Adjust what each expense had at the start of {{ plan.opening.name }}</summary>
-      <p class="muted small">The suggestion keeps the monthly amount the same before and after the next payment: a yearly 1.200 due in two months should already have 1.000. A payment due this month must be there in full. With less set aside, the expense gets more at each month-end until its next payment. {% if preview %}The last column is what each expense gets at the first month-end, marked when it is more than usual. {% endif %}Change an amount if you know better, then press Recalculate. Nothing is saved until you press {% if started %}Start again{% else %}Start the budget{% endif %}; then these become each expense's <i>Already saved</i>.</p>
-      <div class="table-wrap">
-      <table class="table compact">
-        <thead><tr><th>Expense</th><th class="num">Suggested</th><th class="num">Set aside 1 {{ plan.opening.name|slice:":3" }}</th><th class="num">Now</th>{% if preview %}<th class="num">{{ plan.opening.last_day|date:"j M" }}</th>{% endif %}</tr></thead>
-        <tbody>
-        {% for row in plan.rows %}
-          <tr>
-            <td><label for="{{ row.aside_field.name }}">{{ row.expense.name }}</label> <span class="muted small">{{ row.expense.amount|money0 }} · {{ row.expense.frequency|lower }}{% if row.expense.first_amount is not None and row.expense.first_due >= today %} · first payment {{ row.expense.first_amount|money0 }}{% endif %}</span>{% if row.aside_field.error %}<br><span class="neg small">{{ row.aside_field.error }}</span>{% endif %}</td>
-            <td class="num dim">{% if row.suggested is None %}one-off{% else %}{{ row.suggested|money }}{% endif %}</td>
-            <td class="num"><input type="text" class="amount{% if row.aside_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.aside_field.name }}" name="{{ row.aside_field.name }}" value="{{ row.aside_field.value }}" placeholder="0,00"></td>
-            <td class="num {{ row.now|tone }}">{{ row.now|money }}</td>
-            {% if preview %}<td class="num{% if row.extra %} warn-text{% endif %}"{% if row.extra %} title="Usually about {{ row.usual|money0 }} a month"{% endif %}>{{ row.first|money0 }}</td>{% endif %}
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      </div>
-    </details>
 
     <div class="sticky-actions">
       <a class="btn" href="{% url 'setup-income' %}">Back</a>

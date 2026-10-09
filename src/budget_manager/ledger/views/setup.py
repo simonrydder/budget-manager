@@ -324,15 +324,11 @@ def transfers(request):
     expense_ids = list(budget.expenses.values_list("pk", flat=True))
     bank = {account.pk: account.start_balance for account in items}
     errors: dict[str, str] = {}
-    set_aside = spent = None
+    spent = None
     if request.method == "POST":
-        set_aside, aside_errors = read_amounts(request.POST, "aside-", expense_ids)
         spent, spent_errors = read_amounts(request.POST, "spent-", expense_ids)
-        errors = {
-            **{f"aside-{key}": value for key, value in aside_errors.items()},
-            **{f"spent-{key}": value for key, value in spent_errors.items()},
-        }
-    plan = services.plan_start(budget, now, bank, set_aside, spent)
+        errors = {f"spent-{key}": value for key, value in spent_errors.items()}
+    plan = services.plan_start(budget, now, bank, spent)
     if request.POST.get("action") == "start" and not errors:
         try:
             services.apply_start(budget, plan, request.user)
@@ -357,7 +353,6 @@ def transfers(request):
         }
 
     for row in plan.rows:
-        row.aside_field = field(f"aside-{row.expense.id}", row.set_aside)
         row.spent_field = field(f"spent-{row.expense.id}", row.spent or None)
     missing = [item.account for item in plan.accounts if item.bank is None]
     bills_due = sorted(
@@ -368,23 +363,21 @@ def transfers(request):
     accounts_by_id = {account.pk: account for account in items}
     first_transfers = []
     if preview:
-        # What each expense gets at the first month-end next to what it needs on average. An
-        # expense with less set aside than suggested catches up until its next payment.
+        # Next to each transfer, what its expenses need on average a month: with every expense
+        # set aside as suggested the two match, give or take rounding up to whole kroner.
         usual = services.monthly_amounts(services.preview_state(budget, plan))
-        for row in plan.rows:
-            row.first = preview.lines[row.expense.id].contribution
-            row.usual = usual[row.expense.id]
-            row.extra = row.first - row.usual if row.first - row.usual > 100 else 0
         for transfer in preview.transfers.values():
             if not transfer.amount:
                 continue
-            rows = [row for row in plan.rows if row.expense.account_id == transfer.account_id]
             first_transfers.append(
                 {
                     "account": accounts_by_id[transfer.account_id],
                     "plan": transfer,
-                    "usual": sum(row.usual for row in rows),
-                    "extra": sum(row.extra for row in rows),
+                    "usual": sum(
+                        usual[row.expense.id]
+                        for row in plan.rows
+                        if row.expense.account_id == transfer.account_id
+                    ),
                 }
             )
     context = _context(
@@ -393,7 +386,6 @@ def transfers(request):
         plan=plan,
         preview=preview,
         first_transfers=first_transfers,
-        plan_extra=sum(item["extra"] for item in first_transfers),
         missing=missing,
         errors=errors,
         running_rows=[row for row in plan.rows if row.due and row.expense.is_running],
