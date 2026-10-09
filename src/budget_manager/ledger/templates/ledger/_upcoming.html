@@ -1,0 +1,14 @@
+{% load budget %}
+<table class="table compact upcoming">
+  <colgroup><col class="date"><col><col class="amount"><col class="status"></colgroup>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td class="nowrap">{{ row.date|date:"j M" }}</td>
+      <td><a class="item" href="{% url 'expense-detail' row.expense.id %}">{{ row.expense.name }}</a></td>
+      <td class="num">{{ row.amount|money }}</td>
+      <td class="num"><span class="chip {{ row.status.0 }}" title="Balance now {{ row.balance|money }}{% if row.available != row.balance %}; by the due date {{ row.available|money }}{% endif %}">{{ row.status.1 }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

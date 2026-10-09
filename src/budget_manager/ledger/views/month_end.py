@@ -117,6 +117,11 @@ def _next(request, month: YearMonth, slug: str):
     return redirect(f"month-end-{following[slug]}", month=str(month))
 
 
+def _asks(row: dict) -> bool:
+    """A spending row to show open: due this month, or with an amount or an error."""
+    return bool(row["due"] or row["value"] or row.get("raw") or row.get("error"))
+
+
 def spending(request, month: str):
     guarded = _guard(request, month)
     if not isinstance(guarded, tuple):
@@ -196,7 +201,17 @@ def spending(request, month: str):
         close,
         1,
         days_early=days_early if days_early > 3 else 0,
-        groups=[(account, items) for account, items in groups.items() if items],
+        groups=[
+            {
+                "account": account,
+                "count": len(items),
+                "rows": [row for row in items if _asks(row)],
+                # Not due and nothing entered: folded away, to be opened when needed.
+                "quiet": [row for row in items if not _asks(row)],
+            }
+            for account, items in groups.items()
+            if items
+        ],
         first_close=first_close,
         opening_month=opening_month,
         started_on=budget.started_on,

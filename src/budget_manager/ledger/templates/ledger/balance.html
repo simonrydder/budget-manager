@@ -20,7 +20,7 @@
         <tbody>
         {% for item in plan.moves %}
           <tr>
-            <td>{% if item.expense %}<a href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td>{% if item.expense %}<a class="item" href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
             <td class="dim">{{ item.account.name }}</td>
             <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
             <td class="num">{% if item.move %}<form method="post" action="{% url 'move-cancel' item.move.id %}">{% csrf_token %}<button class="linklike small">Cancel</button></form>{% endif %}</td>

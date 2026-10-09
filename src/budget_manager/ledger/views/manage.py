@@ -50,6 +50,7 @@ def account_list(request):
                 "account": account,
                 "balance": account_balances[account.id],
                 "expenses": sorted(expenses, key=lambda item: item["expense"].name.lower()),
+                "expenses_total": sum(item["balance"] for item in expenses),
             }
         )
     context = {
@@ -287,6 +288,7 @@ def expense_board(request):
     context = {
         "group": group,
         "columns": columns,
+        "monthly_total": sum(column["monthly"] for column in columns),
         "ended": [card for card in cards if card["ended"]],
         "count": len(active),
     }

@@ -4,6 +4,21 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.4.0 (2026-10-09)
+
+- Layouts follow the room the page has, not the window: on an iPad or in a split-screen window
+  the overview and other pages switch to one column instead of squeezing two.
+- Expenses: each category (or account) is a full-width section with its cards in rows, can be
+  folded, and shows what it costs a month. Drag and drop works as before.
+- Accounts: an account's expenses fold into one line with their total when there are many.
+- Overview: Coming up shows the first 10 payments, the rest behind "Show more".
+- Month-end step 1 shows the expenses due that month; the rest fold into "N more, not due".
+- Names in lists and tables are plain text that opens the expense, instead of blue links.
+- The menu is grouped: Overview, Month-end, Balance · Expenses, Income, Accounts · Forecast,
+  History · Settings, Budgets, People.
+- Windows launcher: when an update changes the launcher itself, it hands over to the new one
+  right away, so new launcher features (like Update now) do not wait for the next restart.
+
 ## 1.3.2 (2026-10-09)
 
 - Coming up on the overview no longer calls payments after the next month-end "short" when

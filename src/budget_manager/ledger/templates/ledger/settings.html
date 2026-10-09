@@ -50,7 +50,7 @@
   <form method="post" action="{% url 'app-update' %}">{% csrf_token %}<button class="btn">Update now</button></form>
   {% endif %}
   {% else %}
-  <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. Updates are installed on the computer that runs the app. With the Windows launcher in <code>scripts\windows</code>, an <i>Update now</i> button appears here.</p>
+  <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. This copy does not update itself: it was not started by the Windows launcher in <code>scripts\windows</code>, or by a launcher from before version 1.1.0. On the computer that runs the app, start it again with <code>start-budget.cmd</code>, or run <code>install-nightly-task.ps1</code> again as administrator; after that it updates itself and an <i>Update now</i> button appears here.</p>
   {% endif %}
 </section>
 

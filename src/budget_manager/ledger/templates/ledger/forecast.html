@@ -39,7 +39,7 @@
         {% if group.account.is_nemkonto %}<tr><td class="muted">Free money after the transfers</td><td></td><td class="num {{ point.nemkonto|tone }}">{{ point.nemkonto|money }}</td></tr>{% endif %}
         {% for item in group.items %}
           <tr>
-            <td><a href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% if item.expected %} <span class="chip">pays {{ item.expected|money0 }} in {{ plan.month.name|slice:":3" }}</span>{% endif %}</td>
+            <td><a class="item" href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% if item.expected %} <span class="chip">pays {{ item.expected|money0 }} in {{ plan.month.name|slice:":3" }}</span>{% endif %}</td>
             <td class="num dim small">{% if item.contribution %}+{{ item.contribution|money }}{% endif %}</td>
             <td class="num {{ item.balance|tone }}">{{ item.balance|money }}</td>
           </tr>

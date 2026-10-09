@@ -69,7 +69,7 @@
     <tbody>
     {% for line in lines %}
       <tr>
-        <td><a href="{% url 'expense-detail' line.expense.id %}">{{ line.expense.name }}</a>{% if line.amount_after %}<br><span class="small muted">Amount raised to {{ line.amount_after|money }}</span>{% endif %}</td>
+        <td><a class="item" href="{% url 'expense-detail' line.expense.id %}">{{ line.expense.name }}</a>{% if line.amount_after %}<br><span class="small muted">Amount raised to {{ line.amount_after|money }}</span>{% endif %}</td>
         <td class="dim">{{ line.expense.account.name }}</td>
         <td class="num {{ line.balance_before|tone }}">{{ line.balance_before|money }}</td>
         <td class="num">{{ line.contribution|money }}</td>

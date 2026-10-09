@@ -106,6 +106,14 @@ small, .small { font-size: 0.85rem; }
 .nav-sep { height: 1px; background: var(--line); margin: 10px 8px; }
 .sidebar .who { margin-top: auto; padding: 10px; font-size: 0.85rem; color: var(--muted); display: grid; gap: 4px; }
 .sidebar .who form { display: inline; }
+/* A name in a list or table that opens its page: plain text until pointed at. */
+a.item { color: inherit; text-decoration: none; }
+.upcoming { table-layout: fixed; width: 100%; }
+.upcoming col.date { width: 4.5em; }
+.upcoming col.amount { width: 7.5em; }
+.upcoming col.status { width: 6.5em; }
+.upcoming td:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.item:hover, a.item:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .linklike.small { font-size: 0.85rem; }
 .topbar { display: none; }
@@ -135,9 +143,19 @@ small, .small { font-size: 0.85rem; }
 .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 1100px) { .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .cols-2, .cols-3, .split { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .cols-4 { grid-template-columns: 1fr; } }
+/* Columns follow the width of the page content, not of the window: next to the menu on an
+   iPad or in a split-screen window there is much less room than the window width suggests. */
+.main { container: page / inline-size; }
+@container page (max-width: 980px) { .split { grid-template-columns: 1fr; } }
+@container page (max-width: 860px) { .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container page (max-width: 640px) { .cols-3 { grid-template-columns: 1fr; } }
+@container page (max-width: 520px) { .cols-2 { grid-template-columns: 1fr; } }
+@container page (max-width: 400px) { .cols-4 { grid-template-columns: 1fr; } }
+@supports not (container-type: inline-size) {
+  @media (max-width: 1100px) { .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .cols-2, .cols-3, .split { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) { .cols-4 { grid-template-columns: 1fr; } }
+}
 .stack { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .spread { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 14px; }
@@ -242,6 +260,7 @@ fieldset { border: 0; padding: 0; margin: 0; }
   .steps { grid-template-columns: repeat(5, minmax(110px, 1fr)); overflow-x: auto; }
 }
 .checklist { display: grid; gap: 14px; max-width: 860px; }
+.quiet-entries > summary { padding: 10px 14px; border-top: 1px solid var(--line); cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.9rem; }
 .entry-group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .entry-group > header, details.entry-group > summary { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 10px 14px; background: var(--sunk); }
 details.entry-group > summary { cursor: pointer; list-style: none; }
@@ -289,9 +308,15 @@ details.entry-group:not([open]) > summary h3::before { content: "▸"; }
 .transfer.done .tick { background: var(--pos); border-color: var(--pos); color: var(--surface); }
 
 /* ---- Expenses board ---- */
-.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; align-items: start; }
-.column { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: grid; gap: 8px; min-height: 90px; transition: background 0.12s, border-color 0.12s; }
-.column > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 2px 4px 4px; }
+.board { display: grid; gap: 12px; }
+.column { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 12px; transition: background 0.12s, border-color 0.12s; }
+.column > summary { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 2px; cursor: pointer; list-style: none; }
+.column > summary::-webkit-details-marker { display: none; }
+.column > summary h3::before { content: "▾"; display: inline-block; width: 1.1em; color: var(--muted); }
+.column:not([open]) > summary h3::before { content: "▸"; }
+.column:not([open]) { padding-bottom: 8px; }
+.column .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 8px; }
+.column .add-to { display: inline-block; margin-top: 8px; }
 .column.over { background: var(--accent-soft); border-color: var(--accent); }
 .column .hint { color: var(--muted); font-size: 0.82rem; padding: 6px 4px; }
 .xcard {
@@ -334,7 +359,12 @@ details.entry-group:not([open]) > summary h3::before { content: "▸"; }
 
 /* ---- Account cards ---- */
 .account-card .rows { display: grid; gap: 3px; font-size: 0.88rem; }
-.account-card .rows div { display: flex; justify-content: space-between; gap: 10px; }
+.account-card .rows > div { display: flex; justify-content: space-between; gap: 10px; }
+.expense-list > summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; list-style: none; font-weight: 600; padding: 4px 0; }
+.expense-list > summary::-webkit-details-marker { display: none; }
+.expense-list > summary > span:first-child::before { content: "▸ "; color: var(--muted); }
+.expense-list[open] > summary > span:first-child::before { content: "▾ "; }
+.expense-list[open] > summary { margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .account-card .rows span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gs-line { border-top: 1px dashed var(--line); padding-top: 6px; }
 

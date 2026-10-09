@@ -37,27 +37,16 @@
         {% if nemkonto.error %}<span class="error">{{ nemkonto.error }}</span>{% endif %}
       </div>
     </section>
-    {% for account, rows in groups %}
+    {% for group in groups %}
     <section class="entry-group">
-      <header><h3>{{ account.name }}</h3><span class="muted small">{{ rows|length }} expense{{ rows|length|pluralize }}</span></header>
-      {% for row in rows %}
-      {% with expense=row.expense %}
-      <div class="entry{% if row.due %} due{% endif %}">
-        <label class="name" for="spent-{{ expense.id }}">
-          <span><b>{{ expense.name }}</b> {% include "ledger/_kind.html" %}</span>
-          <small>{% if expense.is_running and row.due %}Spent during {{ previous.name }} · budget {{ row.expected|money }}{% elif row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}</small>
-        </label>
-        <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
-               id="spent-{{ expense.id }}" name="spent-{{ expense.id }}" placeholder="0,00"
-               value="{% if row.raw is not None %}{{ row.raw }}{% else %}{{ row.value|money_input }}{% endif %}"
-               data-live="after-{{ expense.id }}" data-base="{{ row.base }}"
-               {% if row.due %}data-due data-expected="{{ row.expected|money_input }}"{% endif %}
-               {% if row.due and expense.is_fixed %}data-fixed-due{% endif %}>
-        <span class="after">Balance after<br><b id="after-{{ expense.id }}" class="{{ row.after|tone }}">{{ row.after|money }}</b></span>
-        {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
-      </div>
-      {% endwith %}
-      {% endfor %}
+      <header><h3>{{ group.account.name }}</h3><span class="muted small">{{ group.count }} expense{{ group.count|pluralize }}</span></header>
+      {% for row in group.rows %}{% include "ledger/month_end/_spending_entry.html" %}{% endfor %}
+      {% if group.quiet %}
+      <details class="quiet-entries">
+        <summary>{{ group.quiet|length }} more, not due in {{ previous.name }}</summary>
+        {% for row in group.quiet %}{% include "ledger/month_end/_spending_entry.html" %}{% endfor %}
+      </details>
+      {% endif %}
     </section>
     {% empty %}
     <div class="card flat"><p class="empty">No expenses yet. <a href="{% url 'expense-new' %}">Add your first expense</a>.</p></div>
