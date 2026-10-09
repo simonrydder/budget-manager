@@ -21,6 +21,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$TailscaleRule = "$TaskName (Tailscale)"
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -31,8 +32,9 @@ if (-not $isAdmin) {
 if ($Uninstall) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
     Remove-NetFirewallRule -DisplayName $TaskName -ErrorAction SilentlyContinue
+    Remove-NetFirewallRule -DisplayName $TailscaleRule -ErrorAction SilentlyContinue
     & (Join-Path $PSScriptRoot "run-budget.ps1") -Stop -Port $Port -DataDir $DataDir
-    Write-Host "Removed the '$TaskName' task and firewall rule."
+    Write-Host "Removed the '$TaskName' task and firewall rules."
     return
 }
 
@@ -60,8 +62,14 @@ if (-not (Get-NetFirewallRule -DisplayName $TaskName -ErrorAction SilentlyContin
     New-NetFirewallRule -DisplayName $TaskName -Direction Inbound -Protocol TCP `
         -LocalPort $Port -Profile Private -Action Allow | Out-Null
 }
+# Tailscale's network adapter is often classed as public, so this rule covers every profile
+# but only Tailscale's addresses (100.64.0.0/10), never the internet.
+if (-not (Get-NetFirewallRule -DisplayName $TailscaleRule -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName $TailscaleRule -Direction Inbound -Protocol TCP `
+        -LocalPort $Port -RemoteAddress "100.64.0.0/10" -Profile Any -Action Allow | Out-Null
+}
 
 Start-ScheduledTask -TaskName $TaskName
 Write-Host "Installed. Budget Manager starts with Windows and updates from '$Branch' every day at $At."
 Write-Host "It is starting now; logs are in $(Join-Path $DataDir 'logs')."
-Write-Host "Port $Port is open for private (home) networks only."
+Write-Host "Port $Port is open for private (home) networks and Tailscale (100.64.0.0/10) only."

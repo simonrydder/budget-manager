@@ -60,6 +60,10 @@ def test_first_visit_creates_the_first_login(db):
         ("::1", True),
         ("::ffff:192.168.1.20", True),
         ("fe80::1%eth0", True),
+        ("100.101.102.103", True),  # Tailscale
+        ("fd7a:115c:a1e0::1", True),  # Tailscale over IPv6
+        ("100.63.255.255", False),  # just outside Tailscale's range
+        ("100.128.0.1", False),
         ("8.8.8.8", False),
         ("172.32.0.1", False),
         ("2001:db8::1", False),
@@ -69,6 +73,11 @@ def test_first_visit_creates_the_first_login(db):
 )
 def test_network_check(address, allowed, settings):
     assert is_allowed(address, parse_networks(settings.ALLOWED_NETWORKS)) is allowed
+
+
+def test_tailscale_devices_can_connect_but_the_internet_cannot(client):
+    assert client.get("/", REMOTE_ADDR="100.101.102.103").status_code == 200
+    assert client.get("/", REMOTE_ADDR="8.8.8.8").status_code == 403
 
 
 def test_requests_from_the_internet_are_refused(client):

@@ -48,9 +48,21 @@ function Write-Log([string]$Message) {
 
 function Invoke-Native([string]$File, [string[]]$Arguments) {
     # Runs a program and throws if it fails (PowerShell does not do that for programs).
-    & $File @Arguments 2>&1 | ForEach-Object { Add-Content -Path $LauncherLog -Value "    $_" }
-    if ($LASTEXITCODE -ne 0) {
-        throw "$File $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    # Programs like uv write normal progress to stderr. With "Stop", Windows PowerShell 5.1
+    # turns each such line into a terminating error, so only the exit code decides here.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $File @Arguments 2>&1 | ForEach-Object {
+            # Lines from stderr arrive as ErrorRecord objects; "$_" is their plain text.
+            Add-Content -Path $LauncherLog -Value "    $("$_")"
+        }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($exitCode -ne 0) {
+        throw "$File $($Arguments -join ' ') failed with exit code $exitCode"
     }
 }
 
@@ -64,10 +76,25 @@ function Find-Program([string]$Name, [string[]]$Fallbacks) {
 function Stop-Server {
     if (Test-Path $PidFile) {
         $oldPid = (Get-Content $PidFile -Raw).Trim()
-        if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
+        $process = $null
+        if ($oldPid -match '^\d+$') {
+            $process = Get-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
+        }
+        # After a reboot the stored number can belong to another program. Only the cmd.exe
+        # this script started is stopped: it was running before server.pid was written.
+        $written = (Get-Item $PidFile).LastWriteTime
+        $started = $null
+        if ($process) {
+            try { $started = $process.StartTime } catch { }  # access can be denied
+        }
+        $ours = $process -and $process.ProcessName -eq "cmd" -and
+            $started -and $started -le $written
+        if ($ours) {
             Write-Log "Stopping the running server (process $oldPid)."
             & taskkill.exe /PID $oldPid /T /F | Out-Null
             Start-Sleep -Seconds 2
+        } elseif ($process) {
+            Write-Log "Process $oldPid is not the server started earlier, so it is left running."
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
@@ -92,7 +119,9 @@ function Start-Server {
     }
     $env:BUDGET_DATA_DIR = $DataDir
     $command = "`"$Uv`" run --no-dev budget-manager serve --host 0.0.0.0 --port $Port >> `"$serverLog`" 2>&1"
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $command `
+    # cmd.exe /c strips the first and the last quote of the command line, so the whole
+    # command gets one extra pair of quotes around it.
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$command`"" `
         -WorkingDirectory $RepoDir -NoNewWindow -PassThru
     Set-Content -Path $PidFile -Value $process.Id
     $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)

@@ -4,7 +4,8 @@ Environment variables:
 
 - ``BUDGET_DATA_DIR``: where the database and secret key live (default: ``./data``).
 - ``BUDGET_ALLOWED_NETWORKS``: comma-separated networks allowed to connect
-  (default: loopback and private LAN ranges).
+  (default: loopback, private LAN ranges and Tailscale's 100.64.0.0/10; Tailscale's IPv6
+  addresses are inside fc00::/7).
 - ``BUDGET_ALLOWED_HOSTS``: comma-separated host names (default: ``*``; the network check
   above is what keeps the app off the internet).
 - ``BUDGET_DEBUG``: set to ``1`` during development.
@@ -40,7 +41,8 @@ DEBUG = os.environ.get("BUDGET_DEBUG") == "1"
 ALLOWED_HOSTS = _list("BUDGET_ALLOWED_HOSTS", "*")
 ALLOWED_NETWORKS = _list(
     "BUDGET_ALLOWED_NETWORKS",
-    "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,::1/128,fc00::/7,fe80::/10",
+    "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,100.64.0.0/10,"
+    "::1/128,fc00::/7,fe80::/10",
 )
 
 INSTALLED_APPS = [
