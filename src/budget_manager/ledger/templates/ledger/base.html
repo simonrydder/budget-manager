@@ -20,7 +20,7 @@
     </nav>
     <div class="who">
       <span>Signed in as <b>{{ user.first_name|default:user.username }}</b></span>
-      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="linklike">Log out</button></form>
+      {% if not local_only %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="linklike">Log out</button></form>{% endif %}
       {% if app_version %}<span class="muted small">Version {{ app_version }}</span>{% endif %}
     </div>
   </aside>
@@ -29,7 +29,7 @@
     {% include "ledger/_switcher.html" %}
     <nav class="nav">
       {% include "ledger/_nav.html" %}
-      <form method="post" action="{% url 'logout' %}" style="padding:8px 10px">{% csrf_token %}<button class="linklike">Log out {{ user.username }}</button></form>
+      {% if not local_only %}<form method="post" action="{% url 'logout' %}" style="padding:8px 10px">{% csrf_token %}<button class="linklike">Log out {{ user.username }}</button></form>{% endif %}
     </nav>
   </details>
   {% endwith %}

@@ -15,6 +15,7 @@ def navigation(request):
             "current_budget": budget,
             "my_budgets": list(user.budgets.all()),
             "app_version": settings.VERSION,
+            "local_only": settings.LOCAL_ONLY,
         }
         if budget is None:
             return context

@@ -4,6 +4,16 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.3.0 (2026-10-09)
+
+- `BudgetManager.cmd` needs no login: the app only serves that computer, so it signs in by
+  itself (and hides Log out and People). Any other device would still have to log in.
+- `BudgetManager.cmd` checks for a newer version before downloading it: ordinary updates install
+  by themselves, a major update (a new first number) shows what is new and asks first. It also
+  starts faster when nothing changed.
+- On the home network each device stays logged in for a year instead of 30 days.
+- `budget-manager --version` and `budget-manager check-update`.
+
 ## 1.2.0 (2026-10-09)
 
 - `BudgetManager.cmd`: one file to download from GitHub and double-click to run the app on

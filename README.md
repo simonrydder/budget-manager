@@ -22,9 +22,11 @@ The rules it follows are described in [docs/requirements.md](docs/requirements.m
    **Run** (or **More info → Run anyway**).
 
 The first time, it installs [uv](https://docs.astral.sh/uv/), which downloads Python and Budget
-Manager into your user folder; no administrator rights are needed. Every start gets the newest
-version (without internet it starts the one it has), then opens the app in the browser, where
-the first visit creates your login. Only that computer can use it: other devices cannot connect.
+Manager into your user folder; no administrator rights are needed. Every start checks for a
+newer version: ordinary updates install by themselves, but a major update (a new first number,
+like 2.0.0) shows what is new and asks first. Without internet it starts the version it has.
+Then it opens the app in the browser. Only that computer can use it, so there is no login, and
+other devices cannot connect.
 Your data is in `%USERPROFILE%\BudgetManager`. Keep the window open while you use the app;
 closing it stops the app.
 
@@ -41,7 +43,9 @@ uv run budget-manager serve
 
 Then open `http://<the machine's address>:8000` from a browser on your network, for example
 `http://192.168.1.10:8000`. The first visit asks you to create a login and then takes you
-through setting up your first budget. Add more people under **People** afterwards.
+through setting up your first budget. Add more people under **People** afterwards. The login
+keeps the budget private from everyone else who can reach it (guests on the Wi-Fi, other devices
+on your Tailscale network) and records who did what; each device stays logged in for a year.
 
 `serve` applies database migrations before it starts. Options:
 
@@ -207,6 +211,8 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`fe
 Versions follow [Semantic Versioning](https://semver.org/). Every change merged into `prod`
 raises the version in `pyproject.toml` (then run `uv lock`) and adds a line to `CHANGELOG.md`:
 the last number for fixes (1.0.0 → 1.0.1), the middle one for new features (1.0.1 → 1.1.0) and
-the first one for changes that need something done by hand when updating. The app shows its
+the first one for changes that need something done by hand when updating. `BudgetManager.cmd`
+asks before installing such a major update and shows its `CHANGELOG.md` entries, so write
+them for the people who will read them there. The app shows its
 version under **Settings → App version** and at the bottom of the menu, and the Windows launcher
 logs which version it updated from and to.
