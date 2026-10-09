@@ -411,3 +411,10 @@ def test_starting_again_follows_a_moved_due_date(client, household, accounts):
         balance < 0
         for balance in services.build_state(household).current_expense_balances().values()
     )
+
+
+def test_step_five_takes_what_is_left_of_a_running_budget(client, household, accounts):
+    walk_to_transfers(client, accounts)
+    groceries = Expense.objects.get(name="Groceries")
+    page = client.get("/start/transfers/").content.decode()
+    assert f'data-spent-from="550000" data-spent-to="spent-{groceries.id}"' in page

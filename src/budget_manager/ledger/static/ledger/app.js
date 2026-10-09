@@ -150,16 +150,27 @@
     update();
   });
 
-  // Work out what was spent from the NemKonto from its balance.
+  // Spent or left: typing what is left (on the NemKonto, or of a running budget) works out what
+  // was spent from what there was, and the other way round.
   document.querySelectorAll("input[data-spent-from]").forEach((input) => {
     input.closest(".calc").hidden = false;
     const target = document.getElementById(input.dataset.spentTo);
     const start = parseInt(input.dataset.spentFrom, 10);
+    const show = (value) => formatAmount(value).replace(MINUS, "-");
     input.addEventListener("input", () => {
-      const balance = parseAmount(input.value);
-      if (balance === null || Number.isNaN(balance)) return;
-      target.value = formatAmount(Math.max(0, start - balance)).replace(MINUS, "-");
+      const left = parseAmount(input.value);
+      if (left === null || Number.isNaN(left)) return;
+      target.value = show(Math.max(0, start - left));
+      target.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    const fromSpent = () => {
+      const spent = parseAmount(target.value);
+      input.value = spent === null || Number.isNaN(spent) ? "" : show(start - spent);
+    };
+    target.addEventListener("input", (event) => {
+      if (event.isTrusted) fromSpent();
+    });
+    if (target.value.trim()) fromSpent();
   });
 
   // Forms that submit as soon as a control changes.
