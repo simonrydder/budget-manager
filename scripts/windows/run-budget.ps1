@@ -13,9 +13,11 @@
     The server keeps running until this window is closed or the scheduled task is stopped.
     Your data lives in -DataDir, outside the code, so updates never touch it.
 
-    While it runs, the script watches for an update request: the "Update now" button in the
-    app's Settings, or update-now.cmd, leaves the file update.request in -DataDir. The script
-    then does all of the above again, so the newest version runs within a minute or two.
+    While it runs, the script checks every -CheckMinutes minutes whether -Branch has a new
+    commit, and watches for an update request: the "Update now" button in the app's Settings,
+    or update-now.cmd, leaves the file update.request in -DataDir. Either way it then does all
+    of the above again, so the newest version runs within a minute or two. A version that did
+    not start is skipped by the checks until a newer commit (for example a revert) arrives.
 
 .EXAMPLE
     .\run-budget.ps1
@@ -23,6 +25,8 @@
     .\run-budget.ps1 -Branch dev -Port 8080
 .EXAMPLE
     .\run-budget.ps1 -NoUpdate
+.EXAMPLE
+    .\run-budget.ps1 -CheckMinutes 0     # only update when started or asked to
 #>
 [CmdletBinding()]
 param(
@@ -31,6 +35,7 @@ param(
     [string]$DataDir = (Join-Path $env:USERPROFILE "BudgetManagerData"),
     [int]$KeepBackups = 30,
     [int]$StartTimeoutSeconds = 120,
+    [int]$CheckMinutes = 5,
     [switch]$NoUpdate,
     [switch]$Stop
 )
@@ -41,6 +46,7 @@ $LogDir = Join-Path $DataDir "logs"
 $BackupDir = Join-Path $DataDir "backups"
 $PidFile = Join-Path $DataDir "server.pid"
 $RequestFile = Join-Path $DataDir "update.request"
+$FailedFile = Join-Path $DataDir "update.failed"  # a commit that did not start
 $Database = Join-Path $DataDir "budget.sqlite3"
 New-Item -ItemType Directory -Force -Path $DataDir, $LogDir, $BackupDir | Out-Null
 $LauncherLog = Join-Path $LogDir "launcher.log"
@@ -126,6 +132,7 @@ function Start-Server {
     # Tells the app to offer "Update now" (this script watches for the request) and which
     # commit runs; the app knows its own version number.
     $env:BUDGET_UPDATER = "1"
+    $env:BUDGET_CHECK_MINUTES = if ($NoUpdate) { "0" } else { "$CheckMinutes" }
     $env:BUDGET_COMMIT = ""
     try {
         $env:BUDGET_COMMIT = (& $Git -C $RepoDir log -1 "--format=%h, %cd" --date=short).Trim()
@@ -186,10 +193,12 @@ if (Test-Path $Database) {
 $previous = (& $Git -C $RepoDir rev-parse HEAD).Trim()
 $previousVersion = Get-Version
 $updated = $false
+$target = $null
 if (-not $NoUpdate) {
     try {
         Write-Log "Fetching the newest version of '$Branch'."
         Invoke-Native $Git @("-C", $RepoDir, "fetch", "--quiet", "origin", $Branch)
+        $target = (& $Git -C $RepoDir rev-parse "origin/$Branch").Trim()
         Update-Code "origin/$Branch"
         $current = (& $Git -C $RepoDir rev-parse HEAD).Trim()
         $updated = $current -ne $previous
@@ -200,6 +209,9 @@ if (-not $NoUpdate) {
         }
     } catch {
         Write-Log "Could not update ($($_.Exception.Message)). Starting the current version."
+        if ($target -and $target -ne $previous) {
+            Set-Content -Path $FailedFile -Value $target  # do not try it again every few minutes
+        }
         try { Update-Code $previous } catch { Write-Log "Restoring the previous version failed too." }
         $updated = $false
     }
@@ -212,7 +224,10 @@ $server = Start-Server
 if (-not $server -and $updated) {
     Write-Log "The new version did not start. Going back to $previousVersion."
     Write-Log "If the database was changed by the new version, restore it from $BackupDir."
+    Write-Log "It is skipped until a newer commit arrives on '$Branch' (for example a revert)."
+    Set-Content -Path $FailedFile -Value (& $Git -C $RepoDir rev-parse HEAD).Trim()
     Update-Code $previous
+    $updated = $false  # the previous version runs again, so the marker above stays
     $server = Start-Server
 }
 if (-not $server) {
@@ -227,17 +242,56 @@ try {
         ForEach-Object { "http://$($_.IPAddress):$Port" }
 } catch { }
 Write-Log "Running. Open $($addresses -join ' or ') from a browser on your network."
+if ($updated) {
+    Remove-Item $FailedFile -Force -ErrorAction SilentlyContinue  # a newer version runs fine
+}
 Write-Host "Keep this window open. Closing it stops Budget Manager."
-while (-not $server.HasExited -and -not (Test-Path $RequestFile)) {
+
+function Find-NewVersion {
+    # The newest commit on the branch if it is not the one running and did not fail before.
+    Invoke-Native $Git @("-C", $RepoDir, "fetch", "--quiet", "origin", $Branch)
+    $remote = (& $Git -C $RepoDir rev-parse "origin/$Branch").Trim()
+    $running = (& $Git -C $RepoDir rev-parse HEAD).Trim()
+    $failed = if (Test-Path $FailedFile) { "$(Get-Content $FailedFile -Raw)".Trim() } else { "" }
+    if ($remote -ne $running -and $remote -ne $failed) { return $remote }
+    return $null
+}
+
+$checking = -not $NoUpdate -and $CheckMinutes -gt 0
+$nextCheck = (Get-Date).AddMinutes($CheckMinutes)
+$checkFailed = $false
+$reason = $null
+while (-not $server.HasExited) {
+    if (Test-Path $RequestFile) {
+        $request = "$(Get-Content $RequestFile -Raw -ErrorAction SilentlyContinue)".Trim()
+        Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
+        $reason = "Update requested ($request)"
+        break
+    }
+    if ($checking -and (Get-Date) -ge $nextCheck) {
+        $nextCheck = (Get-Date).AddMinutes($CheckMinutes)
+        try {
+            $newer = Find-NewVersion
+            if ($checkFailed) { Write-Log "Checking for new versions works again." }
+            $checkFailed = $false
+            if ($newer) {
+                $reason = "A new version is on '$Branch' ($($newer.Substring(0, 7)))"
+                break
+            }
+        } catch {
+            if (-not $checkFailed) {
+                Write-Log "Could not check for a new version ($($_.Exception.Message)). Trying again every $CheckMinutes minutes."
+            }
+            $checkFailed = $true
+        }
+    }
     Start-Sleep -Seconds 5
 }
-if (Test-Path $RequestFile) {
-    $request = "$(Get-Content $RequestFile -Raw -ErrorAction SilentlyContinue)".Trim()
-    Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
-    Write-Log "Update requested ($request). Updating to the newest '$Branch' and restarting."
+if ($reason) {
+    Write-Log "$reason. Updating to the newest '$Branch' and restarting."
     # Run this script again: it stops the server, backs up, updates and starts the new one.
     & $PSCommandPath -Branch $Branch -Port $Port -DataDir $DataDir -KeepBackups $KeepBackups `
-        -StartTimeoutSeconds $StartTimeoutSeconds
+        -StartTimeoutSeconds $StartTimeoutSeconds -CheckMinutes $CheckMinutes
     exit $LASTEXITCODE
 }
 Remove-Item $PidFile -Force -ErrorAction SilentlyContinue

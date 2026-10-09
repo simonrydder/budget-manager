@@ -11,6 +11,7 @@ Environment variables:
 - ``BUDGET_DEBUG``: set to ``1`` during development.
 - ``BUDGET_UPDATER``: set to ``1`` by the Windows launcher, which updates and restarts the app
   when the *Update now* button in Settings asks for it.
+- ``BUDGET_CHECK_MINUTES``: how often the Windows launcher checks for a new version (0: never).
 - ``BUDGET_COMMIT``: the commit the app runs, shown in Settings next to the version (set by
   the Windows launcher).
 """
@@ -49,6 +50,7 @@ DEBUG = os.environ.get("BUDGET_DEBUG") == "1"
 # restarts the app (scripts/windows/run-budget.ps1).
 UPDATER = os.environ.get("BUDGET_UPDATER") == "1"
 UPDATE_REQUEST_FILE = DATA_DIR / "update.request"
+CHECK_MINUTES = int(os.environ.get("BUDGET_CHECK_MINUTES") or 0)
 VERSION = __version__
 COMMIT = os.environ.get("BUDGET_COMMIT", "")
 ALLOWED_HOSTS = _list("BUDGET_ALLOWED_HOSTS", "*")
