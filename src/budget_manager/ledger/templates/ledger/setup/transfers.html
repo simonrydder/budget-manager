@@ -42,7 +42,7 @@
         <tbody>
         {% for item in plan.accounts %}
           <tr>
-            <td>{{ item.account.name }}{% if item.account.is_nemkonto %} <span class="muted small hide-narrow">{% if item.expected %}the other {{ plan.nemkonto|money }} {% endif %}waits for the month-end</span>{% elif item.account.holds_general_savings %} <span class="muted small hide-narrow">the rest is General Savings</span>{% endif %}</td>
+            <td>{{ item.account.name }}{% if item.account.is_nemkonto %} <span class="muted small hide-narrow">{% if item.expected %}the other {{ plan.nemkonto|money }} {% endif %}is everyday money until the month-end</span>{% elif item.account.holds_general_savings %} <span class="muted small hide-narrow">the rest is General Savings</span>{% endif %}</td>
             <td class="num">{{ item.bank|money }}</td>
             <td class="num dim hide-narrow">{% if not item.account.is_nemkonto or item.expected %}{{ item.expected|money }}{% endif %}</td>
             <td class="num {{ item.difference|tone }}">{% if not item.account.is_nemkonto %}{{ item.difference|signed }}{% endif %}</td>
@@ -78,6 +78,7 @@
       <h2>2 · Your first month-end, {{ plan.opening.last_day|date:"j F" }}</h2>
       <p class="muted small">When the income for {{ plan.start.name }} has arrived ({{ preview.income|money0 }} expected), transfer from the NemKonto:</p>
       <div class="flow">
+        {% if preview.nemkonto_spent %}<div><span>Everyday spending from the NemKonto until then, about</span><span class="num">{{ preview.nemkonto_spent|money0 }}</span></div>{% endif %}
         {% for item in first_transfers %}
         <div><span>{% if item.plan.amount < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}</span><span class="num">{{ item.plan.amount|absolute|money0 }}</span></div>
         {% endfor %}

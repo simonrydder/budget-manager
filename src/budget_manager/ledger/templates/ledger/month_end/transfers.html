@@ -6,6 +6,12 @@
 
 <div class="split">
   <div class="stack" style="gap:16px">
+    {% if nemkonto_missing %}
+    <div class="notice warning">
+      <span>What was spent from the NemKonto in {{ previous.name }} is not entered, so it counts as 0 and the NemKonto would end too high.</span>
+      <small><a href="{% url 'month-end-spending' month %}">Enter it in step 1</a></small>
+    </div>
+    {% endif %}
     {% if missing_income %}
     <div class="notice warning">
       <span>No amount entered for {% for source in missing_income %}{{ source.name }}{% if not forloop.last %}, {% endif %}{% endfor %}. {{ missing_income|length|pluralize:"It counts,They count" }} as 0.</span>
@@ -91,7 +97,8 @@
     <section class="card">
       <h2>NemKonto</h2>
       <div class="flow">
-        <div><span>Before the income</span><span class="num">{{ plan.nemkonto_before|money }}</span></div>
+        <div><span>After the last month-end</span><span class="num">{{ plan.nemkonto_before|money }}</span></div>
+        <div><span>− Spent from it in {{ previous.name }}</span><span class="num">{{ plan.nemkonto_spent|money }}</span></div>
         <div><span>+ Income for {{ month.name }}</span><span class="num">{{ plan.income|money }}</span></div>
         {% if plan.interest_total %}<div><span>+ Interest on all accounts</span><span class="num">{{ plan.interest_total|money }}</span></div>{% endif %}
         <div><span>− Contributions</span><span class="num">{{ plan.contributions_total|money }}</span></div>

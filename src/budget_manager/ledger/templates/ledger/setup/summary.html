@@ -4,10 +4,10 @@
 {% block content %}
 {% include "ledger/setup/_steps.html" with title="What your expenses cost" %}
 <div class="stack" style="gap:18px">
-  <p class="lead">Every expense counted per month: a yearly payment as a twelfth, a savings goal as what is needed each month until it is due. This is what has to be set aside on average.</p>
+  <p class="lead">Every expense counted per month: a yearly payment as a twelfth, a savings goal as what is needed each month until it is due. Together with the everyday spending from the NemKonto, this is what goes out on average.</p>
 
   <section class="grid cols-3">
-    <div class="card"><span class="label">Expenses a month</span><span class="big">{{ summary.monthly|money0 }}</span></div>
+    <div class="card"><span class="label">A month</span><span class="big">{{ summary.monthly|money0 }}</span>{% if summary.everyday %}<span class="small muted">of which {{ summary.everyday|money0 }} everyday spending</span>{% endif %}</div>
     <div class="card"><span class="label">A year</span><span class="big">{{ summary.monthly|times:12|money0 }}</span></div>
     <div class="card"><span class="label">Categories</span><span class="big">{{ summary.groups|length }}</span></div>
   </section>
@@ -34,6 +34,7 @@
         </tr>
         {% endfor %}
       {% endfor %}
+      {% if summary.everyday %}<tr class="group"><td>Everyday spending from the NemKonto</td><td class="share-col"><span class="bar" style="--share:{{ summary.everyday|share_of:summary.monthly }}%"></span> <span class="muted small">{{ summary.everyday|share_of:summary.monthly }}%</span></td><td class="num">{{ summary.everyday|money0 }}</td><td class="num">{{ summary.everyday|times:12|money0 }}</td></tr>{% endif %}
       <tr class="total"><td>Total</td><td class="share-col"></td><td class="num">{{ summary.monthly|money0 }}</td><td class="num">{{ summary.monthly|times:12|money0 }}</td></tr>
       </tbody>
     </table>
@@ -44,7 +45,8 @@
     <h2>By account</h2>
     <p class="muted small">About this much goes from the NemKonto to each account every month.</p>
     <div class="flow">
-      {% for account, monthly in summary.accounts %}<div><span>{{ account.name }}{% if account.is_nemkonto %} <span class="muted small">stays on it, for its running budgets</span>{% endif %}</span><span class="num">{{ monthly|money0 }} a month</span></div>{% endfor %}
+      {% for account, monthly in summary.accounts %}<div><span>{{ account.name }}</span><span class="num">{{ monthly|money0 }} a month</span></div>{% endfor %}
+      {% if summary.everyday %}<div><span>Everyday spending <span class="muted small">stays on the NemKonto</span></span><span class="num">{{ summary.everyday|money0 }} a month</span></div>{% endif %}
     </div>
   </section>
 

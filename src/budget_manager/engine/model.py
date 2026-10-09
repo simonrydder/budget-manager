@@ -224,8 +224,9 @@ class BudgetState:
     ledgers: list[ExpenseLedger]
     incomes: list[Income]
     month: YearMonth  # budget month of the next close
-    nemkonto: int  # NemKonto balance before the income for ``month`` arrives
+    nemkonto: int  # NemKonto balance after the last month-end
     general_savings: int  # General Savings before the next close
+    everyday_spending: int = 0  # expected spending from the NemKonto itself, per month
 
     def __post_init__(self) -> None:
         roles = [account.role for account in self.accounts]

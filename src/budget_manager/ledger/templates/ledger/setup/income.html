@@ -50,7 +50,7 @@
       <h2>Each month</h2>
       <div class="flow">
         <div><span>Expected income</span><span class="num">{{ summary.income|money0 }}</span></div>
-        <div><span>Expenses (from the summary)</span><span class="num">−{{ summary.monthly|money0 }}</span></div>
+        <div><span>Expenses and everyday spending</span><span class="num">−{{ summary.monthly|money0 }}</span></div>
         <div class="total"><span>{% if summary.left_over >= 0 %}Left over for General Savings{% else %}Missing{% endif %}</span><span class="num {{ summary.left_over|tone }}">{{ summary.left_over|signed0 }}</span></div>
       </div>
       {% if summary.left_over < 0 %}

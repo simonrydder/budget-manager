@@ -65,7 +65,7 @@
 {% endif %}
 
 <section class="grid cols-4">
-  <div class="card"><span class="label">NemKonto now</span><span class="big {{ nemkonto_bank|tone }}">{{ nemkonto_bank|money }}</span>{% if nemkonto_bank != nemkonto %}<span class="small muted">{{ nemkonto|money }} free, the rest for running budgets</span>{% endif %}</div>
+  <div class="card"><span class="label">NemKonto</span><span class="big {{ nemkonto_bank|tone }}">{{ nemkonto_bank|money }}</span><span class="small muted">After the last month-end. Everyday spending comes out of this{% if everyday %} (about {{ everyday|money0 }} a month){% endif %}.</span></div>
   <div class="card"><span class="label">General Savings</span><span class="big {{ general_savings|tone }}">{{ general_savings|money }}</span></div>
   <div class="card"><span class="label">Set aside for expenses</span><span class="big {{ set_aside|tone }}">{{ set_aside|money }}</span></div>
   <div class="card">
@@ -94,8 +94,8 @@
             {% endfor %}
             {% if row.items|length > 4 %}<div class="muted"><span>+ {{ row.items|length|add:"-4" }} more</span></div>{% endif %}
             {% if row.account.holds_general_savings %}<div class="gs-line"><span><b>General Savings</b></span><span class="num {{ general_savings|tone }}"><b>{{ general_savings|money }}</b></span></div>{% endif %}
-            {% if row.account.is_nemkonto %}<div class="muted"><span>Keeps {{ preview.min_balance|money0 }}–{{ preview.max_balance|money0 }} free after transfers</span></div>{% endif %}
           </div>
+          {% if row.account.is_nemkonto %}<p class="small muted">Keeps {{ preview.min_balance|money0 }}–{{ preview.max_balance|money0 }} after each month-end for everyday spending.</p>{% endif %}
         </div>
         {% endfor %}
       </div>

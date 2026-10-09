@@ -233,12 +233,15 @@ def expense_board(request):
         if not columns[0]["cards"]:
             columns[0]["hint"] = "Drop expenses here to remove their category."
     else:
-        columns = [{"key": str(a.pk), "name": a.name, "cards": []} for a in budget.accounts.all()]
+        used = {card["expense"].account_id for card in active}
+        columns = [
+            {"key": str(a.pk), "name": a.name, "cards": []}
+            for a in budget.accounts.all()
+            if not a.is_nemkonto or a.pk in used  # only an expense put there earlier
+        ]
         index = {column["key"]: column for column in columns}
         for card in active:
             index[str(card["expense"].account_id)]["cards"].append(card)
-        nemkonto = budget.accounts.get(role=Role.NEMKONTO.value)
-        index[str(nemkonto.pk)]["hint"] = "Only running budgets, like everyday spending."
     for column in columns:
         column["monthly"] = sum(card["expense"].monthly_equivalent for card in column["cards"])
     context = {
@@ -469,12 +472,12 @@ def expense_move(request, pk: int):
             target = expense.category.name if expense.category else "Uncategorised"
         else:
             account = get_object_or_404(Account, pk=value, budget=budget)
-            if account.is_nemkonto and not expense.is_running:
+            if account.is_nemkonto:
                 return JsonResponse(
                     {
                         "ok": False,
-                        "error": "Only running budgets, like everyday spending, can use the "
-                        "NemKonto.",
+                        "error": "Expenses cannot use the NemKonto. What is spent from it is "
+                        "entered at each month-end.",
                     },
                     status=400,
                 )
