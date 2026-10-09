@@ -7,6 +7,8 @@ import argparse
 import os
 import sys
 
+from budget_manager import __version__
+
 
 def _django():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "budget_manager.web.settings")
@@ -24,7 +26,7 @@ def serve(host: str, port: int, threads: int) -> None:
     from budget_manager.web.wsgi import application
 
     call_command("migrate", interactive=False, verbosity=0)
-    print(f"Budget Manager is running on http://{host}:{port}/")
+    print(f"Budget Manager {__version__} is running on http://{host}:{port}/")
     print(f"Data is stored in {settings.DATA_DIR}")
     print(f"Accepting connections from: {', '.join(settings.ALLOWED_NETWORKS)}")
     waitress_serve(application, host=host, port=port, threads=threads)

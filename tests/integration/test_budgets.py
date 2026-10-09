@@ -226,13 +226,15 @@ def test_the_only_person_of_a_budget_cannot_be_deleted(client, budget, company, 
 def test_update_now_asks_the_launcher_to_update(client, household, settings, tmp_path):
     request_file = tmp_path / "update.request"
     settings.UPDATE_REQUEST_FILE = request_file
-    settings.VERSION = "a1b2c3d, 2026-10-09"
+    settings.VERSION = "1.2.0"
+    settings.COMMIT = "a1b2c3d, 2026-10-09"
 
     # Without the Windows launcher there is nothing to ask.
     settings.UPDATER = False
     page = client.get("/settings/").content.decode()
     assert "Update now</button>" not in page
-    assert "Running <b>a1b2c3d, 2026-10-09</b>" in page
+    assert "Running version <b>1.2.0</b> (commit a1b2c3d, 2026-10-09)" in page
+    assert "Version 1.2.0</span>" in page  # also at the bottom of the menu
     client.post("/settings/update/")
     assert not request_file.exists()
 

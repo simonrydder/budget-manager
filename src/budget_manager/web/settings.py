@@ -11,7 +11,8 @@ Environment variables:
 - ``BUDGET_DEBUG``: set to ``1`` during development.
 - ``BUDGET_UPDATER``: set to ``1`` by the Windows launcher, which updates and restarts the app
   when the *Update now* button in Settings asks for it.
-- ``BUDGET_VERSION``: the running version, shown in Settings (set by the Windows launcher).
+- ``BUDGET_COMMIT``: the commit the app runs, shown in Settings next to the version (set by
+  the Windows launcher).
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from __future__ import annotations
 import os
 import secrets
 from pathlib import Path
+
+from budget_manager import __version__
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("BUDGET_DATA_DIR", Path.cwd() / "data")).resolve()
@@ -46,7 +49,8 @@ DEBUG = os.environ.get("BUDGET_DEBUG") == "1"
 # restarts the app (scripts/windows/run-budget.ps1).
 UPDATER = os.environ.get("BUDGET_UPDATER") == "1"
 UPDATE_REQUEST_FILE = DATA_DIR / "update.request"
-VERSION = os.environ.get("BUDGET_VERSION", "")
+VERSION = __version__
+COMMIT = os.environ.get("BUDGET_COMMIT", "")
 ALLOWED_HOSTS = _list("BUDGET_ALLOWED_HOSTS", "*")
 ALLOWED_NETWORKS = _list(
     "BUDGET_ALLOWED_NETWORKS",

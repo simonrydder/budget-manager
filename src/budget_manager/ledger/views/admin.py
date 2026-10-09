@@ -33,6 +33,7 @@ def settings_view(request):
         "everyday": services.everyday_estimate(budget),
         "updater": settings.UPDATER,
         "version": settings.VERSION,
+        "commit": settings.COMMIT,
         "update_waiting": _update_waiting(),
     }
     return render(request, "ledger/settings.html", context)

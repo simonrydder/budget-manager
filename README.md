@@ -186,3 +186,10 @@ The code is in `src/budget_manager`:
 - `web/`: Django settings, URLs and the local-network check.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, …).
+
+Versions follow [Semantic Versioning](https://semver.org/). Every change merged into `prod`
+raises the version in `pyproject.toml` (then run `uv lock`) and adds a line to `CHANGELOG.md`:
+the last number for fixes (1.0.0 → 1.0.1), the middle one for new features (1.0.1 → 1.1.0) and
+the first one for changes that need something done by hand when updating. The app shows its
+version under **Settings → App version** and at the bottom of the menu, and the Windows launcher
+logs which version it updated from and to.

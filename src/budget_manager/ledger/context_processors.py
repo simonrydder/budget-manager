@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import DatabaseError
 
 from budget_manager.ledger import services
@@ -10,7 +11,11 @@ def navigation(request):
         return {}
     budget = getattr(request, "budget", None)
     try:
-        context = {"current_budget": budget, "my_budgets": list(user.budgets.all())}
+        context = {
+            "current_budget": budget,
+            "my_budgets": list(user.budgets.all()),
+            "app_version": settings.VERSION,
+        }
         if budget is None:
             return context
         started = services.budget_started(budget)

@@ -124,11 +124,11 @@ function Start-Server {
     }
     $env:BUDGET_DATA_DIR = $DataDir
     # Tells the app to offer "Update now" (this script watches for the request) and which
-    # version runs.
+    # commit runs; the app knows its own version number.
     $env:BUDGET_UPDATER = "1"
-    $env:BUDGET_VERSION = ""
+    $env:BUDGET_COMMIT = ""
     try {
-        $env:BUDGET_VERSION = (& $Git -C $RepoDir log -1 "--format=%h, %cd" --date=short).Trim()
+        $env:BUDGET_COMMIT = (& $Git -C $RepoDir log -1 "--format=%h, %cd" --date=short).Trim()
     } catch { }
     $command = "`"$Uv`" run --no-dev budget-manager serve --host 0.0.0.0 --port $Port >> `"$serverLog`" 2>&1"
     # cmd.exe /c strips the first and the last quote of the command line, so the whole
@@ -144,6 +144,15 @@ function Start-Server {
     }
     & taskkill.exe /PID $process.Id /T /F | Out-Null
     return $null
+}
+
+function Get-Version {
+    # The version number in pyproject.toml, with the commit: "1.2.0 (a1b2c3d)".
+    $commit = (& $Git -C $RepoDir rev-parse --short HEAD).Trim()
+    $line = Select-String -Path (Join-Path $RepoDir "pyproject.toml") -Pattern '^version = "(.+)"' |
+        Select-Object -First 1
+    if ($line) { return "$($line.Matches[0].Groups[1].Value) ($commit)" }
+    return $commit
 }
 
 function Update-Code([string]$Target) {
@@ -175,6 +184,7 @@ if (Test-Path $Database) {
 }
 
 $previous = (& $Git -C $RepoDir rev-parse HEAD).Trim()
+$previousVersion = Get-Version
 $updated = $false
 if (-not $NoUpdate) {
     try {
@@ -184,9 +194,9 @@ if (-not $NoUpdate) {
         $current = (& $Git -C $RepoDir rev-parse HEAD).Trim()
         $updated = $current -ne $previous
         if ($updated) {
-            Write-Log "Updated from $($previous.Substring(0, 7)) to $($current.Substring(0, 7))."
+            Write-Log "Updated from $previousVersion to $(Get-Version)."
         } else {
-            Write-Log "Already up to date ($($current.Substring(0, 7)))."
+            Write-Log "Already up to date: $(Get-Version)."
         }
     } catch {
         Write-Log "Could not update ($($_.Exception.Message)). Starting the current version."
@@ -197,10 +207,10 @@ if (-not $NoUpdate) {
     Invoke-Native $Uv @("sync", "--locked", "--no-dev", "--directory", $RepoDir)
 }
 
-Write-Log "Starting Budget Manager on port $Port (data in $DataDir)."
+Write-Log "Starting Budget Manager $(Get-Version) on port $Port (data in $DataDir)."
 $server = Start-Server
 if (-not $server -and $updated) {
-    Write-Log "The new version did not start. Going back to $($previous.Substring(0, 7))."
+    Write-Log "The new version did not start. Going back to $previousVersion."
     Write-Log "If the database was changed by the new version, restore it from $BackupDir."
     Update-Code $previous
     $server = Start-Server
