@@ -4,6 +4,13 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.2.0 (2026-10-09)
+
+- `BudgetManager.cmd`: one file to download from GitHub and double-click to run the app on
+  your own Windows computer. It installs uv (which brings Python and the app) without
+  administrator rights, gets the newest version on every start, opens the browser and only
+  accepts that computer.
+
 ## 1.1.0 (2026-10-09)
 
 - The Windows launcher checks `prod` for a new commit every 5 minutes (`-CheckMinutes`) and

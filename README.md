@@ -14,6 +14,20 @@ maximum using General Savings, and forecasts every account and expense into the 
 The rules it follows are described in [docs/requirements.md](docs/requirements.md) and
 [docs/design.md](docs/design.md).
 
+## Try it on your own Windows computer (one file)
+
+1. Open [BudgetManager.cmd](BudgetManager.cmd) on GitHub and click **Download raw file**
+   (the download icon above the file).
+2. Double-click the downloaded file. If Windows warns that it comes from the internet, choose
+   **Run** (or **More info → Run anyway**).
+
+The first time, it installs [uv](https://docs.astral.sh/uv/), which downloads Python and Budget
+Manager into your user folder; no administrator rights are needed. Every start gets the newest
+version (without internet it starts the one it has), then opens the app in the browser, where
+the first visit creates your login. Only that computer can use it: other devices cannot connect.
+Your data is in `%USERPROFILE%\BudgetManager`. Keep the window open while you use the app;
+closing it stops the app.
+
 ## Run it
 
 You need [uv](https://docs.astral.sh/uv/) and Python 3.12 or newer.
