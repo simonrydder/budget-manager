@@ -12,15 +12,14 @@
     <form method="post">{% csrf_token %}<button class="btn primary">Continue to interest</button></form>
   </div>
 {% else %}
-  <p class="lead">Enter what was actually spent on each expense in {{ previous.label }}. Leave a field empty if nothing was spent. Payments that were due are highlighted. {{ entered }} of {{ total }} have an amount.</p>
+  <p class="lead">Enter what was actually spent on each expense in {{ previous.label }}. Fixed payments that were due are filled in already; leave a field empty if nothing was spent. Payments that were due are highlighted. {{ entered }} of {{ total }} have an amount.</p>
   {% if opening_month %}<div class="notice info">You started the budget{% if started_on %} on {{ started_on|date:"j F" }}{% endif %}. The amounts already here are what you entered as spent before that; add what has been spent since.</div>{% endif %}
   {% if days_early %}<div class="notice warning">The month-end is in {{ days_early }} days. {{ previous.name }}'s spending may not be complete yet, but you can enter what you know and come back.</div>{% endif %}
   {% if errors %}<div class="notice danger">Some amounts could not be read. Check the fields marked below.</div>{% endif %}
   <form method="post" class="stack" style="gap:14px" novalidate>
     {% csrf_token %}
     <div class="row">
-      <button type="button" class="btn small" data-fill="input[data-fixed-due]" hidden>Fill fixed payments with expected amounts</button>
-      <button type="button" class="btn small" data-fill="input[data-due]" hidden>Fill all due payments</button>
+      <button type="button" class="btn small" data-fill="input[data-due]" hidden>Fill the other due payments with expected amounts</button>
     </div>
     <section class="entry-group">
       <header><h3>NemKonto</h3><span class="muted small">Everyday spending</span></header>

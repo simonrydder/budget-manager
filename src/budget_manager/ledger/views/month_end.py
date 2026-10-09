@@ -92,15 +92,36 @@ def _context(month: YearMonth, close: MonthClose, current: int, **extra):
         }
         for number, slug, _ in STEPS
     ]
+    last = services.last_closed(close.budget) if close.step == 1 else None
     return {
         "month": month,
         "previous": previous,
         "close": close,
         "steps": steps,
+        # The last finished step can be undone; right after a close, the close itself.
+        "undo": steps[close.step - 2] if close.step > 1 else None,
+        "reopen": last if last and last.budget_month == month - 1 else None,
         "current_step": current,
         "transfer_day": previous.last_day(),
         **extra,
     }
+
+
+@require_POST
+def undo_step(request, month: str):
+    """Mark the last finished step as not done, so the checklist continues from there. What
+    was entered stays and can be changed."""
+    guarded = _guard(request, month)
+    if not isinstance(guarded, tuple):
+        return guarded
+    month, close = guarded
+    if close.step > 1:
+        close.step -= 1
+        close.save(update_fields=["step"])
+        slug = next(slug for number, slug, _ in STEPS if number == close.step)
+        messages.success(request, "That step is open again. What you entered is kept.")
+        return redirect(f"month-end-{slug}", month=str(month))
+    return redirect("month-end")
 
 
 def _advance(close: MonthClose, to_step: int) -> None:
@@ -151,14 +172,25 @@ def spending(request, month: str):
         paid = ledger.expense.schedule.due_in(previous)
         due_amount = ledger.expense.amount_on(paid) if paid else 0
         expected = line.expected_spend if line else due_amount
+        value = entries.get(expense.id)
+        # A fixed payment costs what it always costs, so it is filled in (and can be changed).
+        # Payments before the budget was started were settled by the setup.
+        before_start = opening_month and budget.started_on and paid and paid < budget.started_on
+        suggested = (
+            expected
+            if expense.is_fixed and paid and expected and value is None and not before_start
+            else None
+        )
+        base = ledger.balance_after_close(previous)
         rows.append(
             {
                 "expense": expense,
-                "due": ledger.expense.schedule.due_in(previous),
+                "due": paid,
                 "expected": expected,
-                "value": entries.get(expense.id),
-                "base": ledger.balance_after_close(previous),
-                "after": ledger.balance_after_close(previous) - (entries.get(expense.id) or 0),
+                "value": value,
+                "suggested": suggested,
+                "base": base,
+                "after": base - (value if value is not None else suggested or 0),
             }
         )
 

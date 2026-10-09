@@ -4,7 +4,11 @@
     <h1>{{ title }}</h1>
     <p class="muted">The transfers on {{ transfer_day|date:"j F" }} pay for {{ month.label }}.</p>
   </div>
-  <div class="actions"><a class="btn small" href="{% url 'closes' %}">Earlier month-ends</a></div>
+  <div class="actions">
+    {% if undo %}<form method="post" action="{% url 'month-end-undo' month %}">{% csrf_token %}<button class="btn small" title="Mark step {{ undo.number }} as not done and go back to it. What you entered is kept.">Undo step {{ undo.number }}: {{ undo.label }}</button></form>
+    {% elif reopen %}<a class="btn small" href="{% url 'close-reopen' reopen.budget_month %}" title="Undo the last month-end">Reopen the month-end on {{ reopen.transfer_day|date:"j M" }}</a>{% endif %}
+    <a class="btn small" href="{% url 'closes' %}">Earlier month-ends</a>
+  </div>
 </div>
 <nav class="steps" aria-label="Month-end steps">
   {% for step in steps %}

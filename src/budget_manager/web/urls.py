@@ -37,6 +37,7 @@ urlpatterns = [
     path("month-end/<str:month>/transfers/", month_end.transfers, name="month-end-transfers"),
     path("month-end/<str:month>/check/", month_end.check, name="month-end-check"),
     path("month-end/<str:month>/close/", month_end.finish, name="month-end-close"),
+    path("month-end/<str:month>/undo/", month_end.undo_step, name="month-end-undo"),
     path("closes/", month_end.close_list, name="closes"),
     path("closes/<str:month>/", month_end.close_detail, name="close-detail"),
     path("closes/<str:month>/reopen/", month_end.close_reopen, name="close-reopen"),

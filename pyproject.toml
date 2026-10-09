@@ -1,6 +1,6 @@
 [project]
 name = "budget-manager"
-version = "1.4.0"
+version = "1.5.0"
 description = "Self-hosted budget manager for the home network"
 readme = "README.md"
 authors = [{ name = "simonrydder" }]

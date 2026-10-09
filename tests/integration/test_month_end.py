@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 import pytest
@@ -8,6 +9,7 @@ from budget_manager.ledger.models import (
     Expense,
     IncomeSource,
     MonthClose,
+    SpendingEntry,
     Transfer,
 )
 
@@ -221,3 +223,46 @@ def test_settings_change_the_limits_but_not_the_starting_point(client, budget, u
     assert (budget.name, budget.nemkonto_max, budget.forecast_months) == ("Home", 400000, 12)
     assert budget.start_month == date(2025, 5, 1)
     assert budget.nemkonto_opening == 300000
+
+
+def test_fixed_payments_due_are_filled_in(client, budget):
+    month_end(client, "2025-05")
+    page = client.get("/month-end/2025-06/spending/")
+    rows = {row["expense"].name: row for group in page.context["groups"] for row in group["rows"]}
+    # Rent is fixed and was due on 1 May: filled in, and can be changed.
+    assert (rows["Rent"]["suggested"], rows["Rent"]["after"]) == (1000000, 0)
+    text = page.content.decode()
+    field = re.search(rf'name="spent-{expense("Rent").id}"[^>]*value="([^"]*)"', text)
+    assert field.group(1) == "10.000,00"
+    assert "Filled in with the fixed amount" in text
+    # A running budget is not: only you know what was spent.
+    assert rows["Groceries"]["suggested"] is None
+
+
+def test_a_step_can_be_undone(client, budget):
+    month_end(client, "2025-05")
+    rent = expense("Rent")
+    client.post("/month-end/2025-06/spending/", {f"spent-{rent.id}": "10.000"})
+    client.post("/month-end/2025-06/interest/", {})
+    close = MonthClose.objects.get(month=date(2025, 6, 1))
+    assert close.step == 3
+    page = client.get("/month-end/2025-06/income/").content.decode()
+    assert "Undo step 2: May interest" in page
+
+    response = client.post("/month-end/2025-06/undo/")
+    assert response.url == client.at("/month-end/2025-06/interest/")
+    close.refresh_from_db()
+    assert close.step == 2
+    assert client.get("/month-end/").url == client.at("/month-end/2025-06/interest/")
+    # What was entered stays.
+    assert SpendingEntry.objects.get(expense=rent, month=date(2025, 5, 1)).amount == 1000000
+    client.post("/month-end/2025-06/undo/")
+    close.refresh_from_db()
+    assert close.step == 1
+
+
+def test_right_after_a_close_it_can_be_reopened(client, budget):
+    month_end(client, "2025-05")
+    page = client.get("/month-end/2025-06/spending/").content.decode()
+    assert "Reopen the month-end on 30 Apr" in page
+    assert client.at("/closes/2025-05/reopen/") in page
