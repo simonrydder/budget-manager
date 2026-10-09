@@ -202,11 +202,6 @@ class Expense(models.Model):
             return self.first_amount
         return self.amount
 
-    @property
-    def monthly_equivalent(self) -> int:
-        """The amount spread over its interval, for comparing expenses."""
-        return self.amount // self.interval_months if self.interval_months else 0
-
 
 class IncomeSource(models.Model):
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="incomes")

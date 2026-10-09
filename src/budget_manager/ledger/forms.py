@@ -15,7 +15,7 @@ from budget_manager.ledger.models import (
     Expense,
     IncomeSource,
 )
-from budget_manager.ledger.services import first_running_month
+from budget_manager.ledger.services import budget_started, first_running_month
 
 FREQUENCY_CHOICES = [(value, label) for value, label in FREQUENCIES.items()]
 
@@ -209,11 +209,17 @@ class ExpenseForm(forms.ModelForm):
         data = super().clean()
         account = data.get("account")
         if data.get("kind") == "running":
-            # Monthly, available from the first of the month.
+            # Monthly, available from the first of the month. The due date field is hidden for
+            # running budgets, so whatever it still holds is ignored: a new one covers the
+            # current month during the setup and the next month-end's month later on; one
+            # that has been running keeps its first month.
             data["interval_months"] = 1
-            first = data.get("first_due") or self.instance.first_due
-            if first is None:
-                first = first_running_month(self.instance.budget, date.today()).first_day()
+            budget = self.instance.budget
+            keep = self.instance.pk and self.instance.is_running and budget_started(budget)
+            if keep:
+                first = self.instance.first_due
+            else:
+                first = first_running_month(budget, date.today()).first_day()
             data["first_due"] = first.replace(day=1)
         elif not data.get("first_due") and "first_due" not in self.errors:
             self.add_error("first_due", "Enter the date it is due next.")

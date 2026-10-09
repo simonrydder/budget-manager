@@ -68,8 +68,14 @@ month-end.
    dates (due before today: paid; later: still on the account); only running expenses, like
    food, ask what has been spent so far this month. Each account's surplus or shortage is
    evened out through General Savings; the page lists those bank transfers and previews the
-   first month-end. **Start the budget** saves the starting point, and the overview keeps
-   showing the transfers until they are marked done.
+   first month-end. The preview shows, per account, what the first month-end sends next to
+   the usual monthly amount, and per expense what it gets; an expense with less set aside than
+   suggested gets more until its next payment. Recalculating only previews. **Start the
+   budget** saves the starting point, and the overview keeps showing the transfers until they
+   are marked done. The setup is then the ground truth: anything that was waiting under Balance
+   is dropped, since today's bank balances already hold it, and an expense that has ended gets
+   nothing set aside. Top-ups from General Savings are only offered once the budget is started.
+   A running budget always covers the month the budget is started in.
 
 The first month-end then asks for the rest of the current month's spending.
 

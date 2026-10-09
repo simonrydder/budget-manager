@@ -514,6 +514,26 @@ class MonthlyBalance:
         )
 
 
+def monthly_amounts(state: BudgetState) -> dict[int, int]:
+    """What each expense needs a month on average from the next month-end on: a repeating one
+    its amount divided by its interval, a one-off goal what is still missing spread over the
+    transfers left. Ended expenses need 0."""
+    month = state.month
+    amounts = {}
+    for ledger in state.ledgers:
+        expense = ledger.expense
+        due = expense.schedule.next_due(month)
+        interval = expense.schedule.interval_months
+        if due is None:
+            amounts[expense.id] = 0
+        elif interval:
+            amounts[expense.id] = expense.amount // interval
+        else:
+            missing = max(0, expense.amount - ledger.planned_balance_before(month))
+            amounts[expense.id] = missing // (month.months_until(YearMonth.of(due)) + 1)
+    return amounts
+
+
 def monthly_balance(budget: Budget, state: BudgetState | None = None) -> MonthlyBalance:
     """Average income and set-aside per month from the next month-end on.
 
@@ -523,19 +543,7 @@ def monthly_balance(budget: Budget, state: BudgetState | None = None) -> Monthly
     """
     state = state or build_state(budget)
     month = state.month
-    expenses = 0
-    for ledger in state.ledgers:
-        expense = ledger.expense
-        due = expense.schedule.next_due(month)
-        if due is None:
-            continue
-        interval = expense.schedule.interval_months
-        if interval:
-            expenses += expense.amount // interval
-        else:
-            missing = max(0, expense.amount - ledger.planned_balance_before(month))
-            expenses += missing // (month.months_until(YearMonth.of(due)) + 1)
-    expenses += state.everyday_spending
+    expenses = sum(monthly_amounts(state).values()) + state.everyday_spending
     income = 0
     for source in state.incomes:
         schedule = source.schedule
@@ -615,6 +623,18 @@ class StartPlan:
         return moves
 
 
+def align_running_budgets(budget: Budget, today: date) -> int:
+    """Before the first month-end, every running budget covers the month the budget is started
+    in: its money is already on the account. A later first month, saved by mistake through the
+    hidden due date field, is moved back. Returns how many were moved."""
+    if last_closed(budget) is not None:
+        return 0
+    opening = YearMonth.of(today).first_day()
+    return budget.expenses.filter(
+        kind=engine.Kind.RUNNING.value, start_month__isnull=True, first_due__gt=opening
+    ).update(first_due=opening)
+
+
 def plan_start(
     budget: Budget,
     today: date,
@@ -643,6 +663,8 @@ def plan_start(
             engine_expense(expense, opening + 1), start_month=opening + 1, opening_month=opening
         )
         suggested = model.suggested_starting_balance()
+        if expense.is_ended(today):
+            suggested = 0  # nothing more to pay, so nothing to set aside
         due = model.schedule.due_in(opening)
         # A bill due before today has been paid; what a running budget has used so far is asked.
         paid = not expense.is_running and due and due <= today
@@ -689,7 +711,9 @@ def apply_start(budget: Budget, plan: StartPlan, user) -> None:
     for item in plan.accounts:
         Account.objects.filter(pk=item.account.pk).update(start_balance=item.bank)
     SpendingEntry.objects.filter(expense__budget=budget, month=plan.opening.first_day()).delete()
-    budget.moves.filter(done=True).delete()  # already part of today's bank balances
+    # The setup is the ground truth: today's bank balances already hold every move made, and
+    # one still waiting would undo what the setup just evened out.
+    budget.moves.all().delete()
     for row in plan.rows:
         Expense.objects.filter(pk=row.expense.pk).update(
             starting_balance=row.set_aside, start_month=None
@@ -957,11 +981,8 @@ def setup_summary(budget: Budget, today: date) -> SetupSummary:
     return SetupSummary(groups, accounts, income, budget.everyday_spending)
 
 
-def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
-    """The first month-end as it will look if the budget is started with ``plan``, using the
-    expected income. None until the plan is complete."""
-    if not plan.complete or plan.general_savings < 0:
-        return None
+def preview_state(budget: Budget, plan: StartPlan) -> BudgetState:
+    """The budget as it will stand before its first month-end if it is started with ``plan``."""
     ledgers = []
     for row in plan.rows:
         model = replace(
@@ -972,7 +993,7 @@ def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
         )
         spending = {plan.opening: row.spent} if row.spent else {}
         ledgers.append(ExpenseLedger(model, spending=spending))
-    state = BudgetState(
+    return BudgetState(
         accounts=engine_accounts(budget),
         ledgers=ledgers,
         incomes=[engine_income(source) for source in budget.incomes.all()],
@@ -981,6 +1002,14 @@ def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
         general_savings=plan.general_savings,
         everyday_spending=budget.everyday_spending,
     )
+
+
+def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
+    """The first month-end as it will look if the budget is started with ``plan``, using the
+    expected income. None until the plan is complete."""
+    if not plan.complete or plan.general_savings < 0:
+        return None
+    state = preview_state(budget, plan)
     # Everyday spending from the NemKonto for the rest of the month (its balance is today's).
     last = plan.opening.last_day()
     rest = budget.everyday_spending * (last.day - plan.today.day) // last.day
