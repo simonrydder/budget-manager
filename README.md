@@ -36,7 +36,7 @@ through setting up your first budget. Add more people under **People** afterward
 | `--host` / `BUDGET_HOST` | `0.0.0.0` | Interface to listen on. |
 | `--port` / `BUDGET_PORT` | `8000` | Port. |
 | `BUDGET_DATA_DIR` | `./data` | Where the database (`budget.sqlite3`) and the secret key live. |
-| `BUDGET_ALLOWED_NETWORKS` | loopback and private ranges | Comma-separated networks allowed to connect, e.g. `192.168.1.0/24`. |
+| `BUDGET_ALLOWED_NETWORKS` | loopback, private ranges and Tailscale (`100.64.0.0/10`) | Comma-separated networks allowed to connect, e.g. `192.168.1.0/24`. Setting it replaces the whole default. |
 | `BUDGET_ALLOWED_HOSTS` | `*` | Host names Django accepts. |
 
 Do not forward the port on your router. The app also checks every connection itself and answers
@@ -89,12 +89,25 @@ Then `sudo systemctl enable --now budget-manager`.
 
    This adds a scheduled task called *Budget Manager* that starts the app when Windows starts and
    updates and restarts it every night at 03:30, and opens the port in the firewall for private
-   networks. Options: `-At 04:00`, `-Port 8080`, `-Branch <name>`. Remove it again with
+   networks and for Tailscale (the rule *Budget Manager (Tailscale)*, only `100.64.0.0/10`). Options: `-At 04:00`, `-Port 8080`, `-Branch <name>`. Remove it again with
    `-Uninstall`.
 
 The data lives in `%USERPROFILE%\BudgetManagerData` (`-DataDir` to change it), outside the
 code, so updates never touch it. Every start keeps a copy of the database in `backups` (the 30
 newest) and the server log in `logs\server.log`.
+
+### Access from outside with Tailscale
+
+To use the budget away from home, for example on your phone, without opening it to the
+internet:
+
+1. Install [Tailscale](https://tailscale.com/download) on the computer that runs the app and on
+   your phone, and sign in to both with the same account.
+2. On the phone, with Tailscale connected, open `http://<computer name>:8000`, for example
+   `http://living-room-pc:8000`. The computer name is the one shown in the Tailscale app.
+
+Tailscale's addresses are allowed by default and the Windows script opens the port for them.
+Never forward the port on your router: Tailscale reaches the computer without it.
 
 ### Back up
 
