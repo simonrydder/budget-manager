@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 from freezegun import freeze_time
 
+from budget_manager.ledger import services
 from budget_manager.ledger.models import (
     Account,
     Expense,
@@ -388,3 +389,25 @@ def test_starting_again_sets_aside_the_steady_amount(client, household, accounts
     client.post("/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"})
     insurance.refresh_from_db()
     assert insurance.starting_balance == 100000
+
+
+def test_starting_again_follows_a_moved_due_date(client, household, accounts):
+    """A bill paid earlier this month at the first start, whose next due date is then moved to
+    next month, is no longer paid this month when starting again (it was set aside nothing)."""
+    walk_to_transfers(client, accounts)
+    groceries = Expense.objects.get(name="Groceries")
+    client.post("/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"})
+    rent = Expense.objects.get(name="Rent")
+    assert SpendingEntry.objects.get(expense=rent).amount == 1000000  # due 1 October, paid
+    Expense.objects.filter(pk=rent.pk).update(first_due=date(2026, 11, 1))
+
+    plan = client.get("/start/transfers/").context["plan"]
+    rows = {row.expense.name: row for row in plan.rows}
+    assert (rows["Rent"].set_aside, rows["Rent"].spent, rows["Rent"].now) == (0, 0, 0)
+    assert rows["Groceries"].spent == 320000  # what was typed for a running budget stays
+    client.post("/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"})
+    assert not SpendingEntry.objects.filter(expense=rent).exists()
+    assert not any(
+        balance < 0
+        for balance in services.build_state(household).current_expense_balances().values()
+    )

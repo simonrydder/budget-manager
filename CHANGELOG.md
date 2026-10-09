@@ -4,6 +4,13 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.3.1 (2026-10-09)
+
+- Fix: starting a budget again reused a bill's payment from the first start even after its due
+  date had been moved to next month, so the bill was set aside nothing but still counted as
+  paid and showed a negative balance. Bills now always follow their current due date; only what
+  was typed for running budgets is kept.
+
 ## 1.3.0 (2026-10-09)
 
 - `BudgetManager.cmd` needs no login: the app only serves that computer, so it signs in by
