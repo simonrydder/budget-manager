@@ -176,3 +176,15 @@ def test_setup_asks_only_running_budgets_what_was_spent(client, household, accou
     plan = page.context["plan"]
     assert plan.nemkonto == 400000
     assert page.context["preview"].nemkonto_spent == 300000 * 24 // 31
+
+
+def test_a_running_budget_can_be_entered_as_what_is_left(client, budget):
+    """Next to what was spent, a running budget offers to type what is left instead (the page
+    works out the spending from what it had)."""
+    month_end(client, "2025-05")
+    page = client.get("/month-end/2025-06/spending/").content.decode()
+    groceries = expense("Groceries")
+    assert "Or type what is left of the 4.000,00 it had" in page
+    assert f'data-spent-from="400000" data-spent-to="spent-{groceries.id}"' in page
+    # Rent is a bill, so it has no such field.
+    assert f'data-spent-to="spent-{expense("Rent").id}"' not in page

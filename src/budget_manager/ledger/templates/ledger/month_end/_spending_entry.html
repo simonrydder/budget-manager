@@ -1,9 +1,10 @@
 {% load budget %}{% with expense=row.expense %}
 <div class="entry{% if row.due %} due{% endif %}">
-  <label class="name" for="spent-{{ expense.id }}">
-    <span><b>{{ expense.name }}</b> {% include "ledger/_kind.html" %}</span>
+  <div class="name">
+    <span><label for="spent-{{ expense.id }}"><b>{{ expense.name }}</b></label> {% include "ledger/_kind.html" %}</span>
     <small>{% if expense.is_running and row.due %}Spent during {{ previous.name }} · budget {{ row.expected|money }}{% elif row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}{% if row.suggested is not None and row.raw is None %}<br><span class="muted">Filled in with the fixed amount; change it if it cost something else.</span>{% endif %}</small>
-  </label>
+    {% if expense.is_running and row.due %}<small class="calc" hidden>Or type what is left of the {{ row.base|money }} it had: <input type="text" class="amount" inputmode="decimal" autocomplete="off" aria-label="Left of {{ expense.name }}" data-spent-from="{{ row.base }}" data-spent-to="spent-{{ expense.id }}" placeholder="Left"></small>{% endif %}
+  </div>
   <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
          id="spent-{{ expense.id }}" name="spent-{{ expense.id }}" placeholder="0,00"
          value="{% if row.raw is not None %}{{ row.raw }}{% elif row.value is not None %}{{ row.value|money_input }}{% else %}{{ row.suggested|money_input }}{% endif %}"

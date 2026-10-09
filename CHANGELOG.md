@@ -4,6 +4,12 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.6.0 (2026-10-09)
+
+- Running budgets (food, fuel, …) can be entered as what was spent or as what is left: in
+  month-end step 1 and setup step 5, typing what is left works out the spending, and typing the
+  spending shows what is left.
+
 ## 1.5.0 (2026-10-09)
 
 - Month-end step 1 fills in the fixed payments that were due with their amount (change it if
