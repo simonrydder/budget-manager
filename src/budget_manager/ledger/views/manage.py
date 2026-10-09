@@ -385,6 +385,11 @@ def expense_detail(request, pk: int):
         "balance": balance,
         "history": list(reversed(history)),
         "upcoming": upcoming,
+        "first_payment": (
+            expense.first_amount
+            if upcoming and expense.first_amount is not None and upcoming[0] == expense.first_due
+            else None
+        ),
         "plan_rows": plan_rows,
         "next_contribution": points[0].close.lines[expense.id].contribution,
         "waiting": [item for item in waiting if item is not pending_release],

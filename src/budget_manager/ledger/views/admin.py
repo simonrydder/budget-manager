@@ -25,6 +25,7 @@ def settings_view(request):
         "form": form,
         "started": services.budget_started(budget),
         "running": services.last_closed(budget) is not None,
+        "everyday": services.everyday_estimate(budget),
     }
     return render(request, "ledger/settings.html", context)
 

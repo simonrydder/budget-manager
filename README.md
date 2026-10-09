@@ -123,7 +123,8 @@ as `demo` / `demo`. Run it again with `--name Other` for a second budget.
       roughly what you spend from the NemKonto in a month,
    2. **Expenses:** every expense with its amount, how often it is paid and when it is due next
       (fixed, variable bills, or running budgets like food that need no due date), and the
-      categories they belong to,
+      categories they belong to. If the next payment is a different amount, for example one
+      that covers two months, enter that too,
    3. **Summary:** what the expenses cost a month, per category and in total,
    4. **Income:** what you expect to arrive, compared with the expenses,
    5. **Transfers:** what each expense should have by now so it saves the same every month, the

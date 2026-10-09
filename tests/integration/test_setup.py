@@ -112,6 +112,9 @@ def test_step_two_adds_and_removes_expenses(client, household, accounts):
     assert "Gym" in page and "next due 15 Oct 2026" in page
     assert "Added <b>Gym</b>" in page  # shown by the form, which the page jumps to
     assert "autofocus" in page  # ready for the next one
+    # Each category can be collapsed to its header, which shows what it costs a month.
+    assert '<details class="entry-group" open data-remember="setup-group-none">' in page
+    assert "≈ <b>300</b> a month" in page
     gym = Expense.objects.get(name="Gym")
     assert gym.budget == household and gym.start_month is None
     client.post("/start/expenses/", {"action": "remove", "expense": gym.id})
@@ -285,3 +288,37 @@ def test_categories_can_be_added_renamed_and_removed_in_the_setup(client, househ
     assert b"Removed Animals. Its 1 expense is now uncategorised." in response.content
     assert Expense.objects.get(name="Vet").category is None
     assert not household.categories.filter(pk=pets.pk).exists()
+
+
+def test_a_next_payment_that_covers_two_months(client, household, accounts):
+    """Starting on 7 October with a subscription of 1.000 a month whose payment on 1 November
+    covers October and November."""
+    walk_to_transfers(client, accounts)
+    data = {
+        "action": "add",
+        "name": "Streaming",
+        "amount": "1.000",
+        "interval_months": 1,
+        "first_due": "2026-11-01",
+        "first_amount": "2.000",
+        "account": accounts["Budget"].id,
+        "category": "",
+        "kind": "fixed",
+    }
+    client.post("/start/expenses/", data)
+    streaming = Expense.objects.get(name="Streaming")
+    assert (streaming.amount, streaming.first_amount) == (100000, 200000)
+    assert "next due 1 Nov 2026 (2.000)" in client.get("/start/expenses/").content.decode()
+
+    preview = client.post("/start/transfers/", {"action": "preview"})
+    rows = {row.expense.name: row for row in preview.context["plan"].rows}
+    # The extra 1.000 is set aside from General Savings now, so the transfer stays 1.000.
+    assert rows["Streaming"].set_aside == 100000
+    line = preview.context["preview"].lines[streaming.id]
+    assert (line.contribution, line.expected_spend) == (100000, 200000)
+
+    # A running budget, or the same amount, has no separate first payment.
+    client.post("/start/expenses/", {**data, "name": "Fuel", "kind": "running", "first_due": ""})
+    assert Expense.objects.get(name="Fuel").first_amount is None
+    client.post("/start/expenses/", {**data, "name": "Gym", "first_amount": "1.000"})
+    assert Expense.objects.get(name="Gym").first_amount is None

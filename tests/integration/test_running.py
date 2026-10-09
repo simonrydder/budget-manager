@@ -18,7 +18,9 @@ def test_everyday_spending_comes_out_of_the_nemkonto(client, budget, accounts):
     budget.everyday_spending = 300000
     budget.save()
     month_end(client, "2025-05")  # the first month-end: nothing spent yet
-    assert MonthClose.objects.get(month=date(2025, 5, 1)).nemkonto_end == 500000
+    may = MonthClose.objects.get(month=date(2025, 5, 1))
+    assert may.nemkonto_end == 500000
+    assert may.nemkonto_spent is None  # not entered, so it does not count as an average month
 
     # Before the June month-end: the NemKonto started with 5.000 and 3.600 was spent from it.
     page = client.get("/month-end/2025-06/spending/").content.decode()
@@ -33,9 +35,36 @@ def test_everyday_spending_comes_out_of_the_nemkonto(client, budget, accounts):
     assert (june.surplus, june.nemkonto_end) == (467200, 500000)
     assert "− Spent from it" in client.get("/closes/2025-06/").content.decode()
 
-    # The forecast expects the usual amount from then on.
+    # One month recorded: until there are three, the settings amount fills the gap,
+    # (3.600 + 3.000 + 3.000) / 3.
     points = services.forecast(budget, 2)
-    assert [point.close.nemkonto_spent for point in points] == [300000, 300000]
+    assert [point.close.nemkonto_spent for point in points] == [320000, 320000]
+
+
+def test_the_expected_everyday_spending_follows_the_last_six_month_ends(budget):
+    budget.everyday_spending = 300000
+    budget.save()
+    assert services.everyday_estimate(budget).amount == 300000
+
+    def close(month, spent):
+        MonthClose.objects.create(
+            budget=budget, month=month, status=MonthClose.Status.CLOSED, nemkonto_spent=spent
+        )
+
+    # Started on 30 April: the first month-end only covers one day, so it does not count.
+    close(date(2025, 5, 1), 10000)
+    assert services.everyday_estimate(budget).months == 0
+    close(date(2025, 6, 1), 420000)
+    estimate = services.everyday_estimate(budget)
+    assert (estimate.amount, estimate.months, estimate.from_history) == (340000, 1, False)
+    for number, spent in enumerate([200000, 260000, 330000, 280000, 250000, 400000]):
+        close(date(2025, 7 + number, 1), spent)
+    # The last six: 2.000, 2.600, 3.300, 2.800, 2.500 and 4.000, 2.866,67 rounded to whole kroner. June is too old.
+    estimate = services.everyday_estimate(budget)
+    assert (estimate.amount, estimate.months, estimate.from_history) == (286700, 6, True)
+    # A month-end without the amount (from before it was asked) is skipped.
+    close(date(2026, 1, 1), None)
+    assert services.everyday_estimate(budget).amount == 286700
 
 
 def test_the_month_end_warns_when_nemkonto_spending_is_missing(client, budget):

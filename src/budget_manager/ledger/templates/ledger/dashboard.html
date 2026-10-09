@@ -132,7 +132,7 @@
           <tr>
             <td class="nowrap">{{ row.date|date:"j M" }}</td>
             <td><a href="{% url 'expense-detail' row.expense.id %}">{{ row.expense.name }}</a></td>
-            <td class="num">{{ row.expense.amount|money }}</td>
+            <td class="num">{{ row.amount|money }}</td>
             <td class="num">{% if row.short %}<span class="chip warn" title="Balance {{ row.balance|money }}">short {{ row.short|money0 }}</span>{% else %}<span class="chip ok">ready</span>{% endif %}</td>
           </tr>
         {% endfor %}

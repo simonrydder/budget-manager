@@ -155,6 +155,12 @@ class Expense(models.Model):
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="expenses")
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=Kind.FIXED.value)
     amount = models.BigIntegerField()
+    first_amount = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="The payment on the first due date, when it is a different amount (for "
+        "example one that covers two months). Empty: the normal amount.",
+    )
     interval_months = models.PositiveSmallIntegerField(default=1)
     first_due = models.DateField()
     end_date = models.DateField(null=True, blank=True)
@@ -189,6 +195,12 @@ class Expense(models.Model):
 
     def is_ended(self, on: date | None = None) -> bool:
         return self.end_date is not None and self.end_date < (on or date.today())
+
+    def amount_on(self, due: date | None) -> int:
+        """The amount of the payment due on ``due``."""
+        if due is not None and due == self.first_due and self.first_amount is not None:
+            return self.first_amount
+        return self.amount
 
     @property
     def monthly_equivalent(self) -> int:

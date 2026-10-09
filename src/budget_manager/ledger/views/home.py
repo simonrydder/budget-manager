@@ -62,7 +62,8 @@ def upcoming_payments(state, balances, days: int = 60) -> list[dict]:
                 "date": due,
                 "expense": expense,
                 "balance": balance,
-                "short": max(0, expense.amount - balance),
+                "amount": expense.amount_on(due),
+                "short": max(0, expense.amount_on(due) - balance),
             }
         )
     return sorted(rows, key=lambda row: (row["date"], row["expense"].name))
@@ -157,7 +158,7 @@ def dashboard(request):
         "general_savings": state.general_savings,
         "nemkonto": state.nemkonto,
         "nemkonto_bank": account_balances[state.nemkonto_account.id],
-        "everyday": budget.everyday_spending,
+        "everyday": state.everyday_spending,
         "set_aside": sum(balances.values()),
         "upcoming": upcoming_payments(state, balances),
         "attention": budget_warning(budget, state) + attention(points, state, balances),

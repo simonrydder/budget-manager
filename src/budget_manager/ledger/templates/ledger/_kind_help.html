@@ -1,0 +1,6 @@
+<ul class="kind-help">
+  <li><b>Fixed</b>: the same amount on its due date, like rent or insurance.{% if detail %} If it costs more, General Savings covers the difference and the expected amount is raised.{% endif %}</li>
+  <li><b>Variable</b>: paid on its due date, but the amount varies, like power or heating.</li>
+  <li><b>Running</b>: spent bit by bit through the month, like food or fuel. It is monthly and needs no due date.</li>
+  {% if detail %}<li>Variable and running expenses may go below zero or build up; adjust the amount if that keeps happening.</li>{% endif %}
+</ul>

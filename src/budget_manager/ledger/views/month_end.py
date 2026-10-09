@@ -143,7 +143,8 @@ def spending(request, month: str):
         if first_close or (ended and expense.id not in entries):
             continue
         line = ledger.lines.get(previous)
-        due_amount = ledger.expense.amount if ledger.expense.schedule.due_in(previous) else 0
+        paid = ledger.expense.schedule.due_in(previous)
+        due_amount = ledger.expense.amount_on(paid) if paid else 0
         expected = line.expected_spend if line else due_amount
         rows.append(
             {
@@ -159,7 +160,7 @@ def spending(request, month: str):
     errors = {}
     nemkonto = {
         "start": state.nemkonto,
-        "expected": budget.everyday_spending,
+        "expected": state.everyday_spending,
         "value": close.nemkonto_spent,
         "raw": None,
         "error": None,

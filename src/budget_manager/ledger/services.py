@@ -102,6 +102,7 @@ def engine_expense(
         account_id=expense.account_id,
         kind=engine.Kind(expense.kind),
         amount=expense.amount,
+        first_amount=expense.first_amount,
         schedule=Schedule(expense.first_due, expense.interval_months, expense.end_date),
         start_month=ym(expense.start_month) if expense.start_month else start,
         starting_balance=expense.starting_balance,
@@ -192,8 +193,51 @@ def build_state(budget: Budget) -> BudgetState:
         month=month,
         nemkonto=nemkonto,
         general_savings=general_savings,
-        everyday_spending=budget.everyday_spending,
+        everyday_spending=everyday_estimate(budget).amount,
     )
+
+
+# --- Everyday spending from the NemKonto ---------------------------------------------------
+
+#: The expected everyday spending is the average of this many recent month-ends...
+EVERYDAY_MONTHS = 6
+#: ...and until this many have it, the amount from the settings fills the gap.
+EVERYDAY_SETTLED = 3
+
+
+@dataclass(frozen=True)
+class EverydayEstimate:
+    amount: int  # expected spending from the NemKonto in a month
+    months: int  # recent month-ends it is based on
+    setting: int  # the rough amount from the settings
+
+    @property
+    def from_history(self) -> bool:
+        return self.months >= EVERYDAY_SETTLED or not self.setting
+
+
+def everyday_estimate(budget: Budget) -> EverydayEstimate:
+    """What is expected to be spent from the NemKonto in a month: the average of the last six
+    closed month-ends that recorded it. Until there are three, the amount from the settings
+    counts for the missing ones, so one unusual month does not swing the forecast.
+
+    The first month-end after a start in the middle of a month only covers part of that month,
+    so it is left out.
+    """
+    closes = budget.closes.filter(
+        status=MonthClose.Status.CLOSED, nemkonto_spent__isnull=False
+    ).order_by("-month")
+    if budget.started_on and budget.started_on.day > 1:
+        closes = closes.exclude(month=budget.start.first_day())
+    recorded = list(closes.values_list("nemkonto_spent", flat=True)[:EVERYDAY_MONTHS])
+    setting = budget.everyday_spending
+    values = list(recorded)
+    if setting and len(values) < EVERYDAY_SETTLED:
+        values += [setting] * (EVERYDAY_SETTLED - len(values))
+    if not values:
+        return EverydayEstimate(0, 0, setting)
+    average = sum(values) / len(values)
+    return EverydayEstimate(round(average / 100) * 100, len(recorded), setting)
 
 
 # --- Month-end inputs ---------------------------------------------------------------------------
@@ -287,7 +331,7 @@ def forecast(
 
 @transaction.atomic
 def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
-    state, plan, _ = plan_next_close(budget)
+    state, plan, inputs = plan_next_close(budget)
     if state.month != month:
         raise CloseError(f"The next month-end is {state.month.label}, not {month.label}.")
     if plan.shortfall:
@@ -304,7 +348,8 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
     close.closed_by = user
     close.closed_at = timezone.now()
     close.nemkonto_before = plan.nemkonto_before
-    close.nemkonto_spent = plan.nemkonto_spent
+    # Left empty when it was not entered, so it does not count towards the expected amount.
+    close.nemkonto_spent = inputs.nemkonto_spent
     close.income = plan.income
     close.interest = plan.interest_total
     close.contributions = plan.contributions_total
@@ -490,7 +535,7 @@ def monthly_balance(budget: Budget, state: BudgetState | None = None) -> Monthly
         else:
             missing = max(0, expense.amount - ledger.planned_balance_before(month))
             expenses += missing // (month.months_until(YearMonth.of(due)) + 1)
-    expenses += budget.everyday_spending
+    expenses += state.everyday_spending
     income = 0
     for source in state.incomes:
         schedule = source.schedule
@@ -601,7 +646,7 @@ def plan_start(
         due = model.schedule.due_in(opening)
         # A bill due before today has been paid; what a running budget has used so far is asked.
         paid = not expense.is_running and due and due <= today
-        default_spent = expense.amount if paid else 0
+        default_spent = model.amount_on(due) if paid else 0
         chosen = set_aside.get(expense.id)
         if again and expense.start_month is None:
             default_spent = entered.get(expense.id, 0)

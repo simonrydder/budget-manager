@@ -175,3 +175,43 @@ def test_monthly_budget_already_running_counts_this_months_payment():
 def test_one_off_goal_has_no_suggestion():
     school = started_mid_month(60000, date(2030, 8, 1), 0)
     assert school.expense.suggested_starting_balance() is None
+
+
+def test_a_first_payment_that_covers_two_months():
+    """A subscription of 1.000 a month whose first payment, on 1 June, is 2.000."""
+    sub = expense(1, 1000, date(2025, 6, 1), start=YearMonth(2025, 6))
+    sub.expense = replace(sub.expense, first_amount=kr(2000))
+    assert sub.expense.amount_on(date(2025, 6, 1)) == kr(2000)
+    assert sub.expense.amount_on(date(2025, 7, 1)) == kr(1000)
+    # To keep 1.000 a month, the extra 1.000 is set aside when starting.
+    assert sub.expense.suggested_starting_balance() == kr(1000)
+    budget = state([sub], month=YearMonth(2025, 6))
+    plans = run_months(budget, 3)
+    # Nothing set aside: the first month-end pays all of it, then 1.000 a month.
+    assert [p.lines[1].contribution for p in plans] == [kr(2000), kr(1000), kr(1000)]
+    assert [p.lines[1].expected_spend for p in plans] == [kr(2000), kr(1000), kr(1000)]
+
+    started = expense(1, 1000, date(2025, 6, 1), start=YearMonth(2025, 6), starting_balance=1000)
+    started.expense = replace(started.expense, first_amount=kr(2000))
+    plans = run_months(state([started], month=YearMonth(2025, 6)), 3)
+    assert [p.lines[1].contribution for p in plans] == [kr(1000)] * 3
+
+
+def test_a_larger_first_payment_of_a_quarterly_bill_is_saved_for_evenly():
+    water = expense(1, 1500, date(2025, 7, 1), 3)
+    water.expense = replace(water.expense, first_amount=kr(2400))
+    plans = run_months(state([water]), 6)
+    # May–July save 2.400 (800 each), August–October the usual 1.500 (500 each).
+    assert [p.lines[1].contribution for p in plans] == [kr(800)] * 3 + [kr(500)] * 3
+
+
+def test_a_dearer_first_payment_does_not_raise_the_usual_amount():
+    sub = expense(1, 1000, date(2025, 5, 1))
+    sub.expense = replace(sub.expense, first_amount=kr(2000))
+    budget = state([sub])
+    apply_close(budget, plan_close(budget, income=kr(10000)))
+    sub.spending[MAY] = kr(2100)
+    plan = plan_close(budget, income=kr(10000))
+    assert plan.lines[1].topup == kr(100)
+    assert plan.lines[1].amount_after is None
+    assert plan.lines[1].contribution == kr(1000)

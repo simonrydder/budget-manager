@@ -69,6 +69,7 @@ def forecast(request):
         "trends": trend_cards(points, accounts, marker=index),
         "warnings": warnings[:12],
         "expected_income": point.close.income,
+        "everyday": services.everyday_estimate(budget),
     }
     return render(request, "ledger/forecast.html", context)
 

@@ -42,6 +42,7 @@ An expense is a planned cost that money is set aside for. Each expense has:
   - **One-off savings goal**, e.g. a boarding-school stay in 2030. The app calculates the required monthly contribution.
   - **Recurring savings goal**, e.g. a summer holiday needing 30,000 by March 1st every year.
 - An optional **starting balance**, meaning money already in the linked account for this expense.
+- An optional **different first payment**, for when the payment on the first due date is not the usual amount. Example: a subscription of 1,000 a month whose first payment covers two months (2,000). Later payments are the usual amount. When the budget is started, the extra part is set aside from General Savings, so the monthly contribution stays 1,000.
 - An optional **end date**. Ending an expense (e.g. cancelling Disney+) stops contributions from then on, and the money left on it returns to General Savings.
 - An **expense type**, either fixed or variable (see below).
 
@@ -52,7 +53,7 @@ An expense is a planned cost that money is set aside for. Each expense has:
 - **Fixed expenses** have a relatively stable amount, paid on a due date (e.g. insurance). If the balance goes negative, the missing amount is taken from General Savings and the expense's expected amount is updated to match the real cost.
 - **Variable expenses** are bills paid on a due date whose amount varies (e.g. power, heating).
 - **Running expenses** are spent bit by bit through the month (e.g. food, fuel, parking: 100 set aside per month, sometimes less is spent, sometimes more). They are monthly and have no due date.
-- **Everyday spending from the NemKonto** is not an expense: what the NemKonto keeps after a month-end (between X and Y) is the money for it. At each month-end the actual spending from the NemKonto is entered, and the month-end refills the NemKonto to between X and Y. An expected amount per month is used for the forecast.
+- **Everyday spending from the NemKonto** is not an expense: what the NemKonto keeps after a month-end (between X and Y) is the money for it. At each month-end the actual spending from the NemKonto is entered, and the month-end refills the NemKonto to between X and Y. The forecast expects the average of the last six month-ends. Until three month-ends have recorded it, the rough monthly amount from the settings fills in for the missing ones.
 - For variable and running expenses the balance may go negative or build up, and it is the user's responsibility to adjust the amount.
 
 ### Actual spending

@@ -22,7 +22,7 @@
   <div class="card"><span class="label">Balance now</span><span class="big {{ balance|tone }}">{{ balance|money }}</span></div>
   <div class="card"><span class="label">Next contribution</span><span class="big">{{ next_contribution|money }}</span><span class="small muted">at the coming month-end</span></div>
   <div class="card"><span class="label">Next due</span>
-    {% if upcoming %}<span class="big">{{ upcoming.0|date:"j M Y" }}</span><span class="small muted">then {% for day in upcoming|slice:"1:" %}{{ day|date:"j M Y" }}{% if not forloop.last %}, {% endif %}{% empty %}nothing more{% endfor %}</span>{% else %}<span class="big muted">Nothing due</span>{% endif %}
+    {% if upcoming %}<span class="big">{{ upcoming.0|date:"j M Y" }}</span>{% if first_payment is not None %}<span class="small">This payment is {{ first_payment|money }}; later ones {{ expense.amount|money }}.</span>{% endif %}<span class="small muted">then {% for day in upcoming|slice:"1:" %}{{ day|date:"j M Y" }}{% if not forloop.last %}, {% endif %}{% empty %}nothing more{% endfor %}</span>{% else %}<span class="big muted">Nothing due</span>{% endif %}
   </div>
 </section>
 
