@@ -29,14 +29,25 @@
       {% for card in column.cards %}
       {% with expense=card.expense %}
       <a class="xcard" href="{% url 'expense-detail' expense.id %}" draggable="true" data-id="{{ expense.id }}" data-move="{% url 'expense-move' expense.id %}">
-        <span class="top"><b>{{ expense.name }}</b><span class="num">{{ expense.amount|money }}</span></span>
-        <span class="meta">
-          <span>{{ expense.frequency }}{% if card.next_due %} · next {{ card.next_due|date:"j M Y" }}{% endif %}</span>
+        <span class="top"><b>{{ expense.name }}</b><span class="num muted">{{ card.monthly|money0 }} / month</span></span>
+        {% if card.shape == "running" %}
+        <span class="line"><span>Spent through {{ card.this_month.name }}</span><span>refilled {{ card.refill|date:"j M" }}</span></span>
+        {% elif card.shape == "goal" %}
+        <span class="line"><span>Goal <b class="num">{{ card.target|money }}</b> by <b>{{ card.next_due|date:"M Y" }}</b></span>{% if card.next_due %}<span>{% if card.months %}{{ card.months }} month{{ card.months|pluralize }}{% else %}this month{% endif %}</span>{% endif %}</span>
+        {% elif card.next_due %}
+        <span class="line"><span>Next <b class="num">{{ card.target|money }}</b> on <b>{{ card.next_due|date:"j M" }}</b></span><span>{% if card.days == 0 %}today{% elif card.days == 1 %}tomorrow{% else %}in {{ card.days }} days{% endif %}</span></span>
+        {% else %}
+        <span class="line"><span>Nothing due</span></span>
+        {% endif %}
+        {% if card.target %}<span class="progress{% if card.shape == 'running' %} running{% endif %}{% if card.status.0 == 'warn' %} warn{% elif card.status.0 == 'bad' %} bad{% endif %}" role="img" aria-label="{{ card.percent }}% there"><i style="width:{{ card.percent }}%"></i></span>{% endif %}
+        <span class="line">
+          <span><b class="num {{ card.balance|tone }}">{{ card.balance|money }}</b>{% if card.shape == "running" %} left of {{ card.target|money0 }}{% elif card.shape == "goal" %} saved{% elif card.target %} of {{ card.target|money0 }} there{% else %} balance{% endif %}</span>
+          {% if card.status %}<span class="{{ card.status.0 }}-text">{{ card.status.1 }}</span>{% endif %}
         </span>
         <span class="meta">
           {% if group == "category" %}<span class="chip">{{ expense.account.name }}</span>{% else %}<span class="chip">{{ expense.category.name|default:"Uncategorised" }}</span>{% endif %}
           {% include "ledger/_kind.html" %}
-          <span class="{{ card.balance|tone }}">Balance {{ card.balance|money }}</span>
+          {% if card.shape == "bill" %}<span class="chip">{{ expense.frequency|lower }}</span>{% elif card.shape == "goal" %}<span class="chip">one-off goal</span>{% endif %}
         </span>
       </a>
       {% endwith %}

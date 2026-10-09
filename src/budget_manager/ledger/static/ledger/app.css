@@ -302,7 +302,18 @@ details.entry-group:not([open]) > summary h3::before { content: "▸"; }
 .xcard.dragging { opacity: 0.45; }
 .xcard .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .xcard .top b { font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
-.xcard .meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.8rem; color: var(--muted); align-items: center; }
+.xcard .meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 0.8rem; color: var(--muted); align-items: center; margin-top: 2px; }
+.xcard .line { display: flex; justify-content: space-between; gap: 8px; font-size: 0.84rem; color: var(--muted); align-items: baseline; }
+.xcard .line b { color: var(--ink); font-weight: 650; }
+.xcard .line b.neg { color: var(--neg); }
+.xcard .line > span:last-child { white-space: nowrap; }
+.progress { display: block; height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; margin: 2px 0; }
+.progress > i { display: block; height: 100%; background: var(--accent); }
+.progress.running > i { background: var(--pos); }
+.progress.warn > i { background: var(--warn); }
+.progress.bad > i { background: var(--neg); }
+.ok-text { color: var(--pos); }
+.bad-text { color: var(--neg); }
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
   padding: 10px 16px; border-radius: 8px; font-weight: 500; z-index: 50; max-width: calc(100vw - 32px); box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);

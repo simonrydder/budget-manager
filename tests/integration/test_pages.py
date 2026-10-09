@@ -1,11 +1,12 @@
 from datetime import date
 
 import pytest
+from freezegun import freeze_time
 from django.contrib.auth import get_user_model
 from django.test import Client
 
 from budget_manager.ledger import services
-from budget_manager.ledger.models import Category, Expense
+from budget_manager.ledger.models import Category, Expense, SpendingEntry
 from budget_manager.web.middleware import is_allowed, parse_networks
 
 from .test_month_end import month_end
@@ -370,3 +371,38 @@ def test_board_totals_count_one_off_goals_like_the_month_end(client, budget, acc
     # The month-end transfers the same for the car. Holiday has nothing saved yet, so until its
     # payment in March it catches up: 30.000 over 11 transfers, more than the average.
     assert contributions == {"New car": 100000, "Holiday": 272800}
+
+
+def test_expense_cards_show_the_month_balance_and_next_payment(client, budget, user):
+    """Each card: what it takes a month, the next payment and when, how much of it is there."""
+    month_end(client, "2025-05")
+    SpendingEntry.objects.create(
+        expense=Expense.objects.get(name="Rent"), month=date(2025, 5, 1), amount=1100000
+    )
+    SpendingEntry.objects.create(
+        expense=Expense.objects.get(name="Holiday"), month=date(2025, 5, 1), amount=100000
+    )
+    SpendingEntry.objects.create(
+        expense=Expense.objects.get(name="Groceries"), month=date(2025, 5, 1), amount=100000
+    )
+    with freeze_time("2025-05-20"):
+        page = client.get("/expenses/?group=account")
+    cards = {
+        card["expense"].name: card for column in page.context["columns"] for card in column["cards"]
+    }
+    rent, holiday, groceries = cards["Rent"], cards["Holiday"], cards["Groceries"]
+    assert (rent["monthly"], rent["target"], rent["days"]) == (1000000, 1000000, 12)
+    assert rent["status"] == ("bad", "below zero")  # 11.000 paid, 10.000 expected
+    # Holiday saves 30.000 over 11 transfers; 1.000 was taken from it.
+    assert (holiday["balance"], holiday["percent"]) == (172800, 6)
+    assert holiday["status"] == ("warn", "short 1.000,00")
+    assert (groceries["shape"], groceries["balance"], groceries["percent"]) == (
+        "running",
+        300000,
+        75,
+    )
+    text = page.content.decode()
+    assert "10.000 / month" in text
+    assert 'Next <b class="num">10.000,00</b> on <b>1 Jun</b></span><span>in 12 days' in text
+    assert "Spent through May</span><span>refilled 31 May" in text
+    assert "left of 4.000" in text
