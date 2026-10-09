@@ -168,6 +168,42 @@
   });
 
   // Month slider on the forecast.
+  // Collapsible groups remember whether they were open, per page, in this browser only.
+  function remembered(details) {
+    return location.pathname + "#" + details.dataset.remember;
+  }
+  document.querySelectorAll("details[data-remember]").forEach((details) => {
+    try {
+      const stored = localStorage.getItem(remembered(details));
+      if (stored !== null) details.open = stored === "open";
+    } catch (error) {
+      /* storage unavailable: every group starts open */
+    }
+    details.addEventListener("toggle", () => {
+      try {
+        localStorage.setItem(remembered(details), details.open ? "open" : "closed");
+      } catch (error) {
+        /* not remembered */
+      }
+      refreshToggles();
+    });
+  });
+  function refreshToggles() {
+    document.querySelectorAll("[data-toggle-groups]").forEach((button) => {
+      const groups = document.querySelectorAll(button.dataset.toggleGroups + " > details");
+      const anyOpen = [...groups].some((details) => details.open);
+      button.textContent = anyOpen ? "Collapse all" : "Expand all";
+    });
+  }
+  document.querySelectorAll("[data-toggle-groups]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const groups = document.querySelectorAll(button.dataset.toggleGroups + " > details");
+      const open = ![...groups].some((details) => details.open);
+      groups.forEach((details) => (details.open = open));
+    });
+  });
+  refreshToggles();
+
   const slider = document.querySelector("input[data-months]");
   if (slider) {
     const months = JSON.parse(slider.dataset.months);

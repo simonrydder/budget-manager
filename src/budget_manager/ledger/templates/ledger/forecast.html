@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Forecast</h1>
-    <p class="muted">Expected balances at each month-end, after the transfers, using the expected amounts for income and expenses.</p>
+    <p class="muted">Expected balances at each month-end, after the transfers, using the expected amounts for income and expenses.{% if everyday.amount %} Everyday spending from the NemKonto counts as {{ everyday.amount|money0 }} a month{% if everyday.from_history and everyday.months %}, the average of the last {{ everyday.months }} month-ends{% elif everyday.months %}, from {{ everyday.months }} month-end{{ everyday.months|pluralize }} so far and the amount in the settings{% else %}, from the settings{% endif %}.{% endif %}</p>
   </div>
 </div>
 

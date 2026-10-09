@@ -182,6 +182,7 @@ small, .small { font-size: 0.85rem; }
 .notices { display: grid; gap: 8px; }
 .notice { border-radius: 8px; padding: 10px 14px; background: var(--sunk); display: grid; gap: 2px; }
 .notice.info { background: var(--accent-soft); }
+.kind-help { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .notice.success { background: var(--pos-soft); }
 .notice.warning { background: var(--warn-soft); }
 .notice.danger, .notice.error { background: var(--neg-soft); }
@@ -241,7 +242,11 @@ fieldset { border: 0; padding: 0; margin: 0; }
 }
 .checklist { display: grid; gap: 14px; max-width: 860px; }
 .entry-group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
-.entry-group > header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 10px 14px; background: var(--sunk); }
+.entry-group > header, details.entry-group > summary { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 10px 14px; background: var(--sunk); }
+details.entry-group > summary { cursor: pointer; list-style: none; }
+details.entry-group > summary::-webkit-details-marker { display: none; }
+details.entry-group > summary h3::before { content: "▾"; display: inline-block; width: 1.1em; color: var(--muted); }
+details.entry-group:not([open]) > summary h3::before { content: "▸"; }
 .entry { display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px; gap: 6px 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
 .entry:first-of-type { border-top: 0; }
 .entry .name { display: grid; gap: 2px; min-width: 0; }
@@ -355,6 +360,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 }
 .quick-add .quick-grid .wide { grid-column: 1 / -1; }
 .quick-add .help { display: none; }
+.quick-add details .help { display: block; }
 .quick-add .field .error { display: block; }
 @media (max-width: 760px) { .quick-add .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .quick-add .quick-grid { grid-template-columns: 1fr; } }

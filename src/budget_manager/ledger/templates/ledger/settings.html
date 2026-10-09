@@ -18,6 +18,7 @@
     {% with field=form.nemkonto_max %}{% include "ledger/_field.html" %}{% endwith %}
   </div>
   {% with field=form.everyday_spending %}{% include "ledger/_field.html" %}{% endwith %}
+  {% if everyday.months %}<p class="muted small" style="margin-top:-10px">The forecast now expects <b>{{ everyday.amount|money0 }}</b> a month: {% if everyday.from_history %}the average of the last {{ everyday.months }} month-ends{% else %}{{ everyday.months }} month-end{{ everyday.months|pluralize }} so far, with the amount above for the rest of three{% endif %}.</p>{% endif %}
   <h2>Forecast</h2>
   {% with field=form.forecast_months %}{% include "ledger/_field.html" %}{% endwith %}
   <div class="form-actions"><button class="btn primary">Save settings</button></div>

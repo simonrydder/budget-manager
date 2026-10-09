@@ -209,7 +209,14 @@ def expenses(request):
             if expense.category_id == (category.pk if category else None)
         ]
         if items:
-            groups.append({"name": category.name if category else "Uncategorised", "items": items})
+            groups.append(
+                {
+                    "name": category.name if category else "Uncategorised",
+                    "key": category.pk if category else "none",
+                    "items": items,
+                    "monthly": sum(item["monthly"] or 0 for item in items),
+                }
+            )
     added = request.GET.get("added", "")
     if added and not form.is_bound:
         form.fields["name"].widget.attrs["autofocus"] = True
@@ -220,6 +227,7 @@ def expenses(request):
         form=form,
         groups=groups,
         count=sum(len(g["items"]) for g in groups),
+        monthly=sum(g["monthly"] for g in groups),
         added=added,
         categories=categories,
         category_form=category_form,

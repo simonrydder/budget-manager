@@ -98,7 +98,7 @@
         <tbody>
         {% for row in plan.rows %}
           <tr>
-            <td><label for="{{ row.aside_field.name }}">{{ row.expense.name }}</label> <span class="muted small">{{ row.expense.amount|money0 }} · {{ row.expense.frequency|lower }}</span>{% if row.aside_field.error %}<br><span class="neg small">{{ row.aside_field.error }}</span>{% endif %}</td>
+            <td><label for="{{ row.aside_field.name }}">{{ row.expense.name }}</label> <span class="muted small">{{ row.expense.amount|money0 }} · {{ row.expense.frequency|lower }}{% if row.expense.first_amount is not None and row.expense.first_due >= today %} · first payment {{ row.expense.first_amount|money0 }}{% endif %}</span>{% if row.aside_field.error %}<br><span class="neg small">{{ row.aside_field.error }}</span>{% endif %}</td>
             <td class="num dim">{% if row.suggested is None %}one-off{% else %}{{ row.suggested|money }}{% endif %}</td>
             <td class="num"><input type="text" class="amount{% if row.aside_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.aside_field.name }}" name="{{ row.aside_field.name }}" value="{{ row.aside_field.value }}" placeholder="0,00"></td>
             <td class="num {{ row.now|tone }}">{{ row.now|money }}</td>

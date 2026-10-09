@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from datetime import date
 from enum import StrEnum
 
 from budget_manager.engine.months import YearMonth
@@ -43,9 +44,18 @@ class Expense:
     schedule: Schedule
     start_month: YearMonth  # first budget month that receives a contribution
     starting_balance: int = 0
+    # The payment on the first due date, when it differs from ``amount`` (e.g. it covers two
+    # months). Later payments are ``amount`` again.
+    first_amount: int | None = None
     # The month ``starting_balance`` refers to the start of. Normally the start month; when the
     # budget is started mid-month it is the current month, whose payments come out of it.
     opening_month: YearMonth | None = None
+
+    def amount_on(self, due: date | None) -> int:
+        """The amount of the payment due on ``due``."""
+        if due is not None and due == self.schedule.first_due and self.first_amount is not None:
+            return self.first_amount
+        return self.amount
 
     @property
     def opening(self) -> YearMonth:
@@ -57,8 +67,8 @@ class Expense:
         total = 0
         month = self.opening
         while month < self.start_month:
-            if self.schedule.due_in(month):
-                total += self.amount
+            if due := self.schedule.due_in(month):
+                total += self.amount_on(due)
             month += 1
         return total
 
@@ -74,18 +84,19 @@ class Expense:
             return 0
         due_month = YearMonth.of(due)
         if due_month < self.start_month:
-            return self.amount
+            return self.amount_on(due)
         interval = self.schedule.interval_months
         if not interval:
             return None
         rate = _round_up(self.amount, interval)
         transfers = self.start_month.months_until(due_month) + 1
-        return max(0, self.amount - rate * transfers)
+        return max(0, self.amount_on(due) - rate * transfers)
 
     def expected_spend(self, month: YearMonth) -> int:
         if month < self.start_month:
             return 0
-        return self.amount if self.schedule.due_in(month) else 0
+        due = self.schedule.due_in(month)
+        return self.amount_on(due) if due else 0
 
     def cycle_start(self, month: YearMonth) -> YearMonth:
         """The first transfer that saves for the payment due next after ``month`` starts."""
@@ -110,14 +121,15 @@ class Expense:
         if due is None:
             return 0
         due_month = YearMonth.of(due)
-        missing = self.amount - planned_balance
+        target = self.amount_on(due)
+        missing = target - planned_balance
         cycle = self.cycle_start(month)
         cycle_transfers = cycle.months_until(due_month) + 1
         if cycle_transfers <= 1:
             return max(0, missing)
         if planned_at_cycle_start is None:
             planned_at_cycle_start = planned_balance
-        rate = _round_up(max(0, self.amount - planned_at_cycle_start), cycle_transfers)
+        rate = _round_up(max(0, target - planned_at_cycle_start), cycle_transfers)
         if missing <= -rate:
             return 0  # already a whole contribution ahead
         transfers_left = month.months_until(due_month) + 1

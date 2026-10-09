@@ -210,7 +210,10 @@ def plan_close(
             line.topup_needed = -balance
             previous = ledger.lines.get(month - 1)
             spent = ledger.spending.get(month - 1, 0)
-            if previous and previous.expected_spend and spent > previous.expected_spend:
+            paid = expense.schedule.due_in(month - 1)
+            # A different first payment says nothing about the normal amount.
+            usual = paid is None or expense.amount_on(paid) == expense.amount
+            if usual and previous and previous.expected_spend and spent > previous.expected_spend:
                 line.amount_after = spent if spent > expense.amount else None
         line.topup_chosen = topups.get(expense.id, 0)
         if line.topup_chosen < 0:

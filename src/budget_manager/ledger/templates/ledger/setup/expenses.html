@@ -20,9 +20,16 @@
       <div data-hide-when-running>{% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}</div>
       {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
     </div>
+    <details class="more" data-hide-when-running{% if form.first_amount.value or form.first_amount.errors %} open{% endif %}>
+      <summary>The next payment is a different amount</summary>
+      <div class="quick-grid">{% with field=form.first_amount %}{% include "ledger/_field.html" %}{% endwith %}</div>
+    </details>
     <div class="form-actions">
       <button class="btn primary">Add expense</button>
-      <span class="muted small"><b>Fixed</b>: the same amount each time, like insurance. <b>Variable</b>: a bill whose amount varies, like power or heating. <b>Running</b>: spent bit by bit through the month, like food or fuel; it is monthly and needs no due date. Everyday spending from the NemKonto is not an expense: it comes out of what the NemKonto keeps (step 1). For a savings goal, choose <i>Once</i> and the date the money must be ready.</span>
+    </div>
+    <div class="muted small stack" style="gap:6px">
+      {% include "ledger/_kind_help.html" %}
+      <p>For a savings goal, choose <i>One-off</i> and the date the money must be ready. Everyday spending from the NemKonto is not an expense: it comes out of what the NemKonto keeps (step 1).</p>
     </div>
   </form>
 
@@ -51,16 +58,20 @@
   </section>
 
   <section class="stack">
-    <div class="spread"><h2>Your expenses</h2><span class="muted small">{{ count }} so far</span></div>
+    <div class="spread">
+      <h2>Your expenses</h2>
+      <span class="muted small">{{ count }} so far{% if monthly %} · ≈ {{ monthly|money0 }} a month{% endif %}{% if groups|length > 1 %} · <button type="button" class="linklike small" data-toggle-groups="#expense-groups">Collapse all</button>{% endif %}</span>
+    </div>
+    <div class="stack" id="expense-groups">
     {% for group in groups %}
-    <section class="entry-group">
-      <header><h3>{{ group.name }}</h3><span class="muted small">{{ group.items|length }}</span></header>
+    <details class="entry-group" open data-remember="setup-group-{{ group.key }}">
+      <summary><h3>{{ group.name }} <span class="muted small">({{ group.items|length }})</span></h3><span class="muted small">≈ <b>{{ group.monthly|money0 }}</b> a month</span></summary>
       {% for item in group.items %}
       {% with expense=item.expense %}
       <div class="entry expense-row">
         <div class="name">
           <span><b>{{ expense.name }}</b> <span class="chip">{{ expense.account.name }}</span> {% include "ledger/_kind.html" %}</span>
-          <small>{{ expense.frequency }}{% if item.next_due %} · next due {{ item.next_due|date:"j M Y" }}{% else %} · nothing due{% endif %}{% if item.monthly %} · ≈ {{ item.monthly|money0 }} a month{% endif %}</small>
+          <small>{{ expense.frequency }}{% if item.next_due %} · next due {{ item.next_due|date:"j M Y" }}{% if expense.first_amount is not None and item.next_due == expense.first_due %} ({{ expense.first_amount|money0 }}){% endif %}{% else %} · nothing due{% endif %}{% if item.monthly %} · ≈ {{ item.monthly|money0 }} a month{% endif %}</small>
         </div>
         <span class="num"><b>{{ expense.amount|money }}</b></span>
         <span class="row-actions">
@@ -70,10 +81,11 @@
       </div>
       {% endwith %}
       {% endfor %}
-    </section>
+    </details>
     {% empty %}
     <p class="empty">No expenses yet. Add the first one above.</p>
     {% endfor %}
+    </div>
   </section>
 
   <form method="post" class="sticky-actions">

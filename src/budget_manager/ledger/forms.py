@@ -103,9 +103,9 @@ class UniqueNameInBudget:
 
 
 KIND_CHOICES = [
-    ("fixed", "Fixed: the same amount each time"),
-    ("variable", "Variable: a bill whose amount varies"),
-    ("running", "Running: spent bit by bit through the month"),
+    ("fixed", "Fixed"),
+    ("variable", "Variable"),
+    ("running", "Running"),
 ]
 
 
@@ -120,8 +120,13 @@ class ExpenseForm(forms.ModelForm):
         initial="fixed",
         widget=forms.RadioSelect,
         label="Type",
-        help_text="Running budgets, like food or fuel, are monthly and available from the 1st, "
-        "so they need no due date.",
+    )
+    first_amount = AmountField(
+        required=False,
+        allow_negative=False,
+        label="First payment, if different",
+        help_text="Only when the payment on the first due date is a different amount, for "
+        "example one that covers two months. Later payments are the normal amount.",
     )
     starting_balance = AmountField(
         required=False,
@@ -139,6 +144,7 @@ class ExpenseForm(forms.ModelForm):
             "amount",
             "interval_months",
             "first_due",
+            "first_amount",
             "kind",
             "category",
             "account",
@@ -211,6 +217,8 @@ class ExpenseForm(forms.ModelForm):
             data["first_due"] = first.replace(day=1)
         elif not data.get("first_due") and "first_due" not in self.errors:
             self.add_error("first_due", "Enter the date it is due next.")
+        if data.get("kind") == "running" or data.get("first_amount") == data.get("amount"):
+            data["first_amount"] = None
         if account and account.is_nemkonto:
             self.add_error(
                 "account",
@@ -377,7 +385,8 @@ class SettingsForm(BudgetNameMixin, forms.ModelForm):
         required=False,
         allow_negative=False,
         label="Everyday spending from the NemKonto, a month",
-        help_text="Roughly what is spent with its card. Only used for the forecast.",
+        help_text="Roughly what is spent with its card. The forecast uses it until three month-ends "
+        "have recorded what was spent; after that it uses the average of the last six.",
     )
     forecast_months = forms.IntegerField(min_value=3, max_value=120, label="Forecast length")
 
@@ -512,8 +521,8 @@ class BalancesForm(forms.Form):
         required=False,
         allow_negative=False,
         label="Spent from it in a month, roughly",
-        help_text="Everyday spending with its card. Only used for the forecast; at each "
-        "month-end you enter what was really spent.",
+        help_text="Everyday spending with its card, for the forecast. At each month-end you "
+        "enter what was really spent, and after three month-ends the forecast uses those.",
     )
 
     def __init__(self, *args, budget: Budget, accounts, **kwargs):
@@ -582,9 +591,25 @@ class QuickExpenseForm(ExpenseForm):
     starting_balance = None
     fill_from_savings = None
     topup = None
+    first_amount = AmountField(
+        required=False,
+        allow_negative=False,
+        label="Amount of that payment",
+        help_text="For example 2.000 when the payment on the next due date covers two months. "
+        "Later payments are the normal amount.",
+    )
 
     class Meta(ExpenseForm.Meta):
-        fields = ["name", "amount", "interval_months", "first_due", "account", "category", "kind"]
+        fields = [
+            "name",
+            "amount",
+            "interval_months",
+            "first_due",
+            "first_amount",
+            "account",
+            "category",
+            "kind",
+        ]
         labels = {**ExpenseForm.Meta.labels, "first_due": "Next due date"}
         help_texts = {}
         widgets = {"first_due": DateInput()}
