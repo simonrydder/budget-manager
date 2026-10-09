@@ -63,14 +63,15 @@ month-end.
    over the months until it is due.
 4. **Income**: the expected income, compared with the expenses.
 5. **Transfers**: per expense, what should have been set aside at the start of the current
-   month so the monthly amount stays steady (a yearly 1.200 due in two months should already
-   hold 1.000; a payment due this month must be there in full). Fixed payments follow their due
+   month so the monthly amount is the same from the first month-end on (a yearly 1.200 due in
+   two months should already hold 1.000; a payment due this month must be there in full; a
+   one-off goal keeps what is already saved for it). These amounts are not adjustable, also
+   when starting again: the money moved at the start is what keeps the transfers steady. Fixed payments follow their due
    dates (due before today: paid; later: still on the account); only running expenses, like
    food, ask what has been spent so far this month. Each account's surplus or shortage is
    evened out through General Savings; the page lists those bank transfers and previews the
-   first month-end. The preview shows, per account, what the first month-end sends next to
-   the usual monthly amount, and per expense what it gets; an expense with less set aside than
-   suggested gets more until its next payment. Recalculating only previews. **Start the
+   first month-end, which shows per account the usual monthly amount next to what is sent.
+   Recalculating only previews. **Start the
    budget** saves the starting point, and the overview keeps showing the transfers until they
    are marked done. The setup is then the ground truth: anything that was waiting under Balance
    is dropped, since today's bank balances already hold it, and an expense that has ended gets

@@ -639,14 +639,16 @@ def plan_start(
     budget: Budget,
     today: date,
     bank: dict[int, int | None] | None = None,
-    set_aside: dict[int, int | None] | None = None,
     spent: dict[int, int | None] | None = None,
 ) -> StartPlan:
-    """Balances when starting the budget today: what each expense should have (so its monthly
-    contribution stays steady) and how the accounts must be evened out via General Savings."""
-    bank, set_aside, spent = bank or {}, set_aside or {}, spent or {}
+    """Balances when starting the budget today: what each expense should have so its monthly
+    contribution is the same from the first month-end on, and how the accounts must be evened
+    out via General Savings to get there. Every repeating expense gets exactly that, so the
+    transfers never have to catch up; a one-off goal keeps what is already saved for it.
+    """
+    bank, spent = bank or {}, spent or {}
     opening = YearMonth.of(today)
-    # Starting again in the same month begins from what was chosen the first time.
+    # Starting again in the same month keeps the spending entered the first time.
     again = budget.started_on is not None and budget.opening_month == opening.first_day()
     entered = {}
     if again:
@@ -669,13 +671,9 @@ def plan_start(
         # A bill due before today has been paid; what a running budget has used so far is asked.
         paid = not expense.is_running and due and due <= today
         default_spent = model.amount_on(due) if paid else 0
-        chosen = set_aside.get(expense.id)
         if again and expense.start_month is None:
             default_spent = entered.get(expense.id, 0)
-            if chosen is None:
-                chosen = expense.starting_balance
-        if chosen is None:
-            chosen = suggested if suggested is not None else expense.starting_balance
+        chosen = suggested if suggested is not None else expense.starting_balance
         used = spent.get(expense.id)
         rows.append(
             StartRow(expense, suggested, chosen, default_spent if used is None else used, due)
@@ -696,7 +694,7 @@ def apply_start(budget: Budget, plan: StartPlan, user) -> None:
     if plan.general_savings < 0:
         raise CloseError(
             f"The accounts hold {format_amount(-plan.general_savings)} less than the expenses "
-            "should have. Lower some set-aside amounts or check the balances."
+            "should have. Check the balances and the expenses."
         )
     budget.opening_month = plan.opening.first_day()
     budget.start_month = plan.start.first_day()
