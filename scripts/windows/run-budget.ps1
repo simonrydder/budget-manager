@@ -13,6 +13,10 @@
     The server keeps running until this window is closed or the scheduled task is stopped.
     Your data lives in -DataDir, outside the code, so updates never touch it.
 
+    While it runs, the script watches for an update request: the "Update now" button in the
+    app's Settings, or update-now.cmd, leaves the file update.request in -DataDir. The script
+    then does all of the above again, so the newest version runs within a minute or two.
+
 .EXAMPLE
     .\run-budget.ps1
 .EXAMPLE
@@ -36,6 +40,7 @@ $RepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $LogDir = Join-Path $DataDir "logs"
 $BackupDir = Join-Path $DataDir "backups"
 $PidFile = Join-Path $DataDir "server.pid"
+$RequestFile = Join-Path $DataDir "update.request"
 $Database = Join-Path $DataDir "budget.sqlite3"
 New-Item -ItemType Directory -Force -Path $DataDir, $LogDir, $BackupDir | Out-Null
 $LauncherLog = Join-Path $LogDir "launcher.log"
@@ -118,6 +123,13 @@ function Start-Server {
         Move-Item $serverLog (Join-Path $LogDir "server.previous.log") -Force
     }
     $env:BUDGET_DATA_DIR = $DataDir
+    # Tells the app to offer "Update now" (this script watches for the request) and which
+    # version runs.
+    $env:BUDGET_UPDATER = "1"
+    $env:BUDGET_VERSION = ""
+    try {
+        $env:BUDGET_VERSION = (& $Git -C $RepoDir log -1 "--format=%h, %cd" --date=short).Trim()
+    } catch { }
     $command = "`"$Uv`" run --no-dev budget-manager serve --host 0.0.0.0 --port $Port >> `"$serverLog`" 2>&1"
     # cmd.exe /c strips the first and the last quote of the command line, so the whole
     # command gets one extra pair of quotes around it.
@@ -151,6 +163,8 @@ if ($Stop) {
     Write-Log "Stopped."
     return
 }
+# This start updates anyway (unless -NoUpdate), so an earlier request is done with.
+Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
 
 if (Test-Path $Database) {
     $backup = Join-Path $BackupDir ("budget-{0:yyyy-MM-dd-HHmm}.sqlite3" -f (Get-Date))
@@ -204,6 +218,17 @@ try {
 } catch { }
 Write-Log "Running. Open $($addresses -join ' or ') from a browser on your network."
 Write-Host "Keep this window open. Closing it stops Budget Manager."
-Wait-Process -Id $server.Id -ErrorAction SilentlyContinue
+while (-not $server.HasExited -and -not (Test-Path $RequestFile)) {
+    Start-Sleep -Seconds 5
+}
+if (Test-Path $RequestFile) {
+    $request = "$(Get-Content $RequestFile -Raw -ErrorAction SilentlyContinue)".Trim()
+    Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
+    Write-Log "Update requested ($request). Updating to the newest '$Branch' and restarting."
+    # Run this script again: it stops the server, backs up, updates and starts the new one.
+    & $PSCommandPath -Branch $Branch -Port $Port -DataDir $DataDir -KeepBackups $KeepBackups `
+        -StartTimeoutSeconds $StartTimeoutSeconds
+    exit $LASTEXITCODE
+}
 Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 Write-Log "Budget Manager stopped."

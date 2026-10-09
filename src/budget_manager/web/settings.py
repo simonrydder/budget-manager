@@ -9,6 +9,9 @@ Environment variables:
 - ``BUDGET_ALLOWED_HOSTS``: comma-separated host names (default: ``*``; the network check
   above is what keeps the app off the internet).
 - ``BUDGET_DEBUG``: set to ``1`` during development.
+- ``BUDGET_UPDATER``: set to ``1`` by the Windows launcher, which updates and restarts the app
+  when the *Update now* button in Settings asks for it.
+- ``BUDGET_VERSION``: the running version, shown in Settings (set by the Windows launcher).
 """
 
 from __future__ import annotations
@@ -38,6 +41,12 @@ def _list(name: str, default: str) -> list[str]:
 
 SECRET_KEY = _secret_key()
 DEBUG = os.environ.get("BUDGET_DEBUG") == "1"
+
+# The Windows launcher watches for this file and then updates to the newest version and
+# restarts the app (scripts/windows/run-budget.ps1).
+UPDATER = os.environ.get("BUDGET_UPDATER") == "1"
+UPDATE_REQUEST_FILE = DATA_DIR / "update.request"
+VERSION = os.environ.get("BUDGET_VERSION", "")
 ALLOWED_HOSTS = _list("BUDGET_ALLOWED_HOSTS", "*")
 ALLOWED_NETWORKS = _list(
     "BUDGET_ALLOWED_NETWORKS",

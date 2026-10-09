@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import time
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.forms import SetPasswordForm
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from budget_manager.ledger import services
 from budget_manager.ledger.forms import NewUserForm, SettingsForm
@@ -26,8 +31,40 @@ def settings_view(request):
         "started": services.budget_started(budget),
         "running": services.last_closed(budget) is not None,
         "everyday": services.everyday_estimate(budget),
+        "updater": settings.UPDATER,
+        "version": settings.VERSION,
+        "update_waiting": _update_waiting(),
     }
     return render(request, "ledger/settings.html", context)
+
+
+#: A request the launcher has not picked up within this time is shown as not taken.
+UPDATE_PATIENCE = 10 * 60
+
+
+def _update_waiting() -> bool:
+    """True while an update asked for from the app has not been picked up by the launcher."""
+    try:
+        age = time.time() - settings.UPDATE_REQUEST_FILE.stat().st_mtime
+    except OSError:
+        return False
+    return age < UPDATE_PATIENCE
+
+
+@require_POST
+def request_update(request):
+    """Ask the launcher on the PC to update to the newest version and restart. The page answers
+    first; the launcher notices the request within seconds."""
+    if not settings.UPDATER:
+        messages.error(request, "This copy of Budget Manager is not run by the Windows launcher.")
+        return redirect("settings")
+    settings.UPDATE_REQUEST_FILE.write_text(f"{timezone.now().isoformat()} {request.user}\n")
+    messages.success(
+        request,
+        "Updating to the newest version. Budget Manager restarts in a minute or two; "
+        "reload the page then.",
+    )
+    return redirect("settings")
 
 
 @budget_free

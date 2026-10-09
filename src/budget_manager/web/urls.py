@@ -77,6 +77,7 @@ urlpatterns = [
     # The budget's settings
     path("settings/", admin.settings_view, name="settings"),
     path("settings/delete/", budgets.budget_delete, name="budget-delete"),
+    path("settings/update/", admin.request_update, name="app-update"),
     # Budgets and people (not part of one budget)
     path("budgets/", budgets.budget_list, name="budgets"),
     path("budgets/new/", budgets.budget_new, name="budget-new"),
