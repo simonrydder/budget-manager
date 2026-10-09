@@ -203,6 +203,50 @@ def category_move(request, pk: int, direction: str):
 # --- Expenses -----------------------------------------------------------------------------------
 
 
+def _card(expense, ledger, balance: int, month, now) -> dict:
+    """What an expense card shows: the next payment (or the month's running budget, or the
+    goal), how much of it is there, and whether that is on track with the plan."""
+    model = ledger.expense
+    next_due = model.schedule.next_due_from(now)
+    card = {
+        "expense": expense,
+        "balance": balance,
+        "next_due": next_due,
+        "ended": expense.is_ended(now),
+        "days": (next_due - now).days if next_due else None,
+    }
+    if expense.is_running:
+        card["shape"] = "running"
+        card["target"] = model.amount
+        card["refill"] = (month - 1).last_day()
+        card["this_month"] = YearMonth.of(now)
+    elif model.schedule.interval_months == 0:
+        card["shape"] = "goal"
+        card["target"] = model.amount
+        card["months"] = YearMonth.of(now).months_until(YearMonth.of(next_due)) if next_due else 0
+    else:
+        card["shape"] = "bill"
+        card["target"] = model.amount_on(next_due) if next_due else 0
+    target = card["target"]
+    card["percent"] = max(0, min(100, round(balance * 100 / target))) if target else 0
+    # The plan's balance by now assumes every payment so far cost what was expected, this
+    # month's included; one not entered yet counts as its expected amount.
+    line = ledger.lines.get(month - 1)
+    pending = line.expected_spend if line and (month - 1) not in ledger.spending else 0
+    short = ledger.planned_balance_before(month) - (balance - pending)
+    if balance < 0:
+        card["status"] = ("bad", "below zero")
+    elif expense.is_running:
+        card["status"] = None
+    elif next_due is None:
+        card["status"] = None
+    elif short > 100:
+        card["status"] = ("warn", f"short {format_amount(short)}")
+    else:
+        card["status"] = ("ok", "on track")
+    return card
+
+
 def expense_board(request):
     budget = request.budget
     group = "account" if request.GET.get("group") == "account" else "category"
@@ -214,14 +258,9 @@ def expense_board(request):
     cards = []
     for expense in budget.expenses.select_related("account", "category"):
         ledger = ledgers[expense.id]
-        cards.append(
-            {
-                "expense": expense,
-                "balance": balances[expense.id],
-                "next_due": ledger.expense.schedule.next_due_from(now),
-                "ended": expense.is_ended(now),
-            }
-        )
+        card = _card(expense, ledger, balances[expense.id], state.month, now)
+        card["monthly"] = monthly[expense.id]
+        cards.append(card)
     active = [card for card in cards if not card["ended"]]
     if group == "category":
         columns = [{"key": "", "name": "Uncategorised", "cards": []}]
