@@ -65,17 +65,17 @@
   <h2>Expenses this month</h2>
   <div class="table-wrap">
   <table class="table compact">
-    <thead><tr><th>Expense</th><th>Account</th><th class="num">Balance before</th><th class="num">Contribution</th><th class="num">Other</th><th class="num">Balance after</th><th class="num">Expected spend</th></tr></thead>
+    <thead><tr><th>Expense</th><th class="hide-narrow">Account</th><th class="num hide-narrow">Balance before</th><th class="num">Contribution</th><th class="num hide-narrow">Other</th><th class="num">Balance after</th><th class="num hide-narrow">Expected spend</th></tr></thead>
     <tbody>
     {% for line in lines %}
       <tr>
         <td><a class="item" href="{% url 'expense-detail' line.expense.id %}">{{ line.expense.name }}</a>{% if line.amount_after %}<br><span class="small muted">Amount raised to {{ line.amount_after|money }}</span>{% endif %}</td>
-        <td class="dim">{{ line.expense.account.name }}</td>
-        <td class="num {{ line.balance_before|tone }}">{{ line.balance_before|money }}</td>
+        <td class="dim hide-narrow">{{ line.expense.account.name }}</td>
+        <td class="num hide-narrow {{ line.balance_before|tone }}">{{ line.balance_before|money }}</td>
         <td class="num">{{ line.contribution|money }}</td>
-        <td class="num small">{% if line.topup %}top-up {{ line.topup|money }}{% endif %}{% if line.cover %} taken {{ line.cover|money }}{% endif %}{% if line.release %} released {{ line.release|money }}{% endif %}</td>
+        <td class="num small hide-narrow">{% if line.topup %}top-up {{ line.topup|money }}{% endif %}{% if line.cover %} taken {{ line.cover|money }}{% endif %}{% if line.release %} released {{ line.release|money }}{% endif %}</td>
         <td class="num {{ line.balance_after|tone }}">{{ line.balance_after|money }}</td>
-        <td class="num dim">{% if line.expected_spend %}{{ line.expected_spend|money }}{% endif %}</td>
+        <td class="num dim hide-narrow">{% if line.expected_spend %}{{ line.expected_spend|money }}{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

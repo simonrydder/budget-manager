@@ -9,15 +9,15 @@
   <section class="card">
     <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Username</th><th>Name</th><th>Your budgets they use</th><th>Last login</th><th></th></tr></thead>
+      <thead><tr><th>Username</th><th class="hide-narrow">Name</th><th>Budgets</th><th class="hide-narrow">Last login</th><th></th></tr></thead>
       <tbody>
       {% for item in people %}
       {% with person=item.person %}
         <tr>
           <td><b>{{ person.username }}</b>{% if person == user %} <span class="chip">you</span>{% endif %}</td>
-          <td>{{ person.first_name }}</td>
+          <td class="hide-narrow">{{ person.first_name }}</td>
           <td class="dim">{% for budget in item.budgets %}{{ budget.name }}{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}</td>
-          <td class="dim">{{ person.last_login|date:"j M Y H:i"|default:"never" }}</td>
+          <td class="dim hide-narrow">{{ person.last_login|date:"j M Y H:i"|default:"never" }}</td>
           <td class="num"><span class="actions" style="justify-content:flex-end">
             <a class="btn small" href="{% url 'user-password' person.id %}">Change password</a>
             {% if person != user %}<a class="btn small danger" href="{% url 'user-delete' person.id %}">Remove</a>{% endif %}

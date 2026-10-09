@@ -8,8 +8,18 @@ Build a self-hosted **budget manager** web application.
 - Python is strongly preferred (e.g. Flask, FastAPI or Django) so the code is easy to read and maintain. It is not a hard requirement.
 - Any storage works, but all data must be stored locally on the machine running the app.
 - Do not display any currency symbol or code. Amounts are shown as plain numbers.
-- Multiple users can log in, but the app must only be reachable from the local network (not exposed to the internet).
+- Multiple users can log in, but the app must only be reachable from the local network (not exposed to the internet). Reaching it from your own devices over Tailscale is allowed.
 - Several budgets (for example private and a company), each shared with chosen users. A budget can be copied or started from scratch under its own name.
+- A login is only asked for where it protects something: when the app only serves the computer it runs on, there is nothing to log in to. On the home network each device stays logged in for a long time (a year).
+- Works on a phone, an iPad and a desktop, also in a split-screen window: no page may need sideways scrolling, and columns follow the room the page actually has.
+
+### Running and updating
+
+- **One file:** someone else must be able to run the app on their own Windows computer by downloading one file from GitHub and double-clicking it, without administrator rights. That copy only serves its own computer.
+- **Home server:** on the computer that runs the household's copy, a new version merged into `prod` is picked up within minutes, without anyone doing anything. An **Update now** button (usable from any device, e.g. an iPad) and a script on the computer update right away.
+- A version that fails to start is rolled back automatically; reverting the change on GitHub must be enough to recover.
+- The database is backed up before every update.
+- Versions are numbered with [Semantic Versioning](https://semver.org/) and described in `CHANGELOG.md`. The app shows its version. The one-file copy asks before installing a major (breaking) version.
 
 ## Core concepts
 
@@ -44,7 +54,7 @@ An expense is a planned cost that money is set aside for. Each expense has:
 - An optional **starting balance**, meaning money already in the linked account for this expense.
 - An optional **different first payment**, for when the payment on the first due date is not the usual amount. Example: a subscription of 1,000 a month whose first payment covers two months (2,000). Later payments are the usual amount. When the budget is started, the extra part is set aside from General Savings, so the monthly contribution stays 1,000.
 - An optional **end date**. Ending an expense (e.g. cancelling Disney+) stops contributions from then on, and the money left on it returns to General Savings.
-- An **expense type**, either fixed or variable (see below).
+- An **expense type**: fixed, variable or running (see below).
 
 **Changes over time:** if an expense's amount changes, the monthly contribution is recalculated so the shortfall is covered by the due date. Example: a yearly payment of 500 has 250 saved after 6 months, then it turns out to be 600. The contribution for the remaining 6 months must rise so the balance reaches 600 on the due date.
 
@@ -71,12 +81,18 @@ Expenses are based on expected costs. Each month the user enters the actual amou
 1. **Monthly transfer overview:** how much to transfer from the NemKonto to each account at the end of the month, based on all active expenses, interest adjustments, and the resulting transfer to or from General Savings.
 2. **Account balances:** current balance of every account, easy to match against the bank.
 3. **Management:** create, edit and end expenses, categories, accounts and income sources.
-4. **Monthly entry** of actual spending per expense and actual income per income source.
+4. **Monthly entry** of actual spending per expense and actual income per income source, as a step-by-step checklist:
+   - fixed payments that were due are filled in with their amount (they can be changed);
+   - a running budget can be entered as what was spent or as what is left;
+   - expenses that were not due are folded away;
+   - a finished step can be undone, and the latest month-end can be reopened.
 5. **History:** actual spending per year and average per month, broken down by expense, category and account.
 6. **Forecast:** navigate to future months and see the expected balance of every account and expense.
 7. **Warnings** when General Savings can't cover a shortfall, and a prompt to choose where to take money from if the NemKonto would go below 0.
 8. **Balancing any day:** moves between General Savings and the expenses (filling a new expense, top-ups, returning money no longer needed) and refunds (e.g. a surplus paid back by the insurance company) can be made outside the month-end. The app lists the bank transfers needed; once they are made, the balances update.
-9. **Step-by-step setup** of a budget: today's account balances (and adding accounts), all expenses with their next due date, a summary per category with the monthly total, the expected income, then the transfers that start the budget. Once started, the setup is the ground truth: no money should have to be moved afterwards to match it.
+9. **Coming up:** the next payments with how ready each one is: *ready* (the money is there), *on track* (the planned month-end transfers bring it in time) or *short* (even the planned transfers do not cover it).
+10. **Expenses board:** per category or account, each expense shows its monthly amount, its next payment and how much of it is there.
+11. **Step-by-step setup** of a budget: today's account balances (and adding accounts), all expenses with their next due date, a summary per category with the monthly total, the expected income, then the transfers that start the budget. Once started, the setup is the ground truth: no money should have to be moved afterwards to match it.
 
 ## Future extension (not needed now)
 

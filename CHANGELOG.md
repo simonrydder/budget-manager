@@ -4,6 +4,14 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.6.1 (2026-10-09)
+
+- People and the page of a closed month-end fit on a phone: their tables hide the less
+  important columns on narrow screens.
+- A user guide (`docs/user-guide.md`) that walks through every page, and an updated README,
+  requirements and design for this version: the three ways to run the app, every setting,
+  updates, backups and troubleshooting.
+
 ## 1.6.0 (2026-10-09)
 
 - Running budgets (food, fuel, …) can be entered as what was spent or as what is left: in

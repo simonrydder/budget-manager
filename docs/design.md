@@ -19,7 +19,12 @@ the budget came from; the requirements are the source of truth.
 | Budgets | Several budgets (for example private and a company), each with its own accounts, expenses, income and month-ends. A budget is shared with the people chosen in its settings; they all see and edit the same data. Budgets can be created from scratch or copied. |
 | Setup | A five-step checklist per budget: accounts with today's balances, expenses, a summary of what they cost, income, then the transfers that start the budget. |
 | Interface | English. Amounts as plain numbers like `1.234,56`, no currency. |
-| Layout | The dashboard layout (sidebar, status first) with the month-end as a step-by-step checklist. |
+| Layout | A dashboard (menu on the left, status first) with the setup and the month-end as step-by-step checklists. The menu is grouped: Overview, Month-end, Balance · Expenses, Income, Accounts · Forecast, History · Settings, Budgets, People. Below 900 pixels the menu becomes a bar at the top. |
+| Window sizes | Columns follow the width of the page content, not the window (CSS container queries on `.main`, with a window-width fallback for old browsers), so a page next to the menu on an iPad or in half a screen switches to one column instead of squeezing two. Wide tables hide their least important columns on a phone. Every page is checked at 390, 640, 768, 820, 1024, 1180 and 1440 pixels for sideways scrolling. |
+| Links | Names in lists and tables open their page but look like text (`a.item`); only actions look like links or buttons. |
+| Login | Required on the home network: anyone on it could otherwise open the budget. Each device stays logged in for a year. In *this computer only* mode (`BUDGET_LOCAL_ONLY=1`, used by `BudgetManager.cmd`) the app listens on `127.0.0.1` only and signs every request in as one person, so there is no login page, Log out or People. |
+| Updates | The home server follows the `prod` branch: the launcher checks it every 5 minutes and restarts the app with a new commit; **Update now** asks for it at once. The one-file copy updates when it starts. See [Running and updating](#running-and-updating). |
+| Versions | Semantic Versioning in `pyproject.toml`, read at run time with `importlib.metadata`, shown in the footer and Settings with the commit. Every change to `prod` raises it and adds a `CHANGELOG.md` entry; a new first number means something must be done by hand, and the one-file copy asks before installing it. |
 
 ## Architecture
 
@@ -42,7 +47,7 @@ flowchart LR
 | Rules | `budget_manager.engine` | No Django imports, so every rule is unit tested on its own. |
 | Charts | SVG drawn on the server | No JavaScript chart library; works offline. |
 | JavaScript | One small file | Only for conveniences (drag and drop, live balances, fill buttons, copy). Every page works without it. |
-| Local only | Middleware checks the connecting address against private ranges; login required everywhere | The app refuses the internet even if a port is forwarded by mistake. |
+| Local only | Middleware checks the connecting address against private ranges and Tailscale's `100.64.0.0/10`; login required everywhere except in this-computer-only mode | The app refuses the internet even if a port is forwarded by mistake. |
 | Budgets in the address | Every page of a budget lives under `/b/<id>/` (`ledger/scope.py`) | The middleware strips the prefix before Django resolves the URL and sets it as the script prefix, so views and templates are unchanged and every link they build stays in the same budget. Two tabs on two budgets never mix them up. A page opened without a budget goes to the last one used. |
 
 ## Setting up a budget
@@ -71,6 +76,7 @@ month-end.
    food, ask what has been spent so far this month. Each account's surplus or shortage is
    evened out through General Savings; the page lists those bank transfers and previews the
    first month-end, which shows per account the usual monthly amount next to what is sent.
+   Running budgets can be entered as what was spent or what is left; the other is worked out.
    Recalculating only previews. **Start the
    budget** saves the starting point, and the overview keeps showing the transfers until they
    are marked done. The setup is then the ground truth: anything that was waiting under Balance
@@ -86,12 +92,22 @@ A **budget month** is the month whose payments a transfer pays for. The transfer
 on 30 April, funded by the income that arrives at the end of April. The checklist on 30 April:
 
 1. **April spending**: what each expense actually cost in April, and what was spent from the
-   NemKonto itself.
+   NemKonto itself. Fixed payments that were due in April are filled in with their expected
+   amount (`row.suggested`); variable and running expenses stay empty, since only the person
+   knows what they cost, and payments from before the budget was started are left out because
+   the setup settled them. Expenses that were not due and have nothing entered fold into
+   "N more, not due". A running budget can be entered as what was spent or as what is left on
+   it (the page works out the other, `data-spent-from` / `data-spent-to`).
 2. **April interest**: interest per account (negative if paid).
 3. **May income**: what arrived on the NemKonto.
 4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
 5. **Check and close**: compare the balances with the bank (optional), then close. Closing
-   freezes the month; the latest month-end can be reopened.
+   freezes the month.
+
+`MonthClose.step` records how far the checklist has come. **Undo step N** lowers it by one and
+opens that step again; what was entered stays. The latest closed month-end can be **reopened**
+(from its page, and right after closing from the next month-end), which deletes its frozen
+lines and transfers so it can be closed again.
 
 ### Rules (engine/close.py)
 
@@ -144,6 +160,48 @@ the overview: how much General Savings pays each month and the month it runs out
 The forecast (engine/forecast.py) runs the same close forward, assuming expected income, expected
 spending and no interest for everything not yet entered.
 
+**Coming up** on the overview takes the next payments from the forecast. A payment is *ready*
+when the expense holds its amount now, *on track* when the balance after the month-end before its
+due month will hold it, and *short* only when even the planned transfers leave it below the
+amount. The first 10 are shown; the rest are behind "Show N more".
+
+## Running and updating
+
+| | `BudgetManager.cmd` | Home server (`scripts/windows`) | By hand |
+|---|---|---|---|
+| Code | Installed with `uv tool install` from the `prod` zip on GitHub | A git clone that follows `prod` | A git clone |
+| Listens on | `127.0.0.1` only | All interfaces; firewall open for private networks and Tailscale | `BUDGET_HOST` |
+| Login | None (`BUDGET_LOCAL_ONLY=1`) | Yes | Yes |
+| Data | `%USERPROFILE%\BudgetManager` | `%USERPROFILE%\BudgetManagerData` | `BUDGET_DATA_DIR` |
+| Updates | At start; asks before a major one | Every 5 minutes and on **Update now** | `git pull` |
+
+**One file.** `BudgetManager.cmd` (kept with Windows line endings) installs uv if needed, then
+runs `budget-manager check-update`, which compares the installed version with `pyproject.toml` on
+`prod` (`BUDGET_UPDATE_SOURCE`) and exits with 0 (up to date), 3 (an update), 4 (a major update,
+after printing its `CHANGELOG.md` entries) or 1 (could not check). On 3 it reinstalls, on 4 it asks
+with `choice`, on 0 and 1 it starts what is installed. A second start while the app runs only
+opens the browser.
+
+**Launcher.** `install-nightly-task.ps1` registers a scheduled task that runs `run-budget.ps1` when
+Windows starts (and, with `-At`, every night), and adds the firewall rules. `run-budget.ps1`:
+
+1. stops the server it started before (`server.pid`, only if that process is still the server);
+2. copies `budget.sqlite3` to `backups\budget-<date>-<time>.sqlite3`, keeping the newest 30;
+3. fetches `prod`, resets the clone to it and runs `uv sync`;
+4. starts `budget-manager serve` with `BUDGET_UPDATER=1`, `BUDGET_CHECK_MINUTES` and
+   `BUDGET_COMMIT`, and waits until it answers;
+5. if it does not, goes back to the commit that ran before and writes it to `update.failed`, so the
+   checks skip that commit until a newer one (a revert) arrives;
+6. then loops: every `-CheckMinutes` it compares the clone with `origin/prod`, and every few seconds
+   it looks for `update.request`, which the **Update now** button (`POST /settings/update/`) and
+   `update-now.cmd` leave in the data folder. Either starts again at step 1.
+
+PowerShell keeps running the script it read at start, so when an update changes `run-budget.ps1`
+itself the running launcher starts the new script (passing `-PreviousCommit` for the rollback)
+and exits. Native commands run through `Invoke-Native`, which turns a non-zero exit code into an
+error without letting PowerShell treat their messages on stderr as failures. Everything is
+written to `logs\launcher.log`; the app's output goes to `logs\server.log`.
+
 ## Data model
 
 ```mermaid
@@ -165,13 +223,13 @@ erDiagram
 
 | Table | Holds |
 |---|---|
-| `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, expected everyday spending from the NemKonto, starting balances of the NemKonto and General Savings, forecast length, how far the setup has come. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
+| `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, expected everyday spending from the NemKonto (`everyday_spending`), starting balances of the NemKonto and General Savings, forecast length, how far the setup has come (`setup_step`) and the start transfers still to be marked done. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
 | `Account` | Name, role (`nemkonto`, `savings` that holds General Savings, or `normal`) and the bank balance entered in the setup. |
 | `Category` | Name and order. |
 | `Expense` | Amount, first due date, an optional different amount for the payment on the first due date, frequency in months (0 = once), end date, type (fixed, variable or running), account, category, starting balance, first month with a contribution. |
 | `IncomeSource` | Expected amount, first month, frequency, last month. |
 | `SpendingEntry`, `IncomeEntry`, `InterestEntry` | What actually happened, one row per month. |
-| `MonthClose` | One per budget month: status (in progress or closed), what was spent from the NemKonto, the NemKonto and General Savings flow, notices. |
+| `MonthClose` | One per budget month: status (in progress or closed), the checklist step reached, the transfers ticked off, what was spent from the NemKonto, the NemKonto and General Savings flow, notices. |
 | `ContributionLine` | Frozen per expense and month: contribution, expected payment, top-up, cover, release, amount change. |
 | `Transfer` | The net transfer per account, and whether it has been made. |
 | `Decision` | Covers chosen for a month-end. |
