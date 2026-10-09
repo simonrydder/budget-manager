@@ -4,6 +4,15 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.5.0 (2026-10-09)
+
+- Month-end step 1 fills in the fixed payments that were due with their amount (change it if
+  one cost something else). Variable and running expenses stay empty, since only you know what
+  they cost; payments from before the budget was started were settled by the setup.
+- A month-end step can be undone: "Undo step N" marks the last finished step as not done and
+  goes back to it, keeping what was entered. Right after closing a month-end, the next one
+  offers to reopen it.
+
 ## 1.4.0 (2026-10-09)
 
 - Layouts follow the room the page has, not the window: on an iPad or in a split-screen window

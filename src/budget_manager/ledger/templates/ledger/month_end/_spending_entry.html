@@ -2,11 +2,11 @@
 <div class="entry{% if row.due %} due{% endif %}">
   <label class="name" for="spent-{{ expense.id }}">
     <span><b>{{ expense.name }}</b> {% include "ledger/_kind.html" %}</span>
-    <small>{% if expense.is_running and row.due %}Spent during {{ previous.name }} · budget {{ row.expected|money }}{% elif row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}</small>
+    <small>{% if expense.is_running and row.due %}Spent during {{ previous.name }} · budget {{ row.expected|money }}{% elif row.due %}Due {{ row.due|date:"j M" }} · expected {{ row.expected|money }}{% else %}Not due in {{ previous.name }}{% endif %}{% if expense.category %} · {{ expense.category.name }}{% endif %}{% if row.suggested is not None and row.raw is None %}<br><span class="muted">Filled in with the fixed amount; change it if it cost something else.</span>{% endif %}</small>
   </label>
   <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
          id="spent-{{ expense.id }}" name="spent-{{ expense.id }}" placeholder="0,00"
-         value="{% if row.raw is not None %}{{ row.raw }}{% else %}{{ row.value|money_input }}{% endif %}"
+         value="{% if row.raw is not None %}{{ row.raw }}{% elif row.value is not None %}{{ row.value|money_input }}{% else %}{{ row.suggested|money_input }}{% endif %}"
          data-live="after-{{ expense.id }}" data-base="{{ row.base }}"
          {% if row.due %}data-due data-expected="{{ row.expected|money_input }}"{% endif %}
          {% if row.due and expense.is_fixed %}data-fixed-due{% endif %}>
