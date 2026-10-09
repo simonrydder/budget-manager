@@ -48,9 +48,21 @@ function Write-Log([string]$Message) {
 
 function Invoke-Native([string]$File, [string[]]$Arguments) {
     # Runs a program and throws if it fails (PowerShell does not do that for programs).
-    & $File @Arguments 2>&1 | ForEach-Object { Add-Content -Path $LauncherLog -Value "    $_" }
-    if ($LASTEXITCODE -ne 0) {
-        throw "$File $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    # Programs like uv write normal progress to stderr. With "Stop", Windows PowerShell 5.1
+    # turns each such line into a terminating error, so only the exit code decides here.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $File @Arguments 2>&1 | ForEach-Object {
+            # Lines from stderr arrive as ErrorRecord objects; "$_" is their plain text.
+            Add-Content -Path $LauncherLog -Value "    $("$_")"
+        }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($exitCode -ne 0) {
+        throw "$File $($Arguments -join ' ') failed with exit code $exitCode"
     }
 }
 
