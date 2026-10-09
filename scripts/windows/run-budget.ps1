@@ -76,10 +76,25 @@ function Find-Program([string]$Name, [string[]]$Fallbacks) {
 function Stop-Server {
     if (Test-Path $PidFile) {
         $oldPid = (Get-Content $PidFile -Raw).Trim()
-        if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
+        $process = $null
+        if ($oldPid -match '^\d+$') {
+            $process = Get-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
+        }
+        # After a reboot the stored number can belong to another program. Only the cmd.exe
+        # this script started is stopped: it was running before server.pid was written.
+        $written = (Get-Item $PidFile).LastWriteTime
+        $started = $null
+        if ($process) {
+            try { $started = $process.StartTime } catch { }  # access can be denied
+        }
+        $ours = $process -and $process.ProcessName -eq "cmd" -and
+            $started -and $started -le $written
+        if ($ours) {
             Write-Log "Stopping the running server (process $oldPid)."
             & taskkill.exe /PID $oldPid /T /F | Out-Null
             Start-Sleep -Seconds 2
+        } elseif ($process) {
+            Write-Log "Process $oldPid is not the server started earlier, so it is left running."
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
