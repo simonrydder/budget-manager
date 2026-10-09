@@ -13,6 +13,10 @@
     The server keeps running until this window is closed or the scheduled task is stopped.
     Your data lives in -DataDir, outside the code, so updates never touch it.
 
+    While it runs, the script watches for an update request: the "Update now" button in the
+    app's Settings, or update-now.cmd, leaves the file update.request in -DataDir. The script
+    then does all of the above again, so the newest version runs within a minute or two.
+
 .EXAMPLE
     .\run-budget.ps1
 .EXAMPLE
@@ -36,6 +40,7 @@ $RepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $LogDir = Join-Path $DataDir "logs"
 $BackupDir = Join-Path $DataDir "backups"
 $PidFile = Join-Path $DataDir "server.pid"
+$RequestFile = Join-Path $DataDir "update.request"
 $Database = Join-Path $DataDir "budget.sqlite3"
 New-Item -ItemType Directory -Force -Path $DataDir, $LogDir, $BackupDir | Out-Null
 $LauncherLog = Join-Path $LogDir "launcher.log"
@@ -118,6 +123,13 @@ function Start-Server {
         Move-Item $serverLog (Join-Path $LogDir "server.previous.log") -Force
     }
     $env:BUDGET_DATA_DIR = $DataDir
+    # Tells the app to offer "Update now" (this script watches for the request) and which
+    # commit runs; the app knows its own version number.
+    $env:BUDGET_UPDATER = "1"
+    $env:BUDGET_COMMIT = ""
+    try {
+        $env:BUDGET_COMMIT = (& $Git -C $RepoDir log -1 "--format=%h, %cd" --date=short).Trim()
+    } catch { }
     $command = "`"$Uv`" run --no-dev budget-manager serve --host 0.0.0.0 --port $Port >> `"$serverLog`" 2>&1"
     # cmd.exe /c strips the first and the last quote of the command line, so the whole
     # command gets one extra pair of quotes around it.
@@ -132,6 +144,15 @@ function Start-Server {
     }
     & taskkill.exe /PID $process.Id /T /F | Out-Null
     return $null
+}
+
+function Get-Version {
+    # The version number in pyproject.toml, with the commit: "1.2.0 (a1b2c3d)".
+    $commit = (& $Git -C $RepoDir rev-parse --short HEAD).Trim()
+    $line = Select-String -Path (Join-Path $RepoDir "pyproject.toml") -Pattern '^version = "(.+)"' |
+        Select-Object -First 1
+    if ($line) { return "$($line.Matches[0].Groups[1].Value) ($commit)" }
+    return $commit
 }
 
 function Update-Code([string]$Target) {
@@ -151,9 +172,11 @@ if ($Stop) {
     Write-Log "Stopped."
     return
 }
+# This start updates anyway (unless -NoUpdate), so an earlier request is done with.
+Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
 
 if (Test-Path $Database) {
-    $backup = Join-Path $BackupDir ("budget-{0:yyyy-MM-dd-HHmm}.sqlite3" -f (Get-Date))
+    $backup = Join-Path $BackupDir ("budget-{0:yyyy-MM-dd-HHmmss}.sqlite3" -f (Get-Date))
     Copy-Item $Database $backup -Force
     Write-Log "Backed up the database to $backup"
     Get-ChildItem $BackupDir -Filter "budget-*.sqlite3" | Sort-Object Name -Descending |
@@ -161,6 +184,7 @@ if (Test-Path $Database) {
 }
 
 $previous = (& $Git -C $RepoDir rev-parse HEAD).Trim()
+$previousVersion = Get-Version
 $updated = $false
 if (-not $NoUpdate) {
     try {
@@ -170,9 +194,9 @@ if (-not $NoUpdate) {
         $current = (& $Git -C $RepoDir rev-parse HEAD).Trim()
         $updated = $current -ne $previous
         if ($updated) {
-            Write-Log "Updated from $($previous.Substring(0, 7)) to $($current.Substring(0, 7))."
+            Write-Log "Updated from $previousVersion to $(Get-Version)."
         } else {
-            Write-Log "Already up to date ($($current.Substring(0, 7)))."
+            Write-Log "Already up to date: $(Get-Version)."
         }
     } catch {
         Write-Log "Could not update ($($_.Exception.Message)). Starting the current version."
@@ -183,10 +207,10 @@ if (-not $NoUpdate) {
     Invoke-Native $Uv @("sync", "--locked", "--no-dev", "--directory", $RepoDir)
 }
 
-Write-Log "Starting Budget Manager on port $Port (data in $DataDir)."
+Write-Log "Starting Budget Manager $(Get-Version) on port $Port (data in $DataDir)."
 $server = Start-Server
 if (-not $server -and $updated) {
-    Write-Log "The new version did not start. Going back to $($previous.Substring(0, 7))."
+    Write-Log "The new version did not start. Going back to $previousVersion."
     Write-Log "If the database was changed by the new version, restore it from $BackupDir."
     Update-Code $previous
     $server = Start-Server
@@ -204,6 +228,17 @@ try {
 } catch { }
 Write-Log "Running. Open $($addresses -join ' or ') from a browser on your network."
 Write-Host "Keep this window open. Closing it stops Budget Manager."
-Wait-Process -Id $server.Id -ErrorAction SilentlyContinue
+while (-not $server.HasExited -and -not (Test-Path $RequestFile)) {
+    Start-Sleep -Seconds 5
+}
+if (Test-Path $RequestFile) {
+    $request = "$(Get-Content $RequestFile -Raw -ErrorAction SilentlyContinue)".Trim()
+    Remove-Item $RequestFile -Force -ErrorAction SilentlyContinue
+    Write-Log "Update requested ($request). Updating to the newest '$Branch' and restarting."
+    # Run this script again: it stops the server, backs up, updates and starts the new one.
+    & $PSCommandPath -Branch $Branch -Port $Port -DataDir $DataDir -KeepBackups $KeepBackups `
+        -StartTimeoutSeconds $StartTimeoutSeconds
+    exit $LASTEXITCODE
+}
 Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 Write-Log "Budget Manager stopped."

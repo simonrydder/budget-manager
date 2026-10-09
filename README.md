@@ -92,6 +92,12 @@ Then `sudo systemctl enable --now budget-manager`.
    networks and for Tailscale (the rule *Budget Manager (Tailscale)*, only `100.64.0.0/10`). Options: `-At 04:00`, `-Port 8080`, `-Branch <name>`. Remove it again with
    `-Uninstall`.
 
+To get the newest version right away instead of waiting for the night, press **Update now**
+under **Settings → App version**, from any device that can open the app (an iPad too), or
+double-click `scripts\windows\update-now.cmd` on the computer. The running launcher notices the
+request within seconds, backs up the database, updates and restarts the app, which takes a minute
+or two. If the new version does not start, it goes back to the one that ran before.
+
 The data lives in `%USERPROFILE%\BudgetManagerData` (`-DataDir` to change it), outside the
 code, so updates never touch it. Every start keeps a copy of the database in `backups` (the 30
 newest) and the server log in `logs\server.log`.
@@ -180,3 +186,10 @@ The code is in `src/budget_manager`:
 - `web/`: Django settings, URLs and the local-network check.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, …).
+
+Versions follow [Semantic Versioning](https://semver.org/). Every change merged into `prod`
+raises the version in `pyproject.toml` (then run `uv lock`) and adds a line to `CHANGELOG.md`:
+the last number for fixes (1.0.0 → 1.0.1), the middle one for new features (1.0.1 → 1.1.0) and
+the first one for changes that need something done by hand when updating. The app shows its
+version under **Settings → App version** and at the bottom of the menu, and the Windows launcher
+logs which version it updated from and to.

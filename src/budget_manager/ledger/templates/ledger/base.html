@@ -21,6 +21,7 @@
     <div class="who">
       <span>Signed in as <b>{{ user.first_name|default:user.username }}</b></span>
       <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="linklike">Log out</button></form>
+      {% if app_version %}<span class="muted small">Version {{ app_version }}</span>{% endif %}
     </div>
   </aside>
   <details class="topbar">

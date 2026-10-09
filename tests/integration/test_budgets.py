@@ -1,3 +1,5 @@
+import os
+import time
 from datetime import date
 
 import pytest
@@ -219,3 +221,33 @@ def test_the_only_person_of_a_budget_cannot_be_deleted(client, budget, company, 
     assert response.status_code == 200
     assert b"the only person who can use one of the budgets" in response.content
     assert get_user_model().objects.filter(pk=sam.pk).exists()
+
+
+def test_update_now_asks_the_launcher_to_update(client, household, settings, tmp_path):
+    request_file = tmp_path / "update.request"
+    settings.UPDATE_REQUEST_FILE = request_file
+    settings.VERSION = "1.2.0"
+    settings.COMMIT = "a1b2c3d, 2026-10-09"
+
+    # Without the Windows launcher there is nothing to ask.
+    settings.UPDATER = False
+    page = client.get("/settings/").content.decode()
+    assert "Update now</button>" not in page
+    assert "Running version <b>1.2.0</b> (commit a1b2c3d, 2026-10-09)" in page
+    assert "Version 1.2.0</span>" in page  # also at the bottom of the menu
+    client.post("/settings/update/")
+    assert not request_file.exists()
+
+    settings.UPDATER = True
+    assert "Update now</button>" in client.get("/settings/").content.decode()
+    assert client.get("/settings/update/").status_code == 405  # only by pressing the button
+    response = client.post("/settings/update/", follow=True)
+    assert "alex" in request_file.read_text()
+    text = response.content.decode()
+    assert "Updating to the newest version." in text
+    assert "An update is on its way." in text and "Update now</button>" not in text
+
+    # A request the launcher never picked up does not hide the button for ever.
+    old = time.time() - 11 * 60
+    os.utime(request_file, (old, old))
+    assert "Update now</button>" in client.get("/settings/").content.decode()
