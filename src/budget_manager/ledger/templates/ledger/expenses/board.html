@@ -23,7 +23,7 @@
   <section class="column" data-value="{{ column.key }}" aria-label="{{ column.name }}">
     <header>
       <h3>{{ column.name }} <span class="muted small">(<span data-count>{{ column.cards|length }}</span>)</span></h3>
-      {% if column.monthly %}<span class="muted small" title="Amounts spread per month">≈ {{ column.monthly|money0 }}/mo</span>{% endif %}
+      {% if column.monthly %}<span class="muted small" title="On average a month: a yearly payment as a twelfth, a one-off goal spread over the months until it is due">≈ {{ column.monthly|money0 }}/mo</span>{% endif %}
     </header>
     <div class="cards stack" style="gap:8px">
       {% for card in column.cards %}

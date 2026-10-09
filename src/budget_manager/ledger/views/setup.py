@@ -319,6 +319,7 @@ def transfers(request):
         return blocked
     budget = request.budget
     now = today()
+    services.align_running_budgets(budget, now)
     items = list(budget.accounts.all())
     expense_ids = list(budget.expenses.values_list("pk", flat=True))
     bank = {account.pk: account.start_balance for account in items}
@@ -367,17 +368,32 @@ def transfers(request):
     accounts_by_id = {account.pk: account for account in items}
     first_transfers = []
     if preview:
-        first_transfers = [
-            {"account": accounts_by_id[t.account_id], "plan": t}
-            for t in preview.transfers.values()
-            if t.amount
-        ]
+        # What each expense gets at the first month-end next to what it needs on average. An
+        # expense with less set aside than suggested catches up until its next payment.
+        usual = services.monthly_amounts(services.preview_state(budget, plan))
+        for row in plan.rows:
+            row.first = preview.lines[row.expense.id].contribution
+            row.usual = usual[row.expense.id]
+            row.extra = row.first - row.usual if row.first - row.usual > 100 else 0
+        for transfer in preview.transfers.values():
+            if not transfer.amount:
+                continue
+            rows = [row for row in plan.rows if row.expense.account_id == transfer.account_id]
+            first_transfers.append(
+                {
+                    "account": accounts_by_id[transfer.account_id],
+                    "plan": transfer,
+                    "usual": sum(row.usual for row in rows),
+                    "extra": sum(row.extra for row in rows),
+                }
+            )
     context = _context(
         request,
         5,
         plan=plan,
         preview=preview,
         first_transfers=first_transfers,
+        plan_extra=sum(item["extra"] for item in first_transfers),
         missing=missing,
         errors=errors,
         running_rows=[row for row in plan.rows if row.due and row.expense.is_running],

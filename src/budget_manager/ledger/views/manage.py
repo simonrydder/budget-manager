@@ -208,6 +208,7 @@ def expense_board(request):
     group = "account" if request.GET.get("group") == "account" else "category"
     state = services.build_state(budget)
     balances = state.current_expense_balances()
+    monthly = services.monthly_amounts(state)
     ledgers = {ledger.expense.id: ledger for ledger in state.ledgers}
     now = today()
     cards = []
@@ -243,7 +244,7 @@ def expense_board(request):
         for card in active:
             index[str(card["expense"].account_id)]["cards"].append(card)
     for column in columns:
-        column["monthly"] = sum(card["expense"].monthly_equivalent for card in column["cards"])
+        column["monthly"] = sum(monthly[card["expense"].id] for card in column["cards"])
     context = {
         "group": group,
         "columns": columns,
@@ -268,8 +269,8 @@ def expense_form(request, pk: int | None = None):
         initial["topup"] = pending.amount
     started = services.budget_started(budget)
     form = ExpenseForm(request.POST or None, instance=expense, initial=initial)
-    if not pk:
-        del form.fields["topup"]
+    if not pk or not started:
+        del form.fields["topup"]  # until the budget is started, the setup decides the balances
     if pk or not started:
         del form.fields["fill_from_savings"]
     if request.method == "POST" and form.is_valid():

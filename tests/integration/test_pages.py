@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
 
+from budget_manager.ledger import services
 from budget_manager.ledger.models import Category, Expense
 from budget_manager.web.middleware import is_allowed, parse_networks
 
@@ -346,3 +347,26 @@ def test_expenses_can_be_reordered_within_a_category(client, budget, accounts):
         **json,
     )
     assert bad.status_code == 400
+
+
+def test_board_totals_count_one_off_goals_like_the_month_end(client, budget, accounts):
+    """The ≈/mo of a column is what its expenses take a month, one-off goals included."""
+    Expense.objects.create(
+        budget=budget,
+        name="New car",
+        amount=1000000,
+        interval_months=0,
+        first_due=date(2026, 2, 1),
+        account=accounts["Savings"],
+    )
+    board = client.get("/expenses/?group=account")
+    columns = {column["name"]: column["monthly"] for column in board.context["columns"]}
+    # Holiday 30.000 a year is 2.500; the car 10.000 over May–February is 1.000.
+    assert columns["Savings"] == 250000 + 100000
+    first = services.forecast(budget, 1)[0].close
+    contributions = {
+        e.name: first.lines[e.id].contribution for e in accounts["Savings"].expenses.all()
+    }
+    # The month-end transfers the same for the car. Holiday has nothing saved yet, so until its
+    # payment in March it catches up: 30.000 over 11 transfers, more than the average.
+    assert contributions == {"New car": 100000, "Holiday": 272800}

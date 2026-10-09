@@ -76,7 +76,7 @@ Expenses are based on expected costs. Each month the user enters the actual amou
 6. **Forecast:** navigate to future months and see the expected balance of every account and expense.
 7. **Warnings** when General Savings can't cover a shortfall, and a prompt to choose where to take money from if the NemKonto would go below 0.
 8. **Balancing any day:** moves between General Savings and the expenses (filling a new expense, top-ups, returning money no longer needed) and refunds (e.g. a surplus paid back by the insurance company) can be made outside the month-end. The app lists the bank transfers needed; once they are made, the balances update.
-9. **Step-by-step setup** of a budget: today's account balances (and adding accounts), all expenses with their next due date, a summary per category with the monthly total, the expected income, then the transfers that start the budget.
+9. **Step-by-step setup** of a budget: today's account balances (and adding accounts), all expenses with their next due date, a summary per category with the monthly total, the expected income, then the transfers that start the budget. Once started, the setup is the ground truth: no money should have to be moved afterwards to match it.
 
 ## Future extension (not needed now)
 

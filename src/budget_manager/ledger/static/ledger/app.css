@@ -179,6 +179,7 @@ small, .small { font-size: 0.85rem; }
 .chip.ok { background: var(--pos-soft); color: var(--pos); }
 .chip.bad { background: var(--neg-soft); color: var(--neg); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
+.warn-text { color: var(--warn); }
 .notices { display: grid; gap: 8px; }
 .notice { border-radius: 8px; padding: 10px 14px; background: var(--sunk); display: grid; gap: 2px; }
 .notice.info { background: var(--accent-soft); }

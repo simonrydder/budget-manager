@@ -3,7 +3,14 @@ from datetime import date
 import pytest
 from freezegun import freeze_time
 
-from budget_manager.ledger.models import Account, Expense, IncomeSource, MonthClose, SpendingEntry
+from budget_manager.ledger.models import (
+    Account,
+    Expense,
+    IncomeSource,
+    MonthClose,
+    Move,
+    SpendingEntry,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -322,3 +329,62 @@ def test_a_next_payment_that_covers_two_months(client, household, accounts):
     assert Expense.objects.get(name="Fuel").first_amount is None
     client.post("/start/expenses/", {**data, "name": "Gym", "first_amount": "1.000"})
     assert Expense.objects.get(name="Gym").first_amount is None
+
+
+def test_a_running_budget_ignores_the_hidden_due_date(client, household, accounts):
+    """Choosing Running hides the due date, but a date typed before still comes along."""
+    walk_to_transfers(client, accounts)
+    add_expense(client, accounts, "Fuel", "900", "2026-11-01", account="Food", kind="running")
+    fuel = Expense.objects.get(name="Fuel")
+    assert fuel.first_due == date(2026, 10, 1)  # it covers October, whose money is on Food
+
+    # One saved with November before this was fixed is moved back in step 5, so October's
+    # spending is asked and the first month-end refills it.
+    Expense.objects.filter(pk=fuel.pk).update(first_due=date(2026, 11, 1))
+    page = client.post("/start/transfers/", {"action": "preview", f"spent-{fuel.id}": "300"})
+    fuel.refresh_from_db()
+    assert fuel.first_due == date(2026, 10, 1)
+    assert f'name="spent-{fuel.id}"' in page.content.decode()
+    assert page.context["preview"].lines[fuel.id].contribution == 90000
+
+
+def test_starting_makes_the_setup_the_ground_truth(client, household, accounts):
+    """Nothing waits under Balance after Start: today's bank balances already hold it all."""
+    walk_to_transfers(client, accounts)
+    rent = Expense.objects.get(name="Rent")
+    # No top-ups while setting up: the setup decides what each expense has.
+    form = client.get(f"/expenses/{rent.id}/edit/").context["form"]
+    assert "topup" not in form.fields
+    Move.objects.create(budget=household, kind=Move.Type.TOPUP, expense=rent, amount=50000)
+    # An expense that has already ended needs nothing set aside.
+    Expense.objects.filter(name="Phone").update(end_date=date(2026, 10, 5))
+    groceries = Expense.objects.get(name="Groceries")
+    response = client.post(
+        "/start/transfers/", {"action": "start", f"spent-{groceries.id}": "3.200"}, follow=True
+    )
+    assert response.redirect_chain[-1][0] == client.at("/")
+    assert not Move.objects.filter(budget=household).exists()
+    assert Expense.objects.get(name="Phone").starting_balance == 0
+    assert client.get("/balance/").context["plan"].moves == []
+
+
+def test_step_five_explains_a_first_month_end_above_the_usual(client, household, accounts):
+    walk_to_transfers(client, accounts)
+    insurance = Expense.objects.get(name="Insurance")
+    page = client.post("/start/transfers/", {"action": "preview"})
+    budget_line = next(t for t in page.context["first_transfers"] if t["account"].name == "Budget")
+    # Insurance 100, phone 199 and rent 10.000: the steady amounts, nothing extra.
+    assert (budget_line["usual"], budget_line["extra"]) == (1029900, 0)
+    assert "Usually about 10.299 a month" in page.content.decode()
+
+    # Nothing set aside for the insurance due 1 December: 1.200 over two month-ends.
+    page = client.post("/start/transfers/", {"action": "preview", f"aside-{insurance.id}": "0"})
+    budget_line = next(t for t in page.context["first_transfers"] if t["account"].name == "Budget")
+    assert budget_line["plan"].contributions == 60000 + 19900 + 1000000
+    assert budget_line["extra"] == 50000
+    text = page.content.decode()
+    assert "500 more this time</span> while expenses with less set aside catch up" in text
+    assert 'title="Usually about 100 a month">600</td>' in text
+    # Recalculating only previews: the expense is changed by Start.
+    insurance.refresh_from_db()
+    assert insurance.starting_balance == 0 and household.started_on is None
