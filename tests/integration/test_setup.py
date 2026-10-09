@@ -214,6 +214,7 @@ def test_the_whole_setup_starts_the_budget_mid_month(client, household, accounts
     rent = Expense.objects.get(name="Rent")
     page = client.get("/month-end/2026-11/spending/")
     assert "You started the budget on 7 October" in page.content.decode()
+    assert "It held 4.000,00 when you started the budget on 7 October" in page.content.decode()
     client.post(
         "/month-end/2026-11/spending/",
         {

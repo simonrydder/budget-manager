@@ -11,7 +11,8 @@ the budget came from; the requirements are the source of truth.
 | Accounts | Customisable. Four to start with: **NemKonto**, **Budget**, **Food** and **Savings**. The NemKonto always exists and cannot be deleted. |
 | General Savings | Not a separate bank account: it is the part of the **savings account** not set aside for a savings goal. Exactly one account holds it (Savings by default; it can be moved). |
 | Expenses | Defined in the app: name, amount, first due date and frequency, type, category and account. They can be dragged between categories (or accounts) on the expenses board. A food budget is just a running expense linked to the Food account. |
-| Expense types | **Fixed**: the same amount on its due date (rent, insurance). **Variable**: a bill on its due date whose amount varies (power, heating). **Running**: spent bit by bit through the month (food, fuel, everyday spending); monthly from the 1st, no due date. Only fixed expenses are topped up automatically. Only running expenses can live on the NemKonto: their money stays there without a transfer, and the NemKonto minimum and maximum apply to the rest. |
+| Expense types | **Fixed**: the same amount on its due date (rent, insurance). **Variable**: a bill on its due date whose amount varies (power, heating). **Running**: spent bit by bit through the month (food, fuel); monthly from the 1st, no due date. Only fixed expenses are topped up automatically. Expenses cannot use the NemKonto. |
+| Everyday spending | The NemKonto is also the everyday account: what it keeps after a month-end (between X and Y) is the money for everyday spending with its card. Step 1 of each month-end asks what was spent from it (or its balance, to work that out); the month-end then refills it to between X and Y. An expected amount per month (set in the setup or Settings) is used for the forecast and the monthly totals. |
 | Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
 | Month-end routine | On the last day of a month: enter that month's actual spending, the interest received, next month's income (it arrives at the end of the month), then make the transfers. |
 | Forecast | Uses expected amounts for everything not yet entered. |
@@ -50,8 +51,9 @@ A new budget (or a copy of only the setup) starts with **Set up** in the menu. E
 once the one before it is done; earlier steps can be changed at any time until the first
 month-end.
 
-1. **Accounts**: today's bank balance of every account, and the NemKonto minimum and maximum.
-   Accounts can be added, renamed or removed here.
+1. **Accounts**: today's bank balance of every account, the NemKonto minimum and maximum, and
+   roughly what is spent from the NemKonto in a month. Accounts can be added, renamed or removed
+   here.
 2. **Expenses**: added one at a time with the essentials (amount, frequency, next due date,
    account, category, type). Categories can be added, renamed and removed on the same page. The
    next one starts with the same account, category
@@ -76,7 +78,8 @@ The first month-end then asks for the rest of the current month's spending.
 A **budget month** is the month whose payments a transfer pays for. The transfers for May are made
 on 30 April, funded by the income that arrives at the end of April. The checklist on 30 April:
 
-1. **April spending**: what each expense actually cost in April.
+1. **April spending**: what each expense actually cost in April, and what was spent from the
+   NemKonto itself.
 2. **April interest**: interest per account (negative if paid).
 3. **May income**: what arrived on the NemKonto.
 4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
@@ -101,7 +104,8 @@ For budget month *B*:
    change the contributions: the actual balance of a variable expense may go below zero or build
    up, and a fixed expense below zero is handled by rule 1.
 3. **Transfer per account** = its contributions − interest that landed on it (+ top-ups).
-4. **NemKonto**: what is left after the transfers is kept between the minimum X and maximum Y.
+4. **NemKonto**: what it held after the last month-end, minus what was spent from it, plus the
+   income, minus the transfers, is kept between the minimum X and maximum Y.
    Above Y the excess goes to General Savings; below X the difference comes from General Savings.
    If General Savings cannot cover it there is a warning and the NemKonto may end below X. If it
    would end below 0, the person chooses which expenses or savings goals to take the money from
@@ -154,13 +158,13 @@ erDiagram
 
 | Table | Holds |
 |---|---|
-| `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, starting balances of the NemKonto and General Savings, forecast length, how far the setup has come. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
+| `Budget` | Name, the people who can use it, first budget month, NemKonto minimum and maximum, expected everyday spending from the NemKonto, starting balances of the NemKonto and General Savings, forecast length, how far the setup has come. Accounts, categories, expenses, income, corrections, month-ends and moves each belong to one budget. |
 | `Account` | Name, role (`nemkonto`, `savings` that holds General Savings, or `normal`) and the bank balance entered in the setup. |
 | `Category` | Name and order. |
 | `Expense` | Amount, first due date, frequency in months (0 = once), end date, type (fixed, variable or running), account, category, starting balance, first month with a contribution. |
 | `IncomeSource` | Expected amount, first month, frequency, last month. |
 | `SpendingEntry`, `IncomeEntry`, `InterestEntry` | What actually happened, one row per month. |
-| `MonthClose` | One per budget month: status (in progress or closed), the NemKonto and General Savings flow, notices. |
+| `MonthClose` | One per budget month: status (in progress or closed), what was spent from the NemKonto, the NemKonto and General Savings flow, notices. |
 | `ContributionLine` | Frozen per expense and month: contribution, expected payment, top-up, cover, release, amount change. |
 | `Transfer` | The net transfer per account, and whether it has been made. |
 | `Decision` | Covers chosen for a month-end. |

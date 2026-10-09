@@ -41,7 +41,7 @@ DEFAULT_CATEGORIES = [
     "Savings goals",
 ]
 # Copied as they are when a budget is copied, on top of the name and the people.
-SETTINGS = ["nemkonto_min", "nemkonto_max", "forecast_months"]
+SETTINGS = ["nemkonto_min", "nemkonto_max", "everyday_spending", "forecast_months"]
 HISTORY = [
     "start_month",
     "opening_month",

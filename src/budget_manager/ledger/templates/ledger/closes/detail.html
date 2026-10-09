@@ -48,7 +48,8 @@
   <section class="card">
     <h2>NemKonto</h2>
     <div class="flow">
-      <div><span>Before the income</span><span class="num">{{ close.nemkonto_before|money }}</span></div>
+      <div><span>After the last month-end</span><span class="num">{{ close.nemkonto_before|money }}</span></div>
+      {% if close.nemkonto_spent %}<div><span>− Spent from it</span><span class="num">{{ close.nemkonto_spent|money }}</span></div>{% endif %}
       <div><span>+ Income</span><span class="num">{{ close.income|money }}</span></div>
       {% if close.interest %}<div><span>+ Interest</span><span class="num">{{ close.interest|money }}</span></div>{% endif %}
       <div><span>− Contributions</span><span class="num">{{ close.contributions|money }}</span></div>

@@ -22,6 +22,21 @@
       <button type="button" class="btn small" data-fill="input[data-fixed-due]" hidden>Fill fixed payments with expected amounts</button>
       <button type="button" class="btn small" data-fill="input[data-due]" hidden>Fill all due payments</button>
     </div>
+    <section class="entry-group">
+      <header><h3>NemKonto</h3><span class="muted small">Everyday spending</span></header>
+      <div class="entry">
+        <div class="name">
+          <label for="nemkonto-spent"><b>Spent from the NemKonto in {{ previous.name }}</b></label>
+          <small>It held {{ nemkonto.start|money }} {% if opening_month and started_on %}when you started the budget on {{ started_on|date:"j F" }}{% else %}after the last month-end{% endif %}{% if nemkonto.expected %}; about {{ nemkonto.expected|money }} a month is usual{% endif %}. Paid with its card or from it directly.</small>
+          <small class="calc" hidden>Or type its balance before the {{ month.name }} income arrived: <input type="text" class="amount" inputmode="decimal" autocomplete="off" aria-label="NemKonto balance before the income" data-spent-from="{{ nemkonto.start }}" data-spent-to="nemkonto-spent" placeholder="Balance"></small>
+        </div>
+        <input type="text" class="amount{% if nemkonto.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
+               id="nemkonto-spent" name="nemkonto-spent" placeholder="0,00"
+               value="{% if nemkonto.raw is not None %}{{ nemkonto.raw }}{% else %}{{ nemkonto.value|money_input }}{% endif %}">
+        <span></span>
+        {% if nemkonto.error %}<span class="error">{{ nemkonto.error }}</span>{% endif %}
+      </div>
+    </section>
     {% for account, rows in groups %}
     <section class="entry-group">
       <header><h3>{{ account.name }}</h3><span class="muted small">{{ rows|length }} expense{{ rows|length|pluralize }}</span></header>

@@ -12,9 +12,12 @@ For budget month *B* the close happens on the last day of *B − 1*:
    it, the NemKonto may go below X, and if it would go below 0 the person has to choose which
    expenses to take the money from (``covers``).
 
-All transfers are netted so the NemKonto sends (or receives) one amount per account. Money for
-running budgets that live on the NemKonto itself (everyday spending) stays there: it is set aside
-on the NemKonto without a transfer, and the minimum and maximum apply to what is left besides it.
+All transfers are netted so the NemKonto sends (or receives) one amount per account.
+
+The NemKonto is also the everyday account: what is spent from it during the month
+(``nemkonto_spent``) comes out of what it held after the last month-end, before the minimum and
+maximum are applied. So the money left on it after a month-end is the everyday money for the
+month, and the month-end refills it.
 """
 
 from __future__ import annotations
@@ -111,6 +114,7 @@ class ClosePlan:
     min_balance: int
     max_balance: int
     notices: list[Notice] = field(default_factory=list)
+    nemkonto_spent: int = 0  # everyday spending from the NemKonto since the last month-end
 
     @property
     def transfer_date(self) -> date:
@@ -159,6 +163,7 @@ def plan_close(
     releases: dict[int, int] | None = None,
     topups: dict[int, int] | None = None,
     funding: dict[int, int] | None = None,
+    nemkonto_spent: int = 0,
 ) -> ClosePlan:
     """Plan the close for ``state.month``.
 
@@ -169,6 +174,7 @@ def plan_close(
     chose to move from General Savings to an expense (any kind, e.g. a variable expense that
     has been below zero for a while). ``funding`` is the same, but counts towards the plan: it
     fills a new expense up to what a steady monthly amount would have saved by now.
+    ``nemkonto_spent`` is what was spent from the NemKonto itself since the last month-end.
     """
     interest = {k: v for k, v in (interest or {}).items() if v}
     covers = {k: v for k, v in (covers or {}).items() if v}
@@ -254,6 +260,7 @@ def plan_close(
     contributions = sum(line.contribution for line in lines.values())
     after = (
         state.nemkonto
+        - nemkonto_spent
         + income
         + sum(interest.values())
         - contributions
@@ -382,6 +389,7 @@ def plan_close(
         min_balance=nemkonto.min_balance,
         max_balance=nemkonto.max_balance,
         notices=notices,
+        nemkonto_spent=nemkonto_spent,
     )
 
 

@@ -120,8 +120,8 @@ class ExpenseForm(forms.ModelForm):
         initial="fixed",
         widget=forms.RadioSelect,
         label="Type",
-        help_text="Running budgets, like food or everyday spending, are monthly and available "
-        "from the 1st, so they need no due date. Only they can use the NemKonto.",
+        help_text="Running budgets, like food or fuel, are monthly and available from the 1st, "
+        "so they need no due date.",
     )
     starting_balance = AmountField(
         required=False,
@@ -166,7 +166,12 @@ class ExpenseForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         budget = self.instance.budget
-        self.fields["account"].queryset = budget.accounts.all()
+        # Everyday spending from the NemKonto is entered at each month-end instead. An expense
+        # put on it before that keeps it as a choice, so it can be moved.
+        accounts = budget.accounts.exclude(role="nemkonto")
+        if self.instance.account_id:
+            accounts = accounts | budget.accounts.filter(pk=self.instance.account_id)
+        self.fields["account"].queryset = accounts
         self.fields["account"].empty_label = None
         self.fields["first_due"].required = False
         self.fields["category"].queryset = budget.categories.all()
@@ -204,14 +209,14 @@ class ExpenseForm(forms.ModelForm):
             if first is None:
                 first = first_running_month(self.instance.budget, date.today()).first_day()
             data["first_due"] = first.replace(day=1)
-        else:
-            if not data.get("first_due") and "first_due" not in self.errors:
-                self.add_error("first_due", "Enter the date it is due next.")
-            if account and account.is_nemkonto:
-                self.add_error(
-                    "account",
-                    "Only running budgets, like everyday spending, can use the NemKonto.",
-                )
+        elif not data.get("first_due") and "first_due" not in self.errors:
+            self.add_error("first_due", "Enter the date it is due next.")
+        if account and account.is_nemkonto:
+            self.add_error(
+                "account",
+                "Expenses cannot use the NemKonto. What is spent from it is entered at each "
+                "month-end, so choose another account.",
+            )
         first_due, end_date = data.get("first_due"), data.get("end_date")
         if first_due and end_date and end_date < first_due:
             self.add_error("end_date", "The end date must be on or after the first due date.")
@@ -368,16 +373,32 @@ class SettingsForm(BudgetNameMixin, forms.ModelForm):
     members = PeopleField(help_text="You always keep access yourself.")
     nemkonto_min = AmountField(allow_negative=False, label="NemKonto minimum (X)")
     nemkonto_max = AmountField(allow_negative=False, label="NemKonto maximum (Y)")
+    everyday_spending = AmountField(
+        required=False,
+        allow_negative=False,
+        label="Everyday spending from the NemKonto, a month",
+        help_text="Roughly what is spent with its card. Only used for the forecast.",
+    )
     forecast_months = forms.IntegerField(min_value=3, max_value=120, label="Forecast length")
 
     class Meta:
         model = Budget
-        fields = ["name", "members", "nemkonto_min", "nemkonto_max", "forecast_months"]
+        fields = [
+            "name",
+            "members",
+            "nemkonto_min",
+            "nemkonto_max",
+            "everyday_spending",
+            "forecast_months",
+        ]
         labels = {"name": "Name"}
 
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+
+    def clean_everyday_spending(self):
+        return self.cleaned_data.get("everyday_spending") or 0
 
     def clean(self):
         data = super().clean()
@@ -487,6 +508,13 @@ class BalancesForm(forms.Form):
         label="Keep at most (Y)",
         help_text="More than this is moved to General Savings.",
     )
+    everyday_spending = AmountField(
+        required=False,
+        allow_negative=False,
+        label="Spent from it in a month, roughly",
+        help_text="Everyday spending with its card. Only used for the forecast; at each "
+        "month-end you enter what was really spent.",
+    )
 
     def __init__(self, *args, budget: Budget, accounts, **kwargs):
         super().__init__(*args, **kwargs)
@@ -502,6 +530,8 @@ class BalancesForm(forms.Form):
         if budget.nemkonto_max:
             self.fields["nemkonto_min"].initial = budget.nemkonto_min
             self.fields["nemkonto_max"].initial = budget.nemkonto_max
+        if budget.everyday_spending:
+            self.fields["everyday_spending"].initial = budget.everyday_spending
 
     @staticmethod
     def key(account: Account) -> str:
@@ -520,8 +550,11 @@ class BalancesForm(forms.Form):
             account.save(update_fields=["start_balance"])
         self.budget.nemkonto_min = self.cleaned_data["nemkonto_min"]
         self.budget.nemkonto_max = self.cleaned_data["nemkonto_max"]
+        self.budget.everyday_spending = self.cleaned_data["everyday_spending"] or 0
         self.budget.balances_on = today
-        self.budget.save(update_fields=["nemkonto_min", "nemkonto_max", "balances_on"])
+        self.budget.save(
+            update_fields=["nemkonto_min", "nemkonto_max", "everyday_spending", "balances_on"]
+        )
 
     def keep_typed_balances(self) -> None:
         """Remember the balances typed so far, e.g. before adding another account."""

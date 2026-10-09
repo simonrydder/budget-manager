@@ -23,10 +23,13 @@ def transfers(month: str) -> dict[str, int]:
     return {t.account.name: t.amount for t in close.transfers.select_related("account")}
 
 
-def month_end(client, month: str, *, spending=None, interest=None, income="25.000", close=True):
+def month_end(
+    client, month: str, *, spending=None, nemkonto="", interest=None, income="25.000", close=True
+):
     base = f"/month-end/{month}/"
     assert client.get(base + "spending/").status_code == 200
     data = {f"spent-{expense(name).id}": value for name, value in (spending or {}).items()}
+    data["nemkonto-spent"] = nemkonto
     response = client.post(base + "spending/", data)
     assert response.status_code == 302, response.content
     assert response.url == client.at(base + "interest/")

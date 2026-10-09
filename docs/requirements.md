@@ -51,7 +51,8 @@ An expense is a planned cost that money is set aside for. Each expense has:
 
 - **Fixed expenses** have a relatively stable amount, paid on a due date (e.g. insurance). If the balance goes negative, the missing amount is taken from General Savings and the expense's expected amount is updated to match the real cost.
 - **Variable expenses** are bills paid on a due date whose amount varies (e.g. power, heating).
-- **Running expenses** are spent bit by bit through the month (e.g. food, fuel, parking: 100 set aside per month, sometimes less is spent, sometimes more). They are monthly and have no due date. Everyday spending straight from the NemKonto is a running expense on the NemKonto: its money stays there.
+- **Running expenses** are spent bit by bit through the month (e.g. food, fuel, parking: 100 set aside per month, sometimes less is spent, sometimes more). They are monthly and have no due date.
+- **Everyday spending from the NemKonto** is not an expense: what the NemKonto keeps after a month-end (between X and Y) is the money for it. At each month-end the actual spending from the NemKonto is entered, and the month-end refills the NemKonto to between X and Y. An expected amount per month is used for the forecast.
 - For variable and running expenses the balance may go negative or build up, and it is the user's responsibility to adjust the amount.
 
 ### Actual spending

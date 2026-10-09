@@ -157,16 +157,29 @@ def spending(request, month: str):
         )
 
     errors = {}
+    nemkonto = {
+        "start": state.nemkonto,
+        "expected": budget.everyday_spending,
+        "value": close.nemkonto_spent,
+        "raw": None,
+        "error": None,
+    }
     if request.method == "POST" and not first_close:
         values, errors = read_amounts(request.POST, "spent-", [row["expense"].id for row in rows])
-        if not errors:
+        spent, nemkonto_error = read_amounts(request.POST, "nemkonto-", ["spent"])
+        if not errors and not nemkonto_error:
             with transaction.atomic():
                 save_entries(SpendingEntry, "expense", previous.first_day(), values, request.user)
+                close.nemkonto_spent = spent["spent"]
+                close.save(update_fields=["nemkonto_spent"])
             _advance(close, 2)
             return _next(request, month, "spending")
         for row in rows:
             row["raw"] = request.POST.get(f"spent-{row['expense'].id}", "")
             row["error"] = errors.get(row["expense"].id)
+        nemkonto["raw"] = request.POST.get("nemkonto-spent", "")
+        nemkonto["error"] = nemkonto_error.get("spent")
+        errors = errors or nemkonto_error
     elif request.method == "POST":
         _advance(close, 2)
         return _next(request, month, "spending")
@@ -189,6 +202,7 @@ def spending(request, month: str):
         entered=len(entries),
         total=len(rows),
         errors=errors,
+        nemkonto=nemkonto,
     )
     return render(request, "ledger/month_end/spending.html", context)
 
@@ -314,6 +328,7 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
         "transfers": transfers,
         "lines": lines,
         "missing_income": missing,
+        "nemkonto_missing": inputs.nemkonto_spent is None and month - 1 >= budget.opening,
         "nemkonto": nemkonto,
         "savings_account": accounts[state.savings_account.id],
         "balances_after": [

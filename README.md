@@ -119,7 +119,8 @@ as `demo` / `demo`. Run it again with `--name Other` for a second budget.
 
 1. **Once per budget:** follow **Set up** in the menu, five short steps:
    1. **Accounts:** today's balance of each account (NemKonto, Budget, Food and Savings to begin
-      with; add or rename them if yours are different) and the NemKonto minimum and maximum,
+      with; add or rename them if yours are different), the NemKonto minimum and maximum, and
+      roughly what you spend from the NemKonto in a month,
    2. **Expenses:** every expense with its amount, how often it is paid and when it is due next
       (fixed, variable bills, or running budgets like food that need no due date), and the
       categories they belong to,
@@ -128,7 +129,7 @@ as `demo` / `demo`. Run it again with `--name Other` for a second budget.
    5. **Transfers:** what each expense should have by now so it saves the same every month, the
       bank transfers that even out the accounts today, and your first month-end. Then start.
 2. **Every month-end** (the last day of the month) follow the checklist under **Month-end**:
-   1. enter what was actually spent on each expense during the month,
+   1. enter what was actually spent on each expense during the month, and from the NemKonto,
    2. enter the interest each account received,
    3. enter the income that arrived for next month,
    4. make the transfers it lists and tick them off,

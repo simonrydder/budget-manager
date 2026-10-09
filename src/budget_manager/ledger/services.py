@@ -192,6 +192,7 @@ def build_state(budget: Budget) -> BudgetState:
         month=month,
         nemkonto=nemkonto,
         general_savings=general_savings,
+        everyday_spending=budget.everyday_spending,
     )
 
 
@@ -207,6 +208,7 @@ class CloseInputs:
     releases: dict[int, int] = field(default_factory=dict)
     topups: dict[int, int] = field(default_factory=dict)
     funding: dict[int, int] = field(default_factory=dict)
+    nemkonto_spent: int | None = None  # None until entered at the month-end
 
     @property
     def income(self) -> int:
@@ -222,6 +224,7 @@ def close_inputs(budget: Budget, month: YearMonth) -> CloseInputs:
         inputs.interest[entry.account_id] = entry.amount
     close = draft_close(budget, month)
     if close:
+        inputs.nemkonto_spent = close.nemkonto_spent
         for decision in close.decisions.all():
             target = {
                 Decision.Type.COVER: inputs.covers,
@@ -245,6 +248,7 @@ def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs
         releases=inputs.releases,
         topups=inputs.topups,
         funding=inputs.funding,
+        nemkonto_spent=inputs.nemkonto_spent or 0,
     )
     return state, plan, inputs
 
@@ -272,6 +276,9 @@ def forecast(
         releases={state.month: inputs.releases},
         topups={state.month: inputs.topups},
         funding={state.month: inputs.funding},
+        nemkonto_spent=(
+            {state.month: inputs.nemkonto_spent} if inputs.nemkonto_spent is not None else None
+        ),
     )
 
 
@@ -297,6 +304,7 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
     close.closed_by = user
     close.closed_at = timezone.now()
     close.nemkonto_before = plan.nemkonto_before
+    close.nemkonto_spent = plan.nemkonto_spent
     close.income = plan.income
     close.interest = plan.interest_total
     close.contributions = plan.contributions_total
@@ -482,6 +490,7 @@ def monthly_balance(budget: Budget, state: BudgetState | None = None) -> Monthly
         else:
             missing = max(0, expense.amount - ledger.planned_balance_before(month))
             expenses += missing // (month.months_until(YearMonth.of(due)) + 1)
+    expenses += budget.everyday_spending
     income = 0
     for source in state.incomes:
         schedule = source.schedule
@@ -857,10 +866,15 @@ class SetupSummary:
     groups: list[SummaryGroup]
     accounts: list[tuple[Account, int]]
     income: int  # expected income a month
+    everyday: int = 0  # expected everyday spending from the NemKonto a month
+
+    @property
+    def expenses(self) -> int:
+        return sum(group.monthly for group in self.groups)
 
     @property
     def monthly(self) -> int:
-        return sum(group.monthly for group in self.groups)
+        return self.expenses + self.everyday
 
     @property
     def left_over(self) -> int:
@@ -887,17 +901,15 @@ def setup_summary(budget: Budget, today: date) -> SetupSummary:
             groups.append(SummaryGroup(category.name if category else "Uncategorised", rows))
     groups.sort(key=lambda group: -group.monthly)
     accounts = [
-        (account, monthly)
-        for account in budget.accounts.all()
-        if (monthly := sum(needs[e.pk] for e in expenses if e.account_id == account.pk))
-        or not account.is_nemkonto
+        (account, sum(needs[e.pk] for e in expenses if e.account_id == account.pk))
+        for account in budget.accounts.exclude(role=Role.NEMKONTO.value)
     ]
     income = 0
     for source in budget.incomes.all():
         ends = source.end_month and YearMonth.of(source.end_month) < start
         if source.interval_months and not ends:
             income += source.amount // source.interval_months
-    return SetupSummary(groups, accounts, income)
+    return SetupSummary(groups, accounts, income, budget.everyday_spending)
 
 
 def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
@@ -922,5 +934,9 @@ def preview_first_close(budget: Budget, plan: StartPlan) -> ClosePlan | None:
         month=plan.start,
         nemkonto=plan.nemkonto,
         general_savings=plan.general_savings,
+        everyday_spending=budget.everyday_spending,
     )
-    return engine.plan_close(state, income=state.expected_income(plan.start))
+    # Everyday spending from the NemKonto for the rest of the month (its balance is today's).
+    last = plan.opening.last_day()
+    rest = budget.everyday_spending * (last.day - plan.today.day) // last.day
+    return engine.plan_close(state, income=state.expected_income(plan.start), nemkonto_spent=rest)

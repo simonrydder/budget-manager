@@ -36,12 +36,13 @@ def amounts(plan):
 
 
 def assert_consistent(budget, plan):
-    """Money is only moved around: nothing appears or disappears in a close."""
+    """Money is only moved around: only income and interest come in, and only everyday spending
+    from the NemKonto goes out."""
     balances_before = sum(line.balance_before for line in plan.lines.values())
     balances_after = sum(line.balance_after for line in plan.lines.values())
     before = balances_before + budget.nemkonto + budget.general_savings
     after = balances_after + plan.nemkonto_end + plan.general_savings_after
-    assert after == before + plan.income + plan.interest_total
+    assert after == before + plan.income + plan.interest_total - plan.nemkonto_spent
     sent = sum(amounts(plan).values())
     nem_interest = plan.interest.get(NEM, 0)
     # Money of running budgets on the NemKonto stays on it, next to the free part.
@@ -50,7 +51,8 @@ def assert_consistent(budget, plan):
         for line in plan.lines.values()
         if line.account_id == NEM
     )
-    assert plan.nemkonto_end + kept == budget.nemkonto + plan.income + nem_interest - sent
+    start = budget.nemkonto - plan.nemkonto_spent
+    assert plan.nemkonto_end + kept == start + plan.income + nem_interest - sent
 
 
 def test_surplus_above_maximum_goes_to_general_savings():
@@ -362,4 +364,22 @@ def test_running_budget_on_the_nemkonto_stays_there():
     assert plan.lines[8].balance_before == kr(-400)
     assert plan.lines[8].topup == 0
     assert "variable_below_zero" in [notice.code for notice in plan.notices]
+    assert_consistent(budget, plan)
+
+
+def test_everyday_spending_comes_out_of_the_nemkonto():
+    budget = household(nemkonto=5000)
+    # 5.000 was left after the last month-end and 4.000 of it was spent; then 18.500 arrives
+    # and 16.728 is transferred.
+    plan = plan_close(budget, income=kr(18500), nemkonto_spent=kr(4000))
+    assert plan.nemkonto_before == kr(5000)
+    assert plan.nemkonto_after_transfers == kr(5000 - 4000 + 18500 - 16728)
+    assert plan.nemkonto_end == kr(2772)  # between the minimum and the maximum: it stays
+    assert plan.surplus == plan.taken == 0
+    assert_consistent(budget, plan)
+
+    # Spending more leaves it below the minimum, so General Savings tops it up.
+    plan = plan_close(budget, income=kr(18500), nemkonto_spent=kr(5000))
+    assert plan.taken == kr(228)
+    assert plan.nemkonto_end == kr(2000)
     assert_consistent(budget, plan)

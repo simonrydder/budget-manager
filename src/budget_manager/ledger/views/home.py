@@ -157,6 +157,7 @@ def dashboard(request):
         "general_savings": state.general_savings,
         "nemkonto": state.nemkonto,
         "nemkonto_bank": account_balances[state.nemkonto_account.id],
+        "everyday": budget.everyday_spending,
         "set_aside": sum(balances.values()),
         "upcoming": upcoming_payments(state, balances),
         "attention": budget_warning(budget, state) + attention(points, state, balances),

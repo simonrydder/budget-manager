@@ -31,7 +31,6 @@ EXPENSES = [
     ("Fuel and parking", 900, 1, (0, 1), "Transport", "Budget", "running"),
     ("Football club", 1400, 6, (2, 1), "Children", "Budget", "fixed"),
     ("Groceries", 5500, 1, (0, 1), "Food", "Food", "running"),
-    ("Everyday spending", 2500, 1, (0, 1), "", "NemKonto", "running"),
     ("Summer holiday", 24000, 12, (6, 1), "Savings goals", "Savings", "fixed"),
     ("Christmas gifts", 3500, 12, (9, 1), "Savings goals", "Savings", "variable"),
     ("New car", 60000, 0, (36, 1), "Savings goals", "Savings", "fixed"),
@@ -71,6 +70,7 @@ class Command(BaseCommand):
         budget.nemkonto_max = 500000
         budget.nemkonto_opening = 350000
         budget.general_savings_opening = 2500000
+        budget.everyday_spending = 250000
         budget.save()
 
         accounts = {account.name: account for account in budget.accounts.all()}
@@ -126,7 +126,10 @@ class Command(BaseCommand):
             InterestEntry.objects.create(
                 account=accounts["Savings"], month=previous.first_day(), amount=4150 + number * 120
             )
-            services.start_draft(budget, month, person)
+            close = services.start_draft(budget, month, person)
+            if number:  # the first month-end has no earlier month to spend in
+                close.nemkonto_spent = round(250000 * wobble[(number + 2) % 6])
+                close.save(update_fields=["nemkonto_spent"])
             services.finalize_close(budget, month, person)
             self.stdout.write(f"Closed {month.label}")
         self.stdout.write(

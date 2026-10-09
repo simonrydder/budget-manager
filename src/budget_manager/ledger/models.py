@@ -41,6 +41,10 @@ class Budget(models.Model):
     nemkonto_max = models.BigIntegerField(default=0)
     nemkonto_opening = models.BigIntegerField(default=0)
     general_savings_opening = models.BigIntegerField(default=0)
+    everyday_spending = models.BigIntegerField(
+        default=0,
+        help_text="Expected spending from the NemKonto itself in a month, for the forecast.",
+    )
     forecast_months = models.PositiveSmallIntegerField(default=24)
     setup_step = models.PositiveSmallIntegerField(
         default=1, help_text="The furthest step of the setup reached so far."
@@ -302,6 +306,11 @@ class MonthClose(models.Model):
     done_accounts = models.JSONField(default=list, blank=True)
 
     nemkonto_before = models.BigIntegerField(default=0)
+    nemkonto_spent = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Spent from the NemKonto itself since the last month-end; empty until entered.",
+    )
     income = models.BigIntegerField(default=0)
     interest = models.BigIntegerField(default=0)
     contributions = models.BigIntegerField(default=0)

@@ -70,3 +70,14 @@ def test_forecast_warns_when_income_stops():
     codes = {n.code for p in points for n in p.close.notices}
     assert "nemkonto_below_zero" in codes
     assert points[-1].nemkonto < 0
+
+
+def test_forecast_expects_the_everyday_spending_from_the_nemkonto():
+    budget = household()
+    budget.everyday_spending = kr(3000)
+    points = run_forecast(budget, 3, nemkonto_spent={MAY: kr(1000)})
+    assert [p.close.nemkonto_spent for p in points] == [kr(1000), kr(3000), kr(3000)]
+    without = run_forecast(household(), 3)
+    # Spending from the NemKonto leaves less to move to General Savings.
+    saved = points[-1].general_savings - without[-1].general_savings
+    assert saved == -kr(1000 + 3000 + 3000)

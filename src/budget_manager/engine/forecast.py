@@ -35,13 +35,15 @@ def run_forecast(
     releases: dict[YearMonth, dict[int, int]] | None = None,
     topups: dict[YearMonth, dict[int, int]] | None = None,
     funding: dict[YearMonth, dict[int, int]] | None = None,
+    nemkonto_spent: dict[YearMonth, int] | None = None,
 ) -> list[ForecastMonth]:
     """Forecast ``months`` month-ends, starting with the next close.
 
     Spending that has not been entered is assumed to equal the expected amount. Income uses
     the expected amounts unless ``income`` holds an actual total for a budget month; the same
     goes for ``interest`` (keyed by the budget month whose transfer it adjusts). ``covers`` and
-    ``releases`` hold decisions already made for a close.
+    ``releases`` hold decisions already made for a close. Everyday spending from the NemKonto is
+    the expected amount unless ``nemkonto_spent`` holds what was spent before a budget month.
     """
     state = state.copy()
     income = income or {}
@@ -50,6 +52,7 @@ def run_forecast(
     releases = releases or {}
     topups = topups or {}
     funding = funding or {}
+    nemkonto_spent = nemkonto_spent or {}
     result: list[ForecastMonth] = []
     for _ in range(months):
         month = state.month
@@ -73,6 +76,7 @@ def run_forecast(
             releases=releases.get(month),
             topups=topups.get(month),
             funding=funding.get(month),
+            nemkonto_spent=nemkonto_spent.get(month, state.everyday_spending),
         )
         apply_close(state, plan)
         result.append(

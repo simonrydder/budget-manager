@@ -1,4 +1,4 @@
-"""Running budgets: spent bit by bit through the month, possibly straight from the NemKonto."""
+"""Running budgets (spent bit by bit, like food) and everyday spending from the NemKonto."""
 
 from datetime import date
 
@@ -8,91 +8,120 @@ from freezegun import freeze_time
 from budget_manager.ledger import services
 from budget_manager.ledger.models import Expense, MonthClose
 
-from .test_month_end import month_end, transfers
+from .test_month_end import expense, month_end
 from .test_setup import add_expense, balances
 
 pytestmark = pytest.mark.django_db
 
 
-def add_everyday(client, accounts, **changes):
-    data = {
-        "name": "Everyday",
-        "amount": "2.000",
-        "interval_months": "1",
-        "first_due": "",
-        "kind": "running",
-        "account": accounts["NemKonto"].id,
-        **changes,
-    }
-    return client.post("/expenses/new/", data)
+def test_everyday_spending_comes_out_of_the_nemkonto(client, budget, accounts):
+    budget.everyday_spending = 300000
+    budget.save()
+    month_end(client, "2025-05")  # the first month-end: nothing spent yet
+    assert MonthClose.objects.get(month=date(2025, 5, 1)).nemkonto_end == 500000
+
+    # Before the June month-end: the NemKonto started with 5.000 and 3.600 was spent from it.
+    page = client.get("/month-end/2025-06/spending/").content.decode()
+    assert "Spent from the NemKonto in May" in page
+    assert "It held 5.000,00 after the last month-end" in page
+    month_end(client, "2025-06", nemkonto="3.600")
+    june = MonthClose.objects.get(month=date(2025, 6, 1))
+    # 1.400 left; 25.000 arrives; 16.728 is transferred: 9.672, so 4.672 goes to General
+    # Savings and the NemKonto starts June with its maximum again.
+    assert june.nemkonto_spent == 360000
+    assert june.nemkonto_after_transfers == 500000 - 360000 + 2500000 - 1672800
+    assert (june.surplus, june.nemkonto_end) == (467200, 500000)
+    assert "− Spent from it" in client.get("/closes/2025-06/").content.decode()
+
+    # The forecast expects the usual amount from then on.
+    points = services.forecast(budget, 2)
+    assert [point.close.nemkonto_spent for point in points] == [300000, 300000]
 
 
-def test_a_running_budget_can_live_on_the_nemkonto(client, budget, accounts):
-    response = add_everyday(client, accounts)
-    assert response.status_code == 302
-    everyday = Expense.objects.get(name="Everyday")
-    # Monthly from the first month-end on, no due date needed.
-    assert (everyday.interval_months, everyday.first_due) == (1, date(2025, 5, 1))
-    assert everyday.start_month == date(2025, 5, 1)
-
+def test_the_month_end_warns_when_nemkonto_spending_is_missing(client, budget):
     month_end(client, "2025-05")
-    close = MonthClose.objects.get(month=date(2025, 5, 1))
-    assert close.lines.get(expense=everyday).contribution == 200000
-    assert "NemKonto" not in transfers("2025-05")  # it stays where it is
-    # The NemKonto keeps its maximum free, plus the running budget.
-    state = services.build_state(budget)
-    assert state.nemkonto == 500000
-    nemkonto = accounts["NemKonto"]
-    assert state.current_account_balances()[nemkonto.id] == 500000 + 200000
-
-    # Spending from it is entered at the month-end like any other expense.
-    month_end(client, "2025-06", spending={"Everyday": "2.300"})
-    state = services.build_state(budget)
-    assert state.current_expense_balances()[everyday.id] == 200000 - 230000 + 200000
-    board = client.get("/expenses/?group=account").content.decode()
-    assert "Everyday" in board
+    month_end(client, "2025-06", close=False)
+    page = client.get("/month-end/2025-06/transfers/").content.decode()
+    assert "What was spent from the NemKonto in May is not entered" in page
+    client.post("/month-end/2025-06/spending/", {"nemkonto-spent": "0", "stay": "1"})
+    page = client.get("/month-end/2025-06/transfers/").content.decode()
+    assert "is not entered" not in page
 
 
-def test_only_running_budgets_can_use_the_nemkonto(client, budget, accounts):
-    response = add_everyday(client, accounts, kind="fixed", first_due="2025-05-10")
-    assert response.status_code == 200
-    assert "Only running budgets, like everyday spending, can use the NemKonto." in (
-        response.content.decode()
-    )
-    rent = Expense.objects.get(name="Rent")
+def test_expenses_cannot_use_the_nemkonto(client, budget, accounts):
+    form = client.get("/expenses/new/").context["form"]
+    assert accounts["NemKonto"] not in form.fields["account"].queryset
     response = client.post(
-        f"/expenses/{rent.id}/move/",
+        "/expenses/new/",
+        {
+            "name": "Everyday",
+            "amount": "2.000",
+            "kind": "running",
+            "account": accounts["NemKonto"].id,
+        },
+    )
+    assert response.status_code == 200
+    assert not Expense.objects.filter(name="Everyday").exists()
+    response = client.post(
+        f"/expenses/{expense('Groceries').id}/move/",
         {"field": "account", "value": accounts["NemKonto"].id},
         HTTP_ACCEPT="application/json",
     )
     assert response.status_code == 400
-    groceries = Expense.objects.get(name="Groceries")
-    groceries.kind = "running"
-    groceries.save()
-    response = client.post(
-        f"/expenses/{groceries.id}/move/",
-        {"field": "account", "value": accounts["NemKonto"].id},
-        HTTP_ACCEPT="application/json",
+    # An expense put on the NemKonto before keeps working, and its form asks to move it.
+    old = Expense.objects.create(
+        budget=budget,
+        name="Pocket money",
+        amount=100000,
+        first_due=date(2025, 5, 1),
+        account=accounts["NemKonto"],
+        kind="running",
     )
-    assert response.json()["ok"]
+    month_end(client, "2025-05")
+    form = {
+        "name": "Pocket money",
+        "amount": "1.000",
+        "kind": "running",
+        "account": accounts["NemKonto"].id,
+    }
+    response = client.post(f"/expenses/{old.id}/edit/", form)
+    assert b"Expenses cannot use the NemKonto." in response.content
+    assert "Pocket money" in client.get("/expenses/?group=account").content.decode()
 
 
-def test_bills_need_a_due_date(client, budget, accounts):
-    response = add_everyday(client, accounts, kind="variable", account=accounts["Budget"].id)
-    assert response.status_code == 200
+def test_a_running_budget_needs_no_due_date_but_a_bill_does(client, budget, accounts):
+    data = {
+        "name": "Fuel",
+        "amount": "900",
+        "interval_months": "3",
+        "first_due": "",
+        "kind": "running",
+        "account": accounts["Budget"].id,
+    }
+    assert client.post("/expenses/new/", data).status_code == 302
+    fuel = Expense.objects.get(name="Fuel")
+    # Monthly from the first month-end on.
+    assert (fuel.interval_months, fuel.first_due) == (1, date(2025, 5, 1))
+    response = client.post("/expenses/new/", {**data, "name": "Power", "kind": "variable"})
     assert b"Enter the date it is due next." in response.content
 
 
 @freeze_time("2026-10-07")
 def test_setup_asks_only_running_budgets_what_was_spent(client, household, accounts):
-    client.post("/start/accounts/", balances(accounts))
+    data = balances(accounts)
+    data["everyday_spending"] = "3.000"
+    client.post("/start/accounts/", data)
+    household.refresh_from_db()
+    assert household.everyday_spending == 300000
     add_expense(client, accounts, "Rent", "10.000", "2026-10-01")
     add_expense(client, accounts, "Power", "650", "2026-10-05", kind="variable")
     add_expense(client, accounts, "Heating", "900", "2026-10-25", kind="variable")
-    add_expense(client, accounts, "Everyday", "2.000", "", account="NemKonto", kind="running")
     add_expense(client, accounts, "Groceries", "5.500", "", account="Food", kind="running")
     assert Expense.objects.get(name="Groceries").first_due == date(2026, 10, 1)
     client.post("/start/expenses/", {"action": "next"})
+    summary = client.get("/start/summary/").context["summary"]
+    assert summary.everyday == 300000
+    assert summary.monthly == summary.expenses + 300000
     client.post("/start/summary/")
     client.post(
         "/start/income/",
@@ -112,12 +141,9 @@ def test_setup_asks_only_running_budgets_what_was_spent(client, household, accou
     assert "still on the account: Heating (25 Oct)." in text
     for name in ("Rent", "Power", "Heating"):
         assert f'name="spent-{Expense.objects.get(name=name).id}"' not in text
-    for name in ("Everyday", "Groceries"):
-        assert f'name="spent-{Expense.objects.get(name=name).id}"' in text
-
-    everyday = Expense.objects.get(name="Everyday")
-    plan = client.post(
-        "/start/transfers/", {"action": "preview", f"spent-{everyday.id}": "500"}
-    ).context["plan"]
-    # The NemKonto holds 4.000; 1.500 of it is left for everyday spending this month.
-    assert plan.nemkonto == 400000 - 150000
+    assert f'name="spent-{Expense.objects.get(name="Groceries").id}"' in text
+    # The NemKonto keeps today's balance for everyday spending until the month-end, where
+    # the rest of October's everyday spending (24 of 31 days) is expected to come out of it.
+    plan = page.context["plan"]
+    assert plan.nemkonto == 400000
+    assert page.context["preview"].nemkonto_spent == 300000 * 24 // 31

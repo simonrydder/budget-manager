@@ -150,6 +150,18 @@
     update();
   });
 
+  // Work out what was spent from the NemKonto from its balance.
+  document.querySelectorAll("input[data-spent-from]").forEach((input) => {
+    input.closest(".calc").hidden = false;
+    const target = document.getElementById(input.dataset.spentTo);
+    const start = parseInt(input.dataset.spentFrom, 10);
+    input.addEventListener("input", () => {
+      const balance = parseAmount(input.value);
+      if (balance === null || Number.isNaN(balance)) return;
+      target.value = formatAmount(Math.max(0, start - balance)).replace(MINUS, "-");
+    });
+  });
+
   // Forms that submit as soon as a control changes.
   document.querySelectorAll("[data-autosubmit]").forEach((control) => {
     control.addEventListener("change", () => control.form.requestSubmit());
