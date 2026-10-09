@@ -415,3 +415,35 @@ def test_expense_cards_show_the_month_balance_and_next_payment(client, budget, u
     assert 'Next <b class="num">10.000,00</b> on <b>1 Jun</b></span><span>in 12 days' in text
     assert "Spent through May</span><span>refilled 31 May" in text
     assert "left of 4.000" in text
+
+
+def test_coming_up_is_only_short_when_the_month_ends_do_not_cover_it(client, budget, accounts):
+    """Ready: the money is there. On track: the month-end before the due date brings it.
+    Short: not even that is enough."""
+    Expense.objects.create(
+        budget=budget,
+        name="Car service",
+        amount=1200000,
+        interval_months=12,
+        first_due=date(2025, 6, 15),
+        account=accounts["Budget"],
+    )
+    month_end(client, "2025-05")  # Rent 10.000 and the car service 6.000 (of 12.000) set aside
+    rent = Expense.objects.get(name="Rent")
+    SpendingEntry.objects.create(expense=rent, month=date(2025, 5, 1), amount=1000000)
+    with freeze_time("2025-05-20"):
+        rows = {row["expense"].name: row for row in client.get("/").context["upcoming"]}
+    # Rent was paid on 1 May; the 31 May transfer brings the 10.000 for 1 June.
+    assert (rows["Rent"]["balance"], rows["Rent"]["status"]) == (0, ("ok", "on track"))
+    # The car service has half now and gets the other half on 31 May.
+    assert rows["Car service"]["status"] == ("ok", "on track")
+
+    # 1.000 of the car service money was used for something else: even the transfer is short.
+    car = Expense.objects.get(name="Car service")
+    SpendingEntry.objects.create(expense=car, month=date(2025, 5, 1), amount=100000)
+    with freeze_time("2025-05-20"):
+        page = client.get("/")
+    rows = {row["expense"].name: row for row in page.context["upcoming"]}
+    assert rows["Car service"]["status"] == ("warn", "short 1.000")
+    assert rows["Car service"]["available"] == 1100000
+    assert "<i>On track</i>: the month-end transfers before the due date" in page.content.decode()

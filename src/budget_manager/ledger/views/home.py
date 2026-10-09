@@ -10,7 +10,7 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 
-from budget_manager.engine import Kind, YearMonth
+from budget_manager.engine import Kind, YearMonth, format_amount
 from budget_manager.ledger import budgets, services
 from budget_manager.ledger.charts import trend_cards
 from budget_manager.ledger.forms import NewUserForm
@@ -47,23 +47,42 @@ class LoginView(auth_views.LoginView):
         return super().dispatch(request, *args, **kwargs)
 
 
-def upcoming_payments(state, balances, days: int = 60) -> list[dict]:
+def upcoming_payments(state, balances, points, days: int = 60) -> list[dict]:
+    """The payments in the coming ``days`` and whether their money will be there: *ready* when
+    it is there now, *on track* when the month-ends before the due date bring the rest (as
+    planned in ``points``, the forecast), and *short* only when even they do not."""
     start = today()
     end = start + timedelta(days=days)
+    after_close = {point.budget_month: point.expense_balances for point in points}
     rows = []
     for ledger in state.ledgers:
         expense = ledger.expense
         due = expense.schedule.next_due_from(start)
         if due is None or due > end or YearMonth.of(due) < expense.start_month:
             continue
+        amount = expense.amount_on(due)
         balance = balances[expense.id]
+        month = YearMonth.of(due)
+        # Paid before the next month-end: only what is there now counts. Later: what the
+        # month-end transfer for the due month leaves on it.
+        if month < state.month or month not in after_close:
+            available = balance
+        else:
+            available = after_close[month][expense.id]
+        if balance >= amount:
+            status = ("ok", "ready")
+        elif available >= amount:
+            status = ("ok", "on track")
+        else:
+            status = ("warn", f"short {format_amount(amount - available, decimals=False)}")
         rows.append(
             {
                 "date": due,
                 "expense": expense,
                 "balance": balance,
-                "amount": expense.amount_on(due),
-                "short": max(0, expense.amount_on(due) - balance),
+                "amount": amount,
+                "available": available,
+                "status": status,
             }
         )
     return sorted(rows, key=lambda row: (row["date"], row["expense"].name))
@@ -160,7 +179,7 @@ def dashboard(request):
         "nemkonto_bank": account_balances[state.nemkonto_account.id],
         "everyday": state.everyday_spending,
         "set_aside": sum(balances.values()),
-        "upcoming": upcoming_payments(state, balances),
+        "upcoming": upcoming_payments(state, balances, points),
         "attention": budget_warning(budget, state) + attention(points, state, balances),
         "trends": trend_cards(points, accounts),
         "start_transfers": budget.start_transfers,

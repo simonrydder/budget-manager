@@ -4,6 +4,12 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.3.2 (2026-10-09)
+
+- Coming up on the overview no longer calls payments after the next month-end "short" when
+  the month-end transfers before them bring the money: they are *on track*. *Ready* means the
+  money is there now, and *short* only shows when even the planned transfers do not cover it.
+
 ## 1.3.1 (2026-10-09)
 
 - Fix: starting a budget again reused a bill's payment from the first start even after its due
