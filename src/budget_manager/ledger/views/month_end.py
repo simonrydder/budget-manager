@@ -199,6 +199,7 @@ def spending(request, month: str):
         "start": state.nemkonto,
         "expected": state.everyday_spending,
         "value": close.nemkonto_spent,
+        "after": state.nemkonto - (close.nemkonto_spent or 0),
         "raw": None,
         "error": None,
     }

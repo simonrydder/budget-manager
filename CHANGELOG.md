@@ -4,6 +4,13 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.7.0 (2026-10-10)
+
+- Month-end step 1: every row, the NemKonto's included, has two fields side by side, **Spent**
+  and **Balance after**. Type either one and the other follows, so you can copy whichever number
+  the bank shows. This replaces the separate "Or type what is left" field. Setup step 5 does
+  the same for running budgets (**Spent so far** and **Left**).
+
 ## 1.6.1 (2026-10-09)
 
 - People and the page of a closed month-end fit on a phone: their tables hide the less

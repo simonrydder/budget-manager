@@ -25,7 +25,8 @@ def test_everyday_spending_comes_out_of_the_nemkonto(client, budget, accounts):
     # Before the June month-end: the NemKonto started with 5.000 and 3.600 was spent from it.
     page = client.get("/month-end/2025-06/spending/").content.decode()
     assert "Spent from the NemKonto in May" in page
-    assert "It held 5.000,00 after the last month-end" in page
+    assert "it had 5.000,00 after the last month-end" in page
+    assert 'data-balance-of="nemkonto-spent" data-start="500000" value="5.000,00"' in page
     month_end(client, "2025-06", nemkonto="3.600")
     june = MonthClose.objects.get(month=date(2025, 6, 1))
     # 1.400 left; 25.000 arrives; 16.728 is transferred: 9.672, so 4.672 goes to General
@@ -178,13 +179,14 @@ def test_setup_asks_only_running_budgets_what_was_spent(client, household, accou
     assert page.context["preview"].nemkonto_spent == 300000 * 24 // 31
 
 
-def test_a_running_budget_can_be_entered_as_what_is_left(client, budget):
-    """Next to what was spent, a running budget offers to type what is left instead (the page
-    works out the spending from what it had)."""
+def test_spent_and_balance_after_are_both_editable(client, budget):
+    """Every spending row has what was spent and the balance after, and typing either one works
+    out the other from what the expense had (in app.js). Without JavaScript the balance is only
+    shown."""
     month_end(client, "2025-05")
     page = client.get("/month-end/2025-06/spending/").content.decode()
     groceries = expense("Groceries")
-    assert "Or type what is left of the 4.000,00 it had" in page
-    assert f'data-spent-from="400000" data-spent-to="spent-{groceries.id}"' in page
-    # Rent is a bill, so it has no such field.
-    assert f'data-spent-to="spent-{expense("Rent").id}"' not in page
+    assert "it had 4.000,00" in page
+    assert f'data-balance-of="spent-{groceries.id}" data-start="400000" value="4.000,00"' in page
+    assert f'data-balance-of="spent-{expense("Rent").id}"' in page
+    assert "readonly" in page

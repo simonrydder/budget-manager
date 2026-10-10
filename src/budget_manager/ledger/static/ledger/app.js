@@ -57,25 +57,6 @@
     el._timer = setTimeout(() => { el.hidden = true; }, 4500);
   }
 
-  // Live "balance after" while typing actual spending.
-  function updateLive(input) {
-    const target = document.getElementById(input.dataset.live);
-    if (!target) return;
-    const base = parseInt(input.dataset.base, 10);
-    const spent = parseAmount(input.value);
-    if (Number.isNaN(spent)) {
-      target.textContent = "Check the amount";
-      target.classList.add("neg");
-      return;
-    }
-    const after = base - (spent || 0);
-    target.textContent = formatAmount(after);
-    target.classList.toggle("neg", after < 0);
-  }
-  document.querySelectorAll("input[data-live]").forEach((input) => {
-    input.addEventListener("input", () => updateLive(input));
-  });
-
   // "Fill expected" buttons fill empty fields in their scope.
   document.querySelectorAll("[data-fill]").forEach((button) => {
     button.hidden = false;
@@ -150,27 +131,30 @@
     update();
   });
 
-  // Spent or left: typing what is left (on the NemKonto, or of a running budget) works out what
-  // was spent from what there was, and the other way round.
-  document.querySelectorAll("input[data-spent-from]").forEach((input) => {
-    input.closest(".calc").hidden = false;
-    const target = document.getElementById(input.dataset.spentTo);
-    const start = parseInt(input.dataset.spentFrom, 10);
+  // Spent and balance after: typing either one works out the other from what there was (on
+  // the NemKonto, or on an expense). Without JavaScript the balance is only shown.
+  document.querySelectorAll("[data-with-js]").forEach((element) => { element.hidden = false; });
+  document.querySelectorAll("input[data-balance-of]").forEach((balance) => {
+    const spent = document.getElementById(balance.dataset.balanceOf);
+    const start = parseInt(balance.dataset.start, 10);
     const show = (value) => formatAmount(value).replace(MINUS, "-");
-    input.addEventListener("input", () => {
-      const left = parseAmount(input.value);
-      if (left === null || Number.isNaN(left)) return;
-      target.value = show(Math.max(0, start - left));
-      target.dispatchEvent(new Event("input", { bubbles: true }));
+    balance.readOnly = false;
+    balance.addEventListener("input", () => {
+      const left = parseAmount(balance.value);
+      balance.classList.toggle("invalid", Number.isNaN(left));
+      if (Number.isNaN(left)) return;
+      balance.classList.toggle("neg", left !== null && left < 0);
+      spent.value = left === null ? "" : show(start - left);
+      spent.classList.remove("invalid");
     });
-    const fromSpent = () => {
-      const spent = parseAmount(target.value);
-      input.value = spent === null || Number.isNaN(spent) ? "" : show(start - spent);
-    };
-    target.addEventListener("input", (event) => {
-      if (event.isTrusted) fromSpent();
+    spent.addEventListener("input", () => {
+      const value = parseAmount(spent.value);
+      if (Number.isNaN(value)) return;
+      const left = start - (value || 0);
+      balance.value = show(left);
+      balance.classList.remove("invalid");
+      balance.classList.toggle("neg", left < 0);
     });
-    if (target.value.trim()) fromSpent();
   });
 
   // Forms that submit as soon as a control changes.

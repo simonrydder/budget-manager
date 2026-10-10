@@ -76,7 +76,7 @@ month-end.
    food, ask what has been spent so far this month. Each account's surplus or shortage is
    evened out through General Savings; the page lists those bank transfers and previews the
    first month-end, which shows per account the usual monthly amount next to what is sent.
-   Running budgets can be entered as what was spent or what is left; the other is worked out.
+   Running budgets have two linked fields, **Spent so far** and **Left**; typing one fills in the other.
    Recalculating only previews. **Start the
    budget** saves the starting point, and the overview keeps showing the transfers until they
    are marked done. The setup is then the ground truth: anything that was waiting under Balance
@@ -96,8 +96,10 @@ on 30 April, funded by the income that arrives at the end of April. The checklis
    amount (`row.suggested`); variable and running expenses stay empty, since only the person
    knows what they cost, and payments from before the budget was started are left out because
    the setup settled them. Expenses that were not due and have nothing entered fold into
-   "N more, not due". A running budget can be entered as what was spent or as what is left on
-   it (the page works out the other, `data-spent-from` / `data-spent-to`).
+   "N more, not due". Every row, the NemKonto's too, has two linked fields: **Spent** and
+   **Balance after** (`_balance_after.html`, `data-balance-of` / `data-start` in `app.js`).
+   Typing either works out the other from what there was; only Spent is saved. Without
+   JavaScript the balance is only shown.
 2. **April interest**: interest per account (negative if paid).
 3. **May income**: what arrived on the NemKonto.
 4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
