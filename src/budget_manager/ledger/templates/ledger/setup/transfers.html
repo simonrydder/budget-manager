@@ -24,10 +24,10 @@
         <div class="name">
           <span><label for="{{ row.spent_field.name }}"><b>{{ row.expense.name }}</b></label> <span class="chip">{{ row.expense.account.name }}</span></span>
           <small>{{ row.expense.amount|money }} for {{ plan.opening.name }}</small>
-          <small class="calc" hidden>Or type what is left: <input type="text" class="amount" inputmode="decimal" autocomplete="off" aria-label="Left of {{ row.expense.name }}" data-spent-from="{{ row.set_aside }}" data-spent-to="{{ row.spent_field.name }}" placeholder="Left"></small>
         </div>
-        <input type="text" class="amount{% if row.spent_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.spent_field.name }}" name="{{ row.spent_field.name }}" value="{{ row.spent_field.value }}" placeholder="0,00">
-        <span class="after">Left <b class="{{ row.now|tone }}">{{ row.now|money }}</b></span>
+        <label class="cell"><span>Spent so far</span>
+        <input type="text" class="amount{% if row.spent_field.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off" id="{{ row.spent_field.name }}" name="{{ row.spent_field.name }}" value="{{ row.spent_field.value }}" placeholder="0,00"></label>
+        {% include "ledger/_balance_after.html" with spent_id=row.spent_field.name start=row.set_aside balance=row.now name=row.expense.name label="Left" %}
         {% if row.spent_field.error %}<span class="error">{{ row.spent_field.error }}</span>{% endif %}
       </div>
       {% endfor %}

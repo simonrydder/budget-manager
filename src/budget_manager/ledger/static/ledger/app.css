@@ -267,20 +267,23 @@ details.entry-group > summary { cursor: pointer; list-style: none; }
 details.entry-group > summary::-webkit-details-marker { display: none; }
 details.entry-group > summary h3::before { content: "▾"; display: inline-block; width: 1.1em; color: var(--muted); }
 details.entry-group:not([open]) > summary h3::before { content: "▸"; }
-.entry { display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px; gap: 6px 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.entry { display: grid; grid-template-columns: minmax(0, 1fr) 150px 150px; gap: 6px 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
 .entry:first-of-type { border-top: 0; }
 .entry .name { display: grid; gap: 2px; min-width: 0; }
 .entry .name small { color: var(--muted); }
-.calc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.calc input.amount { width: 150px; max-width: 100%; min-height: 32px; padding: 4px 8px; }
 .entry input.amount { max-width: none; }
-.entry .after { text-align: right; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.entry .after b { color: var(--ink); font-weight: 600; }
+/* A captioned field in a row: Spent, Balance after. */
+.entry .cell { display: grid; gap: 2px; min-width: 0; }
+.entry .cell > span { font-size: 0.8rem; color: var(--muted); text-align: right; }
+.entry input.balance-after { font-weight: 600; }
+.entry input.balance-after.neg { color: var(--neg); }
+.entry input.balance-after[readonly] { border-color: transparent; background: transparent; box-shadow: none; padding-right: 0; }
 .entry.due { background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface)); }
 .entry .error { grid-column: 1 / -1; color: var(--neg); font-size: 0.86rem; }
 @media (max-width: 560px) {
   .entry { grid-template-columns: minmax(0, 1fr) 120px; }
-  .entry .after { grid-column: 1 / -1; text-align: left; }
+  .entry:has(> .cell) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .entry:has(> .cell) > .name { grid-column: 1 / -1; }
 }
 .sticky-actions {
   position: sticky; bottom: 0; background: color-mix(in srgb, var(--bg) 92%, transparent);

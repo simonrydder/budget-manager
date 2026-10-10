@@ -225,7 +225,7 @@ def test_the_whole_setup_starts_the_budget_mid_month(client, household, accounts
     rent = Expense.objects.get(name="Rent")
     page = client.get("/month-end/2026-11/spending/")
     assert "You started the budget on 7 October" in page.content.decode()
-    assert "It held 4.000,00 when you started the budget on 7 October" in page.content.decode()
+    assert "it had 4.000,00 when you started the budget on 7 October" in page.content.decode()
     client.post(
         "/month-end/2026-11/spending/",
         {
@@ -417,4 +417,4 @@ def test_step_five_takes_what_is_left_of_a_running_budget(client, household, acc
     walk_to_transfers(client, accounts)
     groceries = Expense.objects.get(name="Groceries")
     page = client.get("/start/transfers/").content.decode()
-    assert f'data-spent-from="550000" data-spent-to="spent-{groceries.id}"' in page
+    assert f'data-balance-of="spent-{groceries.id}" data-start="550000"' in page

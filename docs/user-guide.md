@@ -104,8 +104,8 @@ This is where the budget starts. The page shows:
 
 1. **October so far** (the current month): bills follow their due dates. A bill due before today
    counts as paid; one due later this month is still on the account. For a running budget like
-   food, type what has been spent so far this month, or what is left of it, then press
-   **Recalculate**.
+   food, type what has been spent so far this month under **Spent so far**, or what is left
+   under **Left** (either one fills in the other), then press **Recalculate**.
 2. **Even out the accounts today**: every expense gets exactly what keeps its monthly amount the
    same from the first month-end on. A yearly 1.200 due in two months needs 1.000 now, a payment
    due this month all of it, and a savings goal what is already saved for it. The table compares
@@ -145,12 +145,14 @@ On the last day of the month open **Month-end** in the menu and follow the five 
 start earlier, enter what you know and come back; nothing is final until you close it.
 
 1. **Spending** (for example *October spending*): what each expense actually cost this month.
+   Every row has two fields, **Spent** and **Balance after**. Type either one and the other
+   follows, so you can copy whichever number your bank shows.
    - **Fixed payments** that were due are filled in with their amount. Change one if it cost
      something else.
-   - **Variable bills** and **running budgets** are empty: type the real amount. For a running
-     budget you can instead type **what is left**, and the app works out what was spent.
-   - **Spent from the NemKonto**: what you spent with the NemKonto's card. Or type its balance
-     before the income arrived, and the app works it out.
+   - **Variable bills** and **running budgets** are empty: type the real amount, or for a running
+     budget what is left on it as its balance after.
+   - **Spent from the NemKonto**: what you spent with the NemKonto's card, or its balance before
+     the income arrived as its balance after.
    - Expenses that were not due this month are folded away under *N more, not due*. Open it if
      one of them had a payment anyway.
 2. **Interest**: interest each account received (or paid, as a negative amount). It counts as if

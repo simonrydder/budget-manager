@@ -1,0 +1,4 @@
+{% load budget %}{# The balance after the spending in spent_id. Read-only without JavaScript; with it, typing the balance works out what was spent (app.js). #}
+<label class="cell"><span>{{ label }}</span>
+  <input type="text" class="amount balance-after {{ balance|tone }}" inputmode="decimal" autocomplete="off" readonly
+         aria-label="{{ label }} for {{ name }}" data-balance-of="{{ spent_id }}" data-start="{{ start }}" value="{{ balance|money_input }}"></label>

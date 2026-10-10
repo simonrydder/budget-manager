@@ -83,7 +83,7 @@ Expenses are based on expected costs. Each month the user enters the actual amou
 3. **Management:** create, edit and end expenses, categories, accounts and income sources.
 4. **Monthly entry** of actual spending per expense and actual income per income source, as a step-by-step checklist:
    - fixed payments that were due are filled in with their amount (they can be changed);
-   - a running budget can be entered as what was spent or as what is left;
+   - each expense and the NemKonto can be entered as what was spent or as the balance after (typing one fills in the other);
    - expenses that were not due are folded away;
    - a finished step can be undone, and the latest month-end can be reopened.
 5. **History:** actual spending per year and average per month, broken down by expense, category and account.
