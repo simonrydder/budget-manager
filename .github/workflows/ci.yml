@@ -28,6 +28,11 @@ jobs:
       - name: Run linter
         run: uv run ruff check
 
+      - name: Check that every model change has a migration
+        run: uv run python manage.py makemigrations --check --dry-run
+        env:
+          PYTHONPATH: src
+
       - name: Run tests
         run: uv run pytest
         env:
