@@ -1,6 +1,6 @@
 # Budget Manager – User guide
 
-This guide follows the app page by page, in the order you meet them. It describes version 1.6
+This guide follows the app page by page, in the order you meet them. It describes version 1.8
 (the version is shown under **Settings → App version** and at the bottom of the menu). How to
 install and run the app is in the [README](../README.md); the rules behind the numbers are in
 [design.md](design.md).
@@ -240,8 +240,9 @@ with the average per month and what the plan expected in the same months.
 
 **Settings** belong to the budget you are in: its name, the people who can use it, the NemKonto
 minimum and maximum, the rough everyday spending, the forecast length, the starting point, and
-copying or deleting the budget. **App version** shows the running version and, when the app runs
-through the Windows launcher, the **Update now** button.
+copying or deleting the budget. **App version** shows the running version, says when a newer one
+is out (with a link to what is new), and, when the app runs through the Windows launcher, has the
+**Update now** button and the end of the launcher's log.
 
 **Budgets** lists your budgets. A new budget starts with the usual accounts and categories and
 the setup. **Copy** makes either a fresh copy (accounts, categories, current expenses and income,
@@ -266,7 +267,8 @@ there is no login, and Log out and People are hidden.
   themselves; a **major update** (a new first number, like 2.0.0) shows what is new and asks
   first.
 
-What changed in each version is in [CHANGELOG.md](../CHANGELOG.md).
+What changed in each version is in [CHANGELOG.md](../CHANGELOG.md) and on the
+[releases page](https://github.com/simonrydder/budget-manager/releases).
 
 ## Questions
 
@@ -288,6 +290,12 @@ keep their numbers.
 Use **Undo step** or **Back** while it is open. Once closed, open the next month-end and press
 **Reopen the month-end on …** (or open it under History / Earlier month-ends), fix it and close it
 again.
+
+**Update now does nothing; it stays on an old version.**
+Look under Settings → App version. *The update was not picked up* means the app runs but the
+launcher that updates it has stopped: on the computer, double-click `start-budget.cmd` in
+`scripts\windows` (or restart the computer if the app starts with Windows). *A newer version did
+not install or start* means the launcher tried; the launcher log below it says why.
 
 **There is no Update now button.**
 The app was not started by the Windows launcher, or by a launcher from before version 1.1. On the

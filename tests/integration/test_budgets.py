@@ -250,7 +250,51 @@ def test_update_now_asks_the_launcher_to_update(client, household, settings, tmp
     assert "Updating to the newest version." in text
     assert "An update is on its way." in text and "Update now</button>" not in text
 
-    # A request the launcher never picked up does not hide the button for ever.
-    old = time.time() - 11 * 60
+    # A request the launcher never picked up means the launcher is not running.
+    old = time.time() - 3 * 60
     os.utime(request_file, (old, old))
-    assert "Update now</button>" in client.get("/settings/").content.decode()
+    page = client.get("/settings/").content.decode()
+    assert "The update was not picked up." in page and "Update now</button>" in page
+
+
+def test_settings_show_why_an_update_did_not_happen(client, household, settings, tmp_path):
+    settings.UPDATER = True
+    settings.VERSION = "1.5.0"
+    settings.UPDATE_REQUEST_FILE = tmp_path / "update.request"
+    settings.UPDATE_FAILED_FILE = tmp_path / "update.failed"
+    settings.LAUNCHER_LOG = tmp_path / "logs" / "launcher.log"
+    page = client.get("/settings/").content.decode()
+    assert "did not install or start" not in page and "Launcher log" not in page
+
+    settings.UPDATE_FAILED_FILE.write_text("0123456789abcdef\n")
+    settings.LAUNCHER_LOG.parent.mkdir()
+    lines = [f"2026-10-12 10:{n:02}:00  line {n}" for n in range(60)]
+    settings.LAUNCHER_LOG.write_text("\n".join(lines + ["  uv sync failed: <oops>"]) + "\n")
+    page = client.get("/settings/").content.decode()
+    assert "A newer version did not install or start" in page
+    assert "Launcher log" in page and "uv sync failed: &lt;oops&gt;" in page
+    assert "line 59" in page and "line 10\n" not in page  # only the end of the log
+
+
+def test_settings_tell_when_a_newer_version_is_out(client, household, settings, monkeypatch):
+    from django.core.cache import cache
+
+    from budget_manager import cli
+
+    settings.CHECK_NEWEST = True
+    settings.VERSION = "1.5.0"
+    monkeypatch.setattr(cli, "_fetch", lambda name, timeout: '[project]\nversion = "1.7.0"\n')
+    cache.clear()
+    assert "Version <b>1.7.0</b> is out." in client.get("/settings/").content.decode()
+
+    settings.VERSION = "1.7.0"
+    assert "This is the newest version." in client.get("/settings/").content.decode()
+
+    def offline(name, timeout):
+        raise OSError("offline")
+
+    monkeypatch.setattr(cli, "_fetch", offline)
+    cache.clear()
+    page = client.get("/settings/").content.decode()
+    assert "newest version" not in page and "is out" not in page
+    cache.clear()

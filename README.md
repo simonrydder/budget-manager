@@ -1,5 +1,8 @@
 # Budget Manager
 
+[![Release](https://img.shields.io/github/v/release/simonrydder/budget-manager)](https://github.com/simonrydder/budget-manager/releases)
+[![CI](https://github.com/simonrydder/budget-manager/actions/workflows/ci.yml/badge.svg?branch=prod)](https://github.com/simonrydder/budget-manager/actions/workflows/ci.yml)
+
 A self-hosted budget manager for the home. Once a month it works out how much to transfer from
 the NemKonto (where your income arrives) to each of your accounts, so every expense has its money
 when it is due. It keeps the NemKonto between a minimum and a maximum using General Savings,
@@ -106,6 +109,11 @@ never touch it:
   the launcher, or by a launcher from before version 1.4, which keeps running its old code until
   it is restarted. Run `install-nightly-task.ps1` again as administrator (or restart the
   computer) once; from then on the launcher replaces itself when it changes.
+- *It stays on an old version:* **Settings → App version** says when a newer version is out, and
+  shows the end of `logs\launcher.log`. If it says *The update was not picked up*, the app is
+  running but the launcher that updates it has stopped: run `start-budget.cmd` (or restart the
+  computer, if the task starts it with Windows). If a newer version did not install or start, the
+  log says why.
 - *The app does not start:* look at the end of `logs\launcher.log` and `logs\server.log`.
 - *Port 8000 is in use:* choose another with `-Port`.
 
@@ -249,7 +257,9 @@ raises the version in `pyproject.toml` (then run `uv lock`) and adds an entry to
 the last number for fixes (1.0.0 → 1.0.1), the middle one for new features (1.0.1 → 1.1.0), and
 the first one for changes that need something done by hand when updating. `BudgetManager.cmd`
 asks before installing such a major update and shows its `CHANGELOG.md` entries, so write them
-for the people who will read them there.
+for the people who will read them there. When CI passes on `prod`, a new version number becomes a
+[GitHub release](https://github.com/simonrydder/budget-manager/releases) (tag `v1.8.0`) with its
+`CHANGELOG.md` entry as the notes (`.github/workflows/release.yml`).
 
 **Layout.** Pages are checked at 390, 640, 768, 820, 1024, 1180 and 1440 pixels wide. Columns
 follow the width of the page content (CSS container queries), so the same page also works next to

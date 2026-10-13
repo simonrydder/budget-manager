@@ -54,6 +54,11 @@ LOCAL_ONLY = os.environ.get("BUDGET_LOCAL_ONLY") == "1"
 # restarts the app (scripts/windows/run-budget.ps1).
 UPDATER = os.environ.get("BUDGET_UPDATER") == "1"
 UPDATE_REQUEST_FILE = DATA_DIR / "update.request"
+# Written by the Windows launcher: a version that did not start, and what it did.
+UPDATE_FAILED_FILE = DATA_DIR / "update.failed"
+LAUNCHER_LOG = DATA_DIR / "logs" / "launcher.log"
+# Look up the newest version on GitHub for the Settings page (off in tests).
+CHECK_NEWEST = True
 CHECK_MINUTES = int(os.environ.get("BUDGET_CHECK_MINUTES") or 0)
 VERSION = __version__
 COMMIT = os.environ.get("BUDGET_COMMIT", "")

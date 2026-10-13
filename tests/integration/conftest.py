@@ -28,6 +28,12 @@ class BudgetClient(Client):
         return super().generic(method, path, *args, **kwargs)
 
 
+@pytest.fixture(autouse=True)
+def offline(settings):
+    """Pages never look things up on GitHub in tests."""
+    settings.CHECK_NEWEST = False
+
+
 @pytest.fixture
 def user(db):
     return get_user_model().objects.create_user(
