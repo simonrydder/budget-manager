@@ -190,40 +190,60 @@ def test_made_moves_can_be_undone_until_the_next_month_end(client, budget, accou
     assert b"can no longer be undone" in response.content
 
 
-def test_the_month_end_waits_for_moves(client, budget, accounts):
+def test_waiting_moves_go_with_the_month_end_transfers(client, budget, accounts):
     month_end(client, "2025-05")
     client.post("/balance/", {"amount": "300", "account": accounts["Budget"].id})
-    response = month_end(client, "2025-06", close=False)
-    assert response.url == client.at("/month-end/2025-06/check/")
-    assert b"still waiting" in client.get("/month-end/2025-06/check/").content
-    response = client.post("/month-end/2025-06/close/", follow=True)
-    assert b"Make those transfers" in response.content
-    assert not MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
-    client.post(f"/balance/{Move.objects.get().id}/cancel/")
-    client.post("/month-end/2025-06/close/")
-    assert MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
-
-
-def test_waiting_moves_are_made_in_the_month_end_transfers_step(client, budget, accounts):
-    month_end(client, "2025-05")
-    client.post("/balance/", {"amount": "300", "account": accounts["Budget"].id})
+    client.post(f"/expenses/{expense('Groceries').id}/release/", {"amount": "200"})
+    before = general_savings()
     month_end(client, "2025-06", close=False)
     page = client.get("/month-end/2025-06/transfers/")
-    assert b"moves waiting under Balance" in page.content
-    assert [
-        (m.source.name, m.target.name, m.amount) for m in page.context["balancing"].bank_moves
-    ] == [("Budget", "Savings", 30000)]
-    before = general_savings()
-    response = client.post("/month-end/2025-06/transfers/", {"action": "moves"})
-    assert response.url == client.at("/month-end/2025-06/transfers/")
-    assert Move.objects.get().done
-    assert Move.objects.get().month == date(2025, 6, 1)
-    assert general_savings() == before + 30000
-    page = client.get("/month-end/2025-06/transfers/")
-    assert b"moves waiting under Balance" not in page.content
-    assert b"still waiting" not in client.get("/month-end/2025-06/check/").content
+    assert b"Moves from Balance in these transfers" in page.content
+    plan = page.context["plan"]
+    assert {i: t.moves for i, t in plan.transfers.items() if t.moves} == {
+        accounts["Budget"].id: -30000,
+        accounts["Food"].id: -20000,
+        accounts["Savings"].id: 50000,
+    }
+    assert plan.general_savings_before == before + 50000
+
     client.post("/month-end/2025-06/close/")
-    assert MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
+    june = MonthClose.objects.get(month=date(2025, 6, 1))
+    assert june.is_closed
+    assert {t.account.name: t.moves for t in june.transfers.all() if t.moves} == {
+        "Budget": -30000,
+        "Food": -20000,
+        "Savings": 50000,
+    }
+    assert not Move.objects.filter(done=False).exists()
+    assert set(Move.objects.values_list("month", "close")) == {(date(2025, 6, 1), june.pk)}
+    assert june.general_savings_before == before + 50000
+    assert general_savings() == june.general_savings_after
+
+    # Reopening puts the moves back on the waiting list; they go with the transfers again.
+    client.post("/closes/2025-06/reopen/")
+    assert Move.objects.filter(done=False, close=None).count() == 2
+    assert general_savings() == before
+    client.post("/month-end/2025-06/close/")
+    june = MonthClose.objects.get(month=date(2025, 6, 1))
+    assert june.is_closed
+    assert june.transfers.get(account=accounts["Savings"]).moves == 50000
+
+
+def test_the_month_end_waits_for_enough_general_savings_for_moves(client, budget, accounts):
+    month_end(client, "2025-05")
+    rent = expense("Rent")
+    Move.objects.create(
+        budget=rent.budget, kind="topup", expense=rent, account=rent.account, amount=10**9
+    )
+    response = month_end(client, "2025-06", close=False)
+    assert response.url == client.at("/month-end/2025-06/transfers/")
+    page = client.get("/month-end/2025-06/transfers/")
+    assert b"too little for the moves waiting" in page.content
+    response = client.post("/month-end/2025-06/close/", follow=True)
+    assert b"short for the moves waiting under Balance" in response.content
+    assert not MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
+    client.post(f"/balance/{Move.objects.get().id}/cancel/")
+    month_end(client, "2025-06")
 
 
 def test_moves_need_enough_general_savings(client, budget, accounts):

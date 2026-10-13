@@ -342,6 +342,31 @@ def test_money_moved_between_month_ends_does_not_change_the_plan():
     assert rent.balance_end_of(APRIL) == kr(700)
 
 
+def test_waiting_moves_go_with_the_transfers_to_or_from_general_savings():
+    budget = household()
+    plain = plan_close(budget, income=kr(25000))
+    budget.ledger(1).adjustments.append(Adjustment(MAY, kr(700)))  # top-up of Rent on Budget
+    budget.general_savings -= kr(700) - kr(300)  # and a refund of 300 that arrived on Food
+    plan = plan_close(budget, income=kr(25000), moves={BUDGET: kr(700), FOOD: kr(-300)})
+    assert plan.transfers[BUDGET].moves == kr(700)
+    assert plan.transfers[FOOD].moves == kr(-300)
+    assert plan.transfers[SAVINGS].moves == kr(-400)
+    assert amounts(plan)[BUDGET] == amounts(plain)[BUDGET] + kr(700)
+    assert amounts(plan)[FOOD] == amounts(plain)[FOOD] - kr(300)
+    assert plan.nemkonto_end == plain.nemkonto_end
+    assert plan.general_savings_after == plain.general_savings_after - kr(400)
+
+
+def test_a_refund_on_the_nemkonto_goes_to_the_savings_account():
+    budget = household()
+    plain = plan_close(budget, income=kr(25000))
+    budget.general_savings += kr(300)
+    plan = plan_close(budget, income=kr(25000), moves={NEM: kr(-300), SAVINGS: kr(50)})
+    assert plan.transfers[SAVINGS].moves == kr(300)
+    assert amounts(plan)[SAVINGS] == amounts(plain)[SAVINGS] + kr(300)
+    assert plan.nemkonto_end == plain.nemkonto_end
+
+
 def test_running_budget_on_the_nemkonto_stays_there():
     budget = household()
     everyday = expense(8, 3000, date(2025, 5, 1), account=NEM, kind=Kind.RUNNING, name="Everyday")

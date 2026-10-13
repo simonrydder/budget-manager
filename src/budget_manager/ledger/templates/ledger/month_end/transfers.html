@@ -18,6 +18,9 @@
       <small><a href="{% url 'month-end-income' month %}">Enter income</a></small>
     </div>
     {% endif %}
+    {% if moves_short %}
+    <div class="notice danger"><span>General Savings would end at {{ plan.general_savings_after|money }}, too little for the moves waiting under Balance. Cancel some of them under <a href="{% url 'balance' %}">Balance</a>.</span></div>
+    {% endif %}
     {% if plan.notices %}
     <div class="notices">
       {% for notice in plan.notices %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endfor %}
@@ -54,47 +57,6 @@
     </section>
     {% endif %}
 
-    {% if balancing.moves %}
-    <section class="stack" id="waiting-moves">
-      <div class="spread"><h2>First: moves waiting under Balance</h2><span class="muted small">{{ balancing.moves|length }} not made yet</span></div>
-      <p class="muted small">Money to or from General Savings since the last month-end that has not been moved yet. Make these bank transfers first and press <b>Transfers made</b>; the month-end transfers below then take them into account.{% if waiting_moves %} The month-end cannot be closed while they wait.{% endif %}</p>
-      <div class="table-wrap">
-      <table class="table compact">
-        <thead><tr><th>What</th><th>Account</th><th class="num">General Savings</th></tr></thead>
-        <tbody>
-        {% for item in balancing.moves %}
-          <tr>
-            <td>{% if item.expense %}{{ item.expense.name }}{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
-            <td class="dim">{{ item.account.name }}</td>
-            <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      </div>
-      <div class="transfers">
-        {% for move in balancing.bank_moves %}
-        <div class="transfer">
-          <span></span>
-          <div>
-            <div class="amt">{{ move.amount|money }}</div>
-            <div class="route">{{ move.source.name }} → {{ move.target.name }}</div>
-          </div>
-          <button type="button" class="btn small" data-copy="{{ move.amount|money_input }}" hidden>Copy</button>
-        </div>
-        {% empty %}
-        <p class="muted">No bank transfer needed: everything stays on {{ balancing.savings.name }}.</p>
-        {% endfor %}
-      </div>
-      <p class="muted small">General Savings goes from {{ balancing.general_savings|money }} to <b class="{{ balancing.general_savings_after|tone }}">{{ balancing.general_savings_after|money }}</b>.</p>
-      <form method="post" class="form-actions">
-        {% csrf_token %}<input type="hidden" name="action" value="moves">
-        <button class="btn"{% if balancing.general_savings_after < 0 %} disabled{% endif %}>Transfers made</button>
-        <span class="muted small">Change or cancel them under <a href="{% url 'balance' %}">Balance</a>.</span>
-      </form>
-    </section>
-    {% endif %}
-
     <section class="stack">
       <div class="spread"><h2>Transfers on {{ transfer_day|date:"j F" }}</h2>{% if transfers %}<span class="muted small">{{ open_count }} of {{ transfers|length }} left to do</span>{% endif %}</div>
       <p class="muted small">Tick each transfer when you have made it in your bank.</p>
@@ -117,6 +79,7 @@
             {% if t.covers %}<span>Taken back {{ t.covers|money }}</span>{% endif %}
             {% if t.releases %}<span>To General Savings {{ t.releases|money }}</span>{% endif %}
             {% if t.general_savings %}<span>General Savings {{ t.general_savings|signed }}</span>{% endif %}
+            {% if t.moves %}<span>Moves under Balance {{ t.moves|signed }}</span>{% endif %}
           </div>
         </div>
         {% endwith %}
@@ -126,10 +89,31 @@
       </div>
     </section>
 
+    {% if moves %}
+    <section class="card" id="moves">
+      <div class="card-head"><h2>Moves from Balance in these transfers</h2><span class="chip">{{ moves|length }}</span></div>
+      <p class="muted small">Money to or from General Savings that has not been moved yet. It goes with the transfers above and counts as moved when the month-end is closed. Change or cancel a move under <a href="{% url 'balance' %}">Balance</a>.</p>
+      <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>What</th><th>Account</th><th class="num">General Savings</th></tr></thead>
+        <tbody>
+        {% for item in moves %}
+          <tr>
+            <td>{% if item.expense %}{{ item.expense.name }}{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td class="dim">{{ item.account.name }}</td>
+            <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+    {% endif %}
+
     <form method="post" class="sticky-actions">
       {% csrf_token %}<input type="hidden" name="action" value="continue">
       <a class="btn" href="{% url 'month-end-income' month %}">Back</a>
-      <button class="btn primary"{% if plan.shortfall %} disabled{% endif %}>Continue to check & close</button>
+      <button class="btn primary"{% if plan.shortfall or moves_short %} disabled{% endif %}>Continue to check & close</button>
     </form>
   </div>
 
@@ -154,7 +138,8 @@
     <section class="card">
       <h2>General Savings</h2>
       <div class="flow">
-        <div><span>Before</span><span class="num">{{ plan.general_savings_before|money }}</span></div>
+        <div><span>Before</span><span class="num">{% if moves %}{{ general_savings_before_moves|money }}{% else %}{{ plan.general_savings_before|money }}{% endif %}</span></div>
+        {% if inputs.moves_to_general_savings %}<div><span>{% if inputs.moves_to_general_savings > 0 %}+{% else %}−{% endif %} Moves under Balance</span><span class="num">{{ inputs.moves_to_general_savings|absolute|money }}</span></div>{% endif %}
         {% if plan.surplus %}<div><span>+ Surplus</span><span class="num">{{ plan.surplus|money }}</span></div>{% endif %}
         {% if plan.releases_total %}<div><span>+ Moved from expenses</span><span class="num">{{ plan.releases_total|money }}</span></div>{% endif %}
         {% if plan.taken %}<div><span>− To the NemKonto</span><span class="num">{{ plan.taken|money }}</span></div>{% endif %}

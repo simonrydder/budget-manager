@@ -253,10 +253,17 @@ class CloseInputs:
     topups: dict[int, int] = field(default_factory=dict)
     funding: dict[int, int] = field(default_factory=dict)
     nemkonto_spent: int | None = None  # None until entered at the month-end
+    # Moves waiting under Balance: they are made with the month-end's transfers.
+    moves: list[PendingMove] = field(default_factory=list)
+    stale_moves: list[Move] = field(default_factory=list)
 
     @property
     def income(self) -> int:
         return sum(self.income_entries.values())
+
+    @property
+    def moves_to_general_savings(self) -> int:
+        return sum(item.to_general_savings for item in self.moves)
 
 
 def close_inputs(budget: Budget, month: YearMonth) -> CloseInputs:
@@ -281,9 +288,22 @@ def close_inputs(budget: Budget, month: YearMonth) -> CloseInputs:
 
 
 def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs]:
-    """Plan the next month-end from what has been entered so far (missing income counts as 0)."""
+    """Plan the next month-end from what has been entered so far (missing income counts as 0).
+
+    The moves waiting under Balance count as made with the month-end's transfers: the returned
+    state includes them, and the transfers move their money."""
     state = build_state(budget)
     inputs = close_inputs(budget, state.month)
+    waiting = balancing(budget, date.today(), state)
+    inputs.moves, inputs.stale_moves = waiting.moves, waiting.stale
+    to_accounts: dict[int, int] = defaultdict(int)
+    for item in inputs.moves:
+        state.general_savings += item.to_general_savings
+        to_accounts[item.account.pk] += item.to_account
+        if item.expense:
+            state.ledger(item.expense.pk).adjustments.append(
+                Adjustment(state.month, item.to_expense, planned=item.kind == Move.Type.FUND)
+            )
     plan = engine.plan_close(
         state,
         income=inputs.income,
@@ -292,6 +312,7 @@ def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs
         releases=inputs.releases,
         topups=inputs.topups,
         funding=inputs.funding,
+        moves=to_accounts,
         nemkonto_spent=inputs.nemkonto_spent or 0,
     )
     return state, plan, inputs
@@ -336,10 +357,10 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
         raise CloseError(f"The next month-end is {state.month.label}, not {month.label}.")
     if plan.shortfall:
         raise CloseError("Choose where to take the missing money from before closing.")
-    if any(item.move for item in balancing(budget, date.today(), state).moves):
+    if inputs.moves and plan.general_savings_after < 0:
         raise CloseError(
-            "Some money is waiting to be moved to or from General Savings. Make those transfers "
-            "in step 4 (or cancel them under Balance) first."
+            f"General Savings is {format_amount(-plan.general_savings_after)} short for the moves "
+            "waiting under Balance. Cancel some of them under Balance first."
         )
 
     close = start_draft(budget, month, user)
@@ -394,6 +415,7 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
             covers=transfer.covers,
             releases=transfer.releases,
             general_savings=transfer.general_savings,
+            moves=transfer.moves,
             done=transfer.account_id in done,
             done_by=user if transfer.account_id in done else None,
             done_at=now if transfer.account_id in done else None,
@@ -404,6 +426,7 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
     for line in plan.lines.values():
         if line.amount_after:
             Expense.objects.filter(pk=line.expense_id).update(amount=line.amount_after)
+    _record_moves(budget, inputs.moves, inputs.stale_moves, month, user, close)
     return close
 
 
@@ -418,6 +441,8 @@ def reopen_close(close: MonthClose) -> None:
             Expense.objects.filter(pk=line.expense_id).update(amount=line.amount_before)
     close.lines.all().delete()
     close.transfers.all().delete()
+    # Moves made with its transfers wait again, so they go with them once more.
+    close.moves.update(done=False, month=None, close=None, done_by=None, done_at=None)
     # Moves made after this month-end now come before it.
     budget.moves.filter(done=True, month__gt=close.month).update(month=close.month)
     budget.closes.filter(
@@ -754,6 +779,12 @@ class PendingMove:
         return Move(kind=self.kind, amount=self.amount).to_general_savings
 
     @property
+    def to_account(self) -> int:
+        """What has to arrive on its account from the account holding General Savings
+        (negative: sent from it). A refund is already on the account and leaves it."""
+        return self.to_expense if self.expense else -self.amount
+
+    @property
     def label(self) -> str:
         return Move.Type(self.kind).label
 
@@ -785,7 +816,7 @@ class Balancing:
             if item.account.pk == self.savings.pk:
                 continue
             accounts[item.account.pk] = item.account
-            net[item.account.pk] += item.to_expense if item.expense else -item.amount
+            net[item.account.pk] += item.to_account
         result = []
         for account_id, amount in net.items():
             account = accounts[account_id]
@@ -864,22 +895,35 @@ def make_moves(budget: Budget, today: date, user) -> Balancing:
             f"General Savings only has {format_amount(plan.general_savings)}, which is "
             f"{format_amount(-plan.general_savings_after)} too little for these moves."
         )
-    month = next_close_month(budget).first_day()
+    _record_moves(budget, plan.moves, plan.stale, next_close_month(budget), user)
+    return plan
+
+
+def _record_moves(
+    budget: Budget,
+    items: list[PendingMove],
+    stale: list[Move],
+    month: YearMonth,
+    user,
+    close: MonthClose | None = None,
+) -> None:
+    """Mark the waiting moves as made before the month-end for ``month`` (or with its
+    transfers, when ``close`` is given)."""
     now = timezone.now()
-    for item in plan.moves:
+    for item in items:
         move = item.move or Move(
             budget=budget, kind=item.kind, expense=item.expense, note=item.note, created_by=user
         )
         move.amount = item.amount
         move.account = item.account
         move.done = True
-        move.month = month
+        move.month = month.first_day()
+        move.close = close
         move.done_by = user
         move.done_at = now
         move.save()
-    for move in plan.stale:
+    for move in stale:
         move.delete()
-    return plan
 
 
 def undo_move(move: Move) -> None:

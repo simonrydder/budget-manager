@@ -367,13 +367,14 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
             balances_after[nemkonto.id] += item.amount
         else:
             balances_after[state.savings_account.id] += item.amount
-    balancing = services.balancing(budget, today(), state)
     return {
         "state": state,
         "plan": plan,
         "inputs": inputs,
-        "balancing": balancing,
-        "waiting_moves": [item for item in balancing.moves if item.move],
+        "moves": inputs.moves,
+        "general_savings_before_moves": plan.general_savings_before
+        - inputs.moves_to_general_savings,
+        "moves_short": bool(inputs.moves) and plan.general_savings_after < 0,
         "transfers": transfers,
         "lines": lines,
         "missing_income": missing,
@@ -410,18 +411,6 @@ def transfers(request, month: str):
             close.done_accounts = sorted(done)
             close.save(update_fields=["done_accounts"])
             return redirect("month-end-transfers", month=str(month))
-        if action == "moves":
-            try:
-                made = services.make_moves(budget, today(), request.user)
-            except CloseError as error:
-                messages.error(request, str(error))
-            else:
-                messages.success(
-                    request,
-                    f"Done. General Savings is now {format_amount(made.general_savings_after)} "
-                    "before the month-end, and the transfers below are updated.",
-                )
-            return redirect("month-end-transfers", month=str(month))
         if action == "covers":
             ids = [line.expense_id for line in plan.lines.values()]
             values, cover_errors = read_amounts(request.POST, "cover-", ids)
@@ -450,6 +439,9 @@ def transfers(request, month: str):
         if action == "continue":
             if plan.shortfall:
                 messages.error(request, "Choose where to take the missing money from first.")
+                return redirect("month-end-transfers", month=str(month))
+            if context["moves_short"]:
+                messages.error(request, "Cancel some of the moves under Balance first.")
                 return redirect("month-end-transfers", month=str(month))
             _advance(close, 5)
             return redirect("month-end-check", month=str(month))

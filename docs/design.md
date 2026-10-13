@@ -151,11 +151,18 @@ move waits on the **Balance** page until its bank transfer is made:
 
 The page nets the waiting moves into one bank transfer per account, to or from the account holding
 General Savings. **Transfers made** records them (table `Move`, with the budget month of the next
-month-end) and the balances update at once. A move can be undone until the next month-end, and a
-month-end cannot be closed while moves are waiting. Step 4 of the month-end (Transfers) shows the
-same waiting moves and bank transfers above its own and makes them the same way, so the plan below
-is worked out with them made. In the engine a made move is an `Adjustment`
-on the expense: it changes the actual balance, and a filling also the planned balance.
+month-end) and the balances update at once. A move can be undone until the next month-end. In
+the engine a made move is an `Adjustment` on the expense: it changes the actual balance, and a
+filling also the planned balance.
+
+Moves still waiting at the next month-end go with its transfers: `plan_next_close` counts them
+in the state (General Savings and the expense adjustments, with the month-end's budget month)
+and passes the net amount per account to `plan_close` as `moves`. Each account's transfer gets
+that amount, and the transfer to the account holding General Savings the opposite (a refund on
+the NemKonto only reaches that one). Closing records the moves as made with that month-end
+(`Move.close`) and stores the part in `Transfer.moves`; reopening it puts them back to waiting.
+If General Savings would end below zero, the month-end cannot be closed until some are
+cancelled.
 
 When expenses on average need more than the expected income (a repeating expense counts as its
 amount divided by its interval), adding or changing an expense or income shows a warning, also on

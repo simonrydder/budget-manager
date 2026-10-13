@@ -12,6 +12,9 @@ For budget month *B* the close happens on the last day of *B − 1*:
    it, the NemKonto may go below X, and if it would go below 0 the person has to choose which
    expenses to take the money from (``covers``).
 
+Money moved between General Savings and an expense (or a refund) since the last month-end that
+has not been moved in the bank yet (``moves``) goes with the same transfers.
+
 All transfers are netted so the NemKonto sends (or receives) one amount per account.
 
 The NemKonto is also the everyday account: what is spent from it during the month
@@ -84,6 +87,7 @@ class TransferPlan:
     covers: int = 0
     releases: int = 0
     general_savings: int = 0  # net change of General Savings, only on the savings account
+    moves: int = 0  # moves to or from General Savings made with this month-end's transfers
 
     @property
     def amount(self) -> int:
@@ -94,6 +98,7 @@ class TransferPlan:
             - self.covers
             - self.releases
             + self.general_savings
+            + self.moves
         )
 
 
@@ -163,6 +168,7 @@ def plan_close(
     releases: dict[int, int] | None = None,
     topups: dict[int, int] | None = None,
     funding: dict[int, int] | None = None,
+    moves: dict[int, int] | None = None,
     nemkonto_spent: int = 0,
 ) -> ClosePlan:
     """Plan the close for ``state.month``.
@@ -175,19 +181,24 @@ def plan_close(
     has been below zero for a while). ``funding`` is the same, but counts towards the plan: it
     fills a new expense up to what a steady monthly amount would have saved by now.
     ``nemkonto_spent`` is what was spent from the NemKonto itself since the last month-end.
+    ``moves`` maps account ids to money moved from General Savings to that account (negative:
+    to General Savings) that is still to be moved in the bank. ``state`` already counts the
+    moves; the plan only adds them to the transfers, to or from the account holding General
+    Savings.
     """
     interest = {k: v for k, v in (interest or {}).items() if v}
     covers = {k: v for k, v in (covers or {}).items() if v}
     releases = {k: v for k, v in (releases or {}).items() if v}
     topups = {k: v for k, v in (topups or {}).items() if v}
     funding = {k: v for k, v in (funding or {}).items() if v}
+    moves = {k: v for k, v in (moves or {}).items() if v}
     month = state.month
     nemkonto = state.nemkonto_account
     savings = state.savings_account
     notices: list[Notice] = []
 
     account_ids = {account.id for account in state.accounts}
-    for account_id in interest:
+    for account_id in (*interest, *moves):
         if account_id not in account_ids:
             raise CloseError(f"Unknown account {account_id}")
     known = {ledger.expense.id for ledger in state.ledgers}
@@ -259,6 +270,12 @@ def plan_close(
     for account_id, amount in interest.items():
         if account_id != nemkonto.id:
             transfers[account_id].interest += amount
+    for account_id, amount in moves.items():
+        if account_id == savings.id:
+            continue  # stays on the account holding General Savings
+        if account_id in transfers:
+            transfers[account_id].moves += amount
+        transfers[savings.id].moves -= amount
 
     contributions = sum(line.contribution for line in lines.values())
     after = (

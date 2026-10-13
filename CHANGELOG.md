@@ -4,6 +4,17 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.10.0 (2026-10-13)
+
+- Moves still waiting under Balance at a month-end go with its transfers: their money is added
+  to the month-end transfer of each account (and taken from, or added to, the one to the account
+  holding General Savings), so there is one transfer per account instead of moving the money
+  first and then again. Step 4 shows a *Moves under Balance* part on each transfer and lists the
+  moves included; they count as made when the month-end is closed, and reopening the month-end
+  puts them back on the waiting list. This replaces the separate **Transfers made** in step 4
+  from 1.9.0. If General Savings is too small for the moves, step 4 says so and the month-end
+  waits until some are cancelled.
+
 ## 1.9.0 (2026-10-13)
 
 - Month-end step 4 (Transfers) includes the moves still waiting under Balance: it lists them and
