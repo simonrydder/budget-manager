@@ -18,7 +18,6 @@
       <small><a href="{% url 'month-end-income' month %}">Enter income</a></small>
     </div>
     {% endif %}
-    {% if waiting_moves %}<div class="notice warning"><span>{{ waiting_moves|length }} move{{ waiting_moves|length|pluralize }} to or from General Savings {{ waiting_moves|length|pluralize:"is,are" }} still waiting. Make {{ waiting_moves|length|pluralize:"it,them" }} (or cancel {{ waiting_moves|length|pluralize:"it,them" }}) under <a href="{% url 'balance' %}">Balance</a> before closing.</span></div>{% endif %}
     {% if plan.notices %}
     <div class="notices">
       {% for notice in plan.notices %}<div class="notice {{ notice.level }}">{{ notice.message }}</div>{% endfor %}
@@ -51,6 +50,47 @@
         </table>
         </div>
         <div class="form-actions" style="padding-top:12px"><button class="btn primary">Update</button><span class="muted small">Expenses due furthest away are listed first.</span></div>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if balancing.moves %}
+    <section class="stack" id="waiting-moves">
+      <div class="spread"><h2>First: moves waiting under Balance</h2><span class="muted small">{{ balancing.moves|length }} not made yet</span></div>
+      <p class="muted small">Money to or from General Savings since the last month-end that has not been moved yet. Make these bank transfers first and press <b>Transfers made</b>; the month-end transfers below then take them into account.{% if waiting_moves %} The month-end cannot be closed while they wait.{% endif %}</p>
+      <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>What</th><th>Account</th><th class="num">General Savings</th></tr></thead>
+        <tbody>
+        {% for item in balancing.moves %}
+          <tr>
+            <td>{% if item.expense %}{{ item.expense.name }}{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td class="dim">{{ item.account.name }}</td>
+            <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      <div class="transfers">
+        {% for move in balancing.bank_moves %}
+        <div class="transfer">
+          <span></span>
+          <div>
+            <div class="amt">{{ move.amount|money }}</div>
+            <div class="route">{{ move.source.name }} → {{ move.target.name }}</div>
+          </div>
+          <button type="button" class="btn small" data-copy="{{ move.amount|money_input }}" hidden>Copy</button>
+        </div>
+        {% empty %}
+        <p class="muted">No bank transfer needed: everything stays on {{ balancing.savings.name }}.</p>
+        {% endfor %}
+      </div>
+      <p class="muted small">General Savings goes from {{ balancing.general_savings|money }} to <b class="{{ balancing.general_savings_after|tone }}">{{ balancing.general_savings_after|money }}</b>.</p>
+      <form method="post" class="form-actions">
+        {% csrf_token %}<input type="hidden" name="action" value="moves">
+        <button class="btn"{% if balancing.general_savings_after < 0 %} disabled{% endif %}>Transfers made</button>
+        <span class="muted small">Change or cancel them under <a href="{% url 'balance' %}">Balance</a>.</span>
       </form>
     </section>
     {% endif %}

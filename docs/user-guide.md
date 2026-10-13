@@ -162,7 +162,9 @@ start earlier, enter what you know and come back; nothing is final until you clo
    **Copy** button for the amount; tick it off when you have made it in the bank. The side panel
    shows how the NemKonto ends up between its minimum and maximum and what that does to General
    Savings. If the NemKonto would end below zero, the page asks which expenses or savings goals to
-   take the missing money from.
+   take the missing money from. Moves still waiting under Balance are listed first, with the
+   bank transfers they need: make those and press **Transfers made** there, and the month-end
+   transfers update to include them.
 5. **Check & close**: optionally type what the bank shows for each account to compare, then
    **Close the month-end**.
 
@@ -186,7 +188,8 @@ Sometimes money has to move between General Savings and an expense before the ne
 Each move waits on the **Balance** page, which nets them into the bank transfers to make (to or
 from the account that holds General Savings). Make them in the bank, then press **Transfers
 made**; the balances update at once. A move can be cancelled while it waits and undone until the
-next month-end. A month-end cannot be closed while moves are waiting.
+next month-end. A month-end cannot be closed while moves are waiting; step 4 of the month-end
+lists any that are left, so they can be made there too.
 
 ## Expenses
 

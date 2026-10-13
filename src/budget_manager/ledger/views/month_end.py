@@ -367,13 +367,13 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
             balances_after[nemkonto.id] += item.amount
         else:
             balances_after[state.savings_account.id] += item.amount
+    balancing = services.balancing(budget, today(), state)
     return {
         "state": state,
         "plan": plan,
         "inputs": inputs,
-        "waiting_moves": [
-            item for item in services.balancing(budget, today(), state).moves if item.move
-        ],
+        "balancing": balancing,
+        "waiting_moves": [item for item in balancing.moves if item.move],
         "transfers": transfers,
         "lines": lines,
         "missing_income": missing,
@@ -409,6 +409,18 @@ def transfers(request, month: str):
             done.symmetric_difference_update({account_id})
             close.done_accounts = sorted(done)
             close.save(update_fields=["done_accounts"])
+            return redirect("month-end-transfers", month=str(month))
+        if action == "moves":
+            try:
+                made = services.make_moves(budget, today(), request.user)
+            except CloseError as error:
+                messages.error(request, str(error))
+            else:
+                messages.success(
+                    request,
+                    f"Done. General Savings is now {format_amount(made.general_savings_after)} "
+                    "before the month-end, and the transfers below are updated.",
+                )
             return redirect("month-end-transfers", month=str(month))
         if action == "covers":
             ids = [line.expense_id for line in plan.lines.values()]
