@@ -4,6 +4,13 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.9.0 (2026-10-13)
+
+- Month-end step 4 (Transfers) includes the moves still waiting under Balance: it lists them and
+  the bank transfers they need, above the month-end transfers, and **Transfers made** there makes
+  them. The month-end transfers then take them into account, so you no longer have to leave the
+  month-end for the Balance page before closing. Cancelling a move is still done under Balance.
+
 ## 1.8.1 (2026-10-13)
 
 - Windows launcher: an update could leave the old version running for good. Before updating, the

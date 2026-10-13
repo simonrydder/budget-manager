@@ -339,7 +339,7 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
     if any(item.move for item in balancing(budget, date.today(), state).moves):
         raise CloseError(
             "Some money is waiting to be moved to or from General Savings. Make those transfers "
-            "(or cancel them) under Balance first."
+            "in step 4 (or cancel them under Balance) first."
         )
 
     close = start_draft(budget, month, user)

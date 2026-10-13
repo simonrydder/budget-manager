@@ -204,6 +204,28 @@ def test_the_month_end_waits_for_moves(client, budget, accounts):
     assert MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
 
 
+def test_waiting_moves_are_made_in_the_month_end_transfers_step(client, budget, accounts):
+    month_end(client, "2025-05")
+    client.post("/balance/", {"amount": "300", "account": accounts["Budget"].id})
+    month_end(client, "2025-06", close=False)
+    page = client.get("/month-end/2025-06/transfers/")
+    assert b"moves waiting under Balance" in page.content
+    assert [
+        (m.source.name, m.target.name, m.amount) for m in page.context["balancing"].bank_moves
+    ] == [("Budget", "Savings", 30000)]
+    before = general_savings()
+    response = client.post("/month-end/2025-06/transfers/", {"action": "moves"})
+    assert response.url == client.at("/month-end/2025-06/transfers/")
+    assert Move.objects.get().done
+    assert Move.objects.get().month == date(2025, 6, 1)
+    assert general_savings() == before + 30000
+    page = client.get("/month-end/2025-06/transfers/")
+    assert b"moves waiting under Balance" not in page.content
+    assert b"still waiting" not in client.get("/month-end/2025-06/check/").content
+    client.post("/month-end/2025-06/close/")
+    assert MonthClose.objects.get(month=date(2025, 6, 1)).is_closed
+
+
 def test_moves_need_enough_general_savings(client, budget, accounts):
     month_end(client, "2025-05")
     rent = expense("Rent")

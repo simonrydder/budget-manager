@@ -152,7 +152,9 @@ move waits on the **Balance** page until its bank transfer is made:
 The page nets the waiting moves into one bank transfer per account, to or from the account holding
 General Savings. **Transfers made** records them (table `Move`, with the budget month of the next
 month-end) and the balances update at once. A move can be undone until the next month-end, and a
-month-end cannot be closed while moves are waiting. In the engine a made move is an `Adjustment`
+month-end cannot be closed while moves are waiting. Step 4 of the month-end (Transfers) shows the
+same waiting moves and bank transfers above its own and makes them the same way, so the plan below
+is worked out with them made. In the engine a made move is an `Adjustment`
 on the expense: it changes the actual balance, and a filling also the planned balance.
 
 When expenses on average need more than the expected income (a repeating expense counts as its
