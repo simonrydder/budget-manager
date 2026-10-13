@@ -115,7 +115,8 @@ never touch it:
   computer, if the task starts it with Windows). If a newer version did not install or start, the
   log says why.
 - *The app does not start:* look at the end of `logs\launcher.log` and `logs\server.log`.
-- *Port 8000 is in use:* choose another with `-Port`.
+- *Port 8000 is in use by another program:* choose another port with `-Port`. (A Budget Manager
+  left running on it is stopped by the launcher.)
 
 ### 3. By hand with uv (Linux, macOS, Windows)
 

@@ -4,6 +4,15 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.8.1 (2026-10-13)
+
+- Windows launcher: an update could leave the old version running for good. Before updating, the
+  launcher sometimes took its own server for another program ("is not the server started
+  earlier"), left it running and stopped, so the old version kept the port. It now stops the
+  server it started itself, and stops any Budget Manager still running on the port, for example
+  one whose launcher has stopped. If you are stuck on an older version, start the launcher once
+  by hand (`start-budget.cmd`, or restart the computer); after that it updates as it should.
+
 ## 1.8.0 (2026-10-13)
 
 - Every new version on `prod` becomes a
