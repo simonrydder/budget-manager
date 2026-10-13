@@ -398,6 +398,9 @@ class Transfer(models.Model):
     covers = models.BigIntegerField(default=0)
     releases = models.BigIntegerField(default=0)
     general_savings = models.BigIntegerField(default=0)
+    moves = models.BigIntegerField(
+        default=0, help_text="Moves to or from General Savings made with this transfer."
+    )
     done = models.BooleanField(default=False)
     done_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -457,6 +460,14 @@ class Move(models.Model):
     done = models.BooleanField(default=False)
     month = models.DateField(
         null=True, blank=True, help_text="Once made: the budget month of the next month-end."
+    )
+    close = models.ForeignKey(
+        MonthClose,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moves",
+        help_text="The month-end whose transfers made it, when it waited until then.",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
