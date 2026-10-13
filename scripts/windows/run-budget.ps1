@@ -97,23 +97,60 @@ function Stop-Server {
             $process = Get-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue
         }
         # After a reboot the stored number can belong to another program. Only the cmd.exe
-        # this script started is stopped: it was running before server.pid was written.
+        # this script started is stopped: it was running before server.pid was written. File
+        # times only move with the clock tick (about 15 ms) while start times are exact, so the
+        # two can look the wrong way round; a few seconds of slack keeps the check working.
         $written = (Get-Item $PidFile).LastWriteTime
         $started = $null
         if ($process) {
             try { $started = $process.StartTime } catch { }  # access can be denied
         }
         $ours = $process -and $process.ProcessName -eq "cmd" -and
-            $started -and $started -le $written
+            $started -and $started -le $written.AddSeconds(5)
         if ($ours) {
             Write-Log "Stopping the running server (process $oldPid)."
             & taskkill.exe /PID $oldPid /T /F | Out-Null
             Start-Sleep -Seconds 2
         } elseif ($process) {
-            Write-Log "Process $oldPid is not the server started earlier, so it is left running."
+            Write-Log ("Process $oldPid ($($process.ProcessName), started $started, server.pid " +
+                "written $written) is not the server started earlier, so it is left running.")
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
+    # A server can outlive its launcher (a launcher that stopped, or a scheduled task started
+    # again). It still holds the port, so it is found by that.
+    foreach ($id in Find-ServerOnPort) {
+        Write-Log "Stopping Budget Manager that still runs on port $Port (process $id)."
+        & taskkill.exe /PID $id /T /F | Out-Null
+        Start-Sleep -Seconds 2
+    }
+}
+
+function Find-ServerOnPort {
+    # The processes that run Budget Manager on -Port: for each program listening on the port,
+    # the outermost of it and its parents whose command line is "... budget-manager ... serve".
+    $found = @()
+    try {
+        $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+            Select-Object -ExpandProperty OwningProcess -Unique)
+    } catch {
+        return $found  # nothing listens (or this Windows cannot tell)
+    }
+    foreach ($listener in $listeners) {
+        $id = $listener
+        $outermost = $null
+        for ($depth = 0; $depth -lt 8 -and $id; $depth++) {
+            $info = Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue
+            if (-not $info) { break }
+            $commandLine = "$($info.CommandLine)"
+            if ($commandLine -match 'budget-manager' -and $commandLine -match '\sserve(\s|$)') {
+                $outermost = [int]$id
+            }
+            $id = $info.ParentProcessId
+        }
+        if ($outermost -and $found -notcontains $outermost) { $found += $outermost }
+    }
+    return $found
 }
 
 function Test-Port {
@@ -259,6 +296,7 @@ try {
         Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" } |
         ForEach-Object { "http://$($_.IPAddress):$Port" }
 } catch { }
+if (-not $addresses) { $addresses = @("http://localhost:$Port") }  # no network right now
 Write-Log "Running. Open $($addresses -join ' or ') from a browser on your network."
 if ($updated) {
     Remove-Item $FailedFile -Force -ErrorAction SilentlyContinue  # a newer version runs fine
@@ -307,6 +345,11 @@ while (-not $server.HasExited) {
 }
 if ($reason) {
     Write-Log "$reason. Updating to the newest '$Branch' and restarting."
+    # This launcher started the server, so it stops it itself before running the script again.
+    Write-Log "Stopping the running server (process $($server.Id))."
+    & taskkill.exe /PID $server.Id /T /F | Out-Null
+    Start-Sleep -Seconds 2
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     # Run this script again: it stops the server, backs up, updates and starts the new one.
     & $PSCommandPath -Branch $Branch -Port $Port -DataDir $DataDir -KeepBackups $KeepBackups `
         -StartTimeoutSeconds $StartTimeoutSeconds -CheckMinutes $CheckMinutes

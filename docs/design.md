@@ -187,7 +187,9 @@ opens the browser.
 **Launcher.** `install-nightly-task.ps1` registers a scheduled task that runs `run-budget.ps1` when
 Windows starts (and, with `-At`, every night), and adds the firewall rules. `run-budget.ps1`:
 
-1. stops the server it started before (`server.pid`, only if that process is still the server);
+1. stops the server it started before (`server.pid`, only if that process is still the server),
+   and any `budget-manager … serve` still listening on the port, for example one whose launcher
+   stopped;
 2. copies `budget.sqlite3` to `backups\budget-<date>-<time>.sqlite3`, keeping the newest 30;
 3. fetches `prod`, resets the clone to it and runs `uv sync`;
 4. starts `budget-manager serve` with `BUDGET_UPDATER=1`, `BUDGET_CHECK_MINUTES` and
@@ -196,7 +198,8 @@ Windows starts (and, with `-At`, every night), and adds the firewall rules. `run
    checks skip that commit until a newer one (a revert) arrives;
 6. then loops: every `-CheckMinutes` it compares the clone with `origin/prod`, and every few seconds
    it looks for `update.request`, which the **Update now** button (`POST /settings/update/`) and
-   `update-now.cmd` leave in the data folder. Either starts again at step 1.
+   `update-now.cmd` leave in the data folder. Either stops the server it started and starts again
+   at step 1.
 
 PowerShell keeps running the script it read at start, so when an update changes `run-budget.ps1`
 itself the running launcher starts the new script (passing `-PreviousCommit` for the rollback)
