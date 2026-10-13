@@ -157,6 +157,11 @@
     });
   });
 
+  // A log opens at its end, where the newest lines are.
+  document.querySelectorAll("pre.log").forEach((log) => {
+    log.closest("details")?.addEventListener("toggle", () => { log.scrollTop = log.scrollHeight; });
+  });
+
   // Forms that submit as soon as a control changes.
   document.querySelectorAll("[data-autosubmit]").forEach((control) => {
     control.addEventListener("change", () => control.form.requestSubmit());

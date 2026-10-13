@@ -47,10 +47,19 @@ def _parse_version(text: str) -> tuple[int, ...]:
     return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
 
 
-def _fetch(name: str) -> str:
+def _fetch(name: str, timeout: float = 15) -> str:
     source = os.environ.get("BUDGET_UPDATE_SOURCE", UPDATE_SOURCE)
-    with urllib.request.urlopen(source + name, timeout=15) as response:  # noqa: S310
+    with urllib.request.urlopen(source + name, timeout=timeout) as response:  # noqa: S310
         return response.read().decode("utf-8")
+
+
+def newest_version(timeout: float = 15) -> str:
+    """The version number of the newest release: the one in pyproject.toml on prod."""
+    return tomllib.loads(_fetch("pyproject.toml", timeout))["project"]["version"]
+
+
+def is_newer(version: str, than: str) -> bool:
+    return _parse_version(version) > _parse_version(than)
 
 
 def changes_since(changelog: str, installed: tuple[int, ...]) -> str:
@@ -65,7 +74,7 @@ def check_update() -> int:
     1.x) means a change that may need something done by hand, so scripts ask before updating."""
     installed = _parse_version(__version__)
     try:
-        newest_text = tomllib.loads(_fetch("pyproject.toml"))["project"]["version"]
+        newest_text = newest_version()
     except Exception as error:  # offline, GitHub unavailable, ...
         print(f"Could not check for a new version ({error}).")
         return 1

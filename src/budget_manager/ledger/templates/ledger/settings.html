@@ -44,13 +44,30 @@
   <h2>App version</h2>
   {% if updater %}
   <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. {% if check_minutes %}The launcher on the computer checks for a new version every {{ check_minutes }} minute{{ check_minutes|pluralize }} and restarts the app with it.{% else %}The launcher on the computer updates the app each time it starts.{% endif %} <i>Update now</i> gets the newest version right away, which takes a minute or two; it can be pressed from any device.</p>
-  {% if update_waiting %}
-  <div class="notice info"><span>An update is on its way. Reload this page in a minute.</span></div>
-  {% else %}
-  <form method="post" action="{% url 'app-update' %}">{% csrf_token %}<button class="btn">Update now</button></form>
-  {% endif %}
   {% else %}
   <p class="muted small">Running version <b>{{ version }}</b>{% if commit %} (commit {{ commit }}){% endif %}. This copy does not update itself: it was not started by the Windows launcher in <code>scripts\windows</code>, or by a launcher from before version 1.1.0. On the computer that runs the app, start it again with <code>start-budget.cmd</code>, or run <code>install-nightly-task.ps1</code> again as administrator; after that it updates itself and an <i>Update now</i> button appears here.</p>
+  {% endif %}
+  {% if newest %}
+  {% if outdated %}<div class="notice warning"><span>Version <b>{{ newest }}</b> is out. <a href="https://github.com/simonrydder/budget-manager/releases">What is new</a></span></div>
+  {% else %}<p class="muted small">This is the newest version. <a href="https://github.com/simonrydder/budget-manager/releases">All versions</a></p>{% endif %}
+  {% endif %}
+  {% if updater %}
+  {% if update_request == "waiting" %}
+  <div class="notice info"><span>An update is on its way. Reload this page in a minute.</span></div>
+  {% else %}
+  {% if update_request == "stuck" %}
+  <div class="notice warning"><span><b>The update was not picked up.</b> The app keeps running, but the launcher on the computer that updates it has stopped. On that computer, double-click <code>start-budget.cmd</code> in <code>scripts\windows</code>, or restart the computer if the app starts with Windows. The launcher then gets the newest version.</span></div>
+  {% elif update_failed %}
+  <div class="notice warning"><span><b>A newer version did not install or start</b>, so this one runs again. The launcher tries again when a newer version comes out; the log below says what went wrong.</span></div>
+  {% endif %}
+  <form method="post" action="{% url 'app-update' %}">{% csrf_token %}<button class="btn">Update now</button></form>
+  {% endif %}
+  {% endif %}
+  {% if launcher_log %}
+  <details class="more"><summary>Launcher log</summary>
+    <p class="muted small">The last lines of <code>logs\launcher.log</code> in the data folder: what the launcher did at each start and update.</p>
+    <pre class="log">{{ launcher_log }}</pre>
+  </details>
   {% endif %}
 </section>
 

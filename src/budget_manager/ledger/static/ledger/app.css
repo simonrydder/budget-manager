@@ -379,6 +379,8 @@ details.entry-group:not([open]) > summary h3::before { content: "▸"; }
 
 details.more > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 details.more[open] > summary { margin-bottom: 10px; }
+pre.log { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--sunk); font-size: .75rem;
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow-y: auto; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 

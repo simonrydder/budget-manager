@@ -4,6 +4,15 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.8.0 (2026-10-13)
+
+- Every new version on `prod` becomes a
+  [GitHub release](https://github.com/simonrydder/budget-manager/releases) with its changes as
+  the notes, once the tests pass.
+- Settings → App version says when a newer version is out, warns when **Update now** was not
+  picked up (the launcher on the computer has stopped) or a newer version did not install or
+  start, and shows the end of the launcher's log.
+
 ## 1.7.0 (2026-10-10)
 
 - Month-end step 1: every row, the NemKonto's included, has two fields side by side, **Spent**

@@ -24,7 +24,7 @@ CHANGELOG = """# Changelog
 def github(monkeypatch):
     files = {}
 
-    def fetch(name):
+    def fetch(name, timeout=15):
         if name not in files:
             raise OSError("offline")
         return files[name]

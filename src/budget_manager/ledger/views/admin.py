@@ -8,11 +8,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.forms import SetPasswordForm
+from django.core.cache import cache
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from budget_manager import cli
 from budget_manager.ledger import services
 from budget_manager.ledger.forms import NewUserForm, SettingsForm
 from budget_manager.ledger.models import Budget
@@ -35,22 +37,55 @@ def settings_view(request):
         "version": settings.VERSION,
         "commit": settings.COMMIT,
         "check_minutes": settings.CHECK_MINUTES,
-        "update_waiting": _update_waiting(),
+        "update_request": _update_request(),
+        "update_failed": settings.UPDATE_FAILED_FILE.exists(),
+        "newest": _newest_version(),
+        "launcher_log": _launcher_log(),
     }
+    if context["newest"]:
+        context["outdated"] = cli.is_newer(context["newest"], settings.VERSION)
     return render(request, "ledger/settings.html", context)
 
 
-#: A request the launcher has not picked up within this time is shown as not taken.
-UPDATE_PATIENCE = 10 * 60
+#: The launcher looks for an update request every few seconds, so one that is still there
+#: after this long was not picked up: the launcher is not running.
+UPDATE_PATIENCE = 2 * 60
 
 
-def _update_waiting() -> bool:
-    """True while an update asked for from the app has not been picked up by the launcher."""
+def _update_request() -> str | None:
+    """The state of an update asked for from the app: "waiting" while it is on its way,
+    "stuck" when the launcher did not pick it up, or None."""
     try:
         age = time.time() - settings.UPDATE_REQUEST_FILE.stat().st_mtime
     except OSError:
-        return False
-    return age < UPDATE_PATIENCE
+        return None
+    return "waiting" if age < UPDATE_PATIENCE else "stuck"
+
+
+def _newest_version() -> str | None:
+    """The newest version on GitHub, looked up at most every 10 minutes; None if unknown."""
+    if not settings.CHECK_NEWEST:
+        return None
+    newest = cache.get("newest-version")
+    if newest is None:
+        try:
+            newest = cli.newest_version(timeout=3)
+        except Exception:  # offline, GitHub unavailable, ...
+            newest = ""
+        cache.set("newest-version", newest, 10 * 60)
+    return newest or None
+
+
+def _launcher_log(lines: int = 40) -> str:
+    """The end of the Windows launcher's log, which says what each update did."""
+    try:
+        with settings.LAUNCHER_LOG.open("rb") as log:
+            log.seek(0, 2)
+            log.seek(max(0, log.tell() - 16_000))
+            text = log.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    return "\n".join(text.splitlines()[-lines:])
 
 
 @require_POST

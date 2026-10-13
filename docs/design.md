@@ -24,7 +24,7 @@ the budget came from; the requirements are the source of truth.
 | Links | Names in lists and tables open their page but look like text (`a.item`); only actions look like links or buttons. |
 | Login | Required on the home network: anyone on it could otherwise open the budget. Each device stays logged in for a year. In *this computer only* mode (`BUDGET_LOCAL_ONLY=1`, used by `BudgetManager.cmd`) the app listens on `127.0.0.1` only and signs every request in as one person, so there is no login page, Log out or People. |
 | Updates | The home server follows the `prod` branch: the launcher checks it every 5 minutes and restarts the app with a new commit; **Update now** asks for it at once. The one-file copy updates when it starts. See [Running and updating](#running-and-updating). |
-| Versions | Semantic Versioning in `pyproject.toml`, read at run time with `importlib.metadata`, shown in the footer and Settings with the commit. Every change to `prod` raises it and adds a `CHANGELOG.md` entry; a new first number means something must be done by hand, and the one-file copy asks before installing it. |
+| Versions | Semantic Versioning in `pyproject.toml`, read at run time with `importlib.metadata`, shown in the footer and Settings with the commit. Every change to `prod` raises it and adds a `CHANGELOG.md` entry; a new first number means something must be done by hand, and the one-file copy asks before installing it. When CI passes on `prod`, a new version becomes a GitHub release (tag `v<version>`, notes from `CHANGELOG.md`). Settings looks up the newest version on GitHub (at most every 10 minutes) and says when one is out. |
 
 ## Architecture
 
@@ -203,6 +203,10 @@ itself the running launcher starts the new script (passing `-PreviousCommit` for
 and exits. Native commands run through `Invoke-Native`, which turns a non-zero exit code into an
 error without letting PowerShell treat their messages on stderr as failures. Everything is
 written to `logs\launcher.log`; the app's output goes to `logs\server.log`.
+
+Settings → App version shows the end of `launcher.log`, warns when `update.failed` is there (a
+newer version did not install or start), and when an `update.request` is still there after two
+minutes: the launcher looks every few seconds, so it is not running and the app runs on without it.
 
 ## Data model
 
