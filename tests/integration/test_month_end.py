@@ -3,12 +3,14 @@ from datetime import date
 
 import pytest
 
+from budget_manager.ledger import services
 from budget_manager.ledger.models import (
     Account,
     Decision,
     Expense,
     IncomeSource,
     MonthClose,
+    Move,
     SpendingEntry,
     Transfer,
 )
@@ -106,6 +108,45 @@ def test_fixed_expense_costing_more_is_topped_up_and_can_be_reopened(client, bud
     assert client.post("/month-end/2025-06/transfers/", {"action": "continue"}).status_code == 302
     client.post("/month-end/2025-06/close/")
     assert expense("Rent").amount == 1050000
+
+
+def test_a_moved_due_date_is_two_payments_not_a_higher_amount(client, budget):
+    """Rent moved from the 1st to the last day of the month before: June has two payments.
+    That is not a new price, so the expected amount and the contribution stay."""
+    month_end(client, "2025-05")
+    month_end(client, "2025-06", spending={"Rent": "10.000", "Groceries": "4.000"}, nemkonto="0")
+    Expense.objects.filter(name="Rent").update(first_due=date(2025, 6, 30))
+    month_end(
+        client,
+        "2025-07",
+        spending={"Rent": "20.000", "Groceries": "4.000"},
+        nemkonto="0",
+        close=False,
+    )
+    rent = expense("Rent")
+    # Without a top-up, the month-end takes the missing payment from General Savings.
+    points = services.forecast(budget, 2)
+    assert [point.close.lines[rent.id].contribution for point in points] == [1000000] * 2
+    _, plan, _ = services.plan_next_close(budget)
+    line = plan.lines[rent.id]
+    assert (line.balance_before, line.topup, line.contribution) == (-1000000, 1000000, 1000000)
+    assert line.amount_after is None
+
+    # With a top-up waiting under Balance, the forecast counts it as the month-end will.
+    Move.objects.create(budget=budget, kind=Move.Type.TOPUP, expense=rent, amount=1000000)
+    point = services.forecast(budget, 1)[0]
+    assert (point.close.lines[rent.id].topup, point.close.lines[rent.id].contribution) == (
+        0,
+        1000000,
+    )
+    client.post("/month-end/2025-07/close/")
+    assert expense("Rent").amount == 1000000
+
+
+def test_twice_the_amount_on_one_payment_is_not_a_price_rise_but_more_is(client, budget):
+    month_end(client, "2025-05")
+    month_end(client, "2025-06", spending={"Rent": "21.000", "Groceries": "4.000"})
+    assert expense("Rent").amount == 2100000
 
 
 def test_only_the_latest_month_end_can_be_reopened(client, budget):

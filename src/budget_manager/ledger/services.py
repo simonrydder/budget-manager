@@ -291,17 +291,14 @@ def close_inputs(budget: Budget, month: YearMonth) -> CloseInputs:
     return inputs
 
 
-def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs]:
-    """Plan the next month-end from what has been entered so far (missing income counts as 0).
-
-    The moves waiting under Balance count as made with the month-end's transfers: the returned
-    state includes them, and the transfers move their money."""
-    state = build_state(budget)
-    inputs = close_inputs(budget, state.month)
+def with_waiting_moves(
+    budget: Budget, state: BudgetState
+) -> tuple[list[PendingMove], list[Move], dict[int, int]]:
+    """Count the moves waiting under Balance in ``state`` as made with the next month-end's
+    transfers. Returns them, the stale ones, and what each account receives for them."""
     waiting = balancing(budget, date.today(), state)
-    inputs.moves, inputs.stale_moves = waiting.moves, waiting.stale
     to_accounts: dict[int, int] = defaultdict(int)
-    for item in inputs.moves:
+    for item in waiting.moves:
         state.general_savings += item.to_general_savings
         for account, amount in item.legs:
             to_accounts[account.pk] += amount
@@ -309,6 +306,17 @@ def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs
             state.ledger(item.expense.pk).adjustments.append(
                 Adjustment(state.month, item.to_expense, planned=item.kind == Move.Type.FUND)
             )
+    return waiting.moves, waiting.stale, to_accounts
+
+
+def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs]:
+    """Plan the next month-end from what has been entered so far (missing income counts as 0).
+
+    The moves waiting under Balance count as made with the month-end's transfers: the returned
+    state includes them, and the transfers move their money."""
+    state = build_state(budget)
+    inputs = close_inputs(budget, state.month)
+    inputs.moves, inputs.stale_moves, to_accounts = with_waiting_moves(budget, state)
     plan = engine.plan_close(
         state,
         income=inputs.income,
@@ -523,8 +531,11 @@ def forecast(
     budget: Budget, months: int | None = None, state: BudgetState | None = None
 ) -> list[ForecastMonth]:
     """Forecast from now, using what has been entered for the next month-end and expected
-    amounts for everything else."""
-    state = state or build_state(budget)
+    amounts for everything else. Moves waiting under Balance count as made with the next
+    month-end's transfers, as they will be."""
+    state = (state or build_state(budget)).copy()
+    if budget_started(budget):
+        with_waiting_moves(budget, state)
     months = months or budget.forecast_months
     inputs = close_inputs(budget, state.month)
     expected = expected_income_entries(state, state.month)

@@ -3,7 +3,8 @@
 For budget month *B* the close happens on the last day of *B − 1*:
 
 1. Fixed expenses that went below zero during *B − 1* are topped up from General Savings, and
-   their expected amount is raised to the real cost when the payment itself cost more.
+   their expected amount is raised to the real cost when the payment itself cost more (but not
+   for exactly two or more times the amount: that is several payments in the month).
 2. Every active expense gets its contribution for *B*.
 3. Each account receives the contributions of its expenses minus the interest that already
    landed on it (interest counts as if it had arrived on the NemKonto).
@@ -224,7 +225,11 @@ def plan_close(
             paid = expense.schedule.due_in(month - 1)
             # A different first payment says nothing about the normal amount.
             usual = paid is None or expense.amount_on(paid) == expense.amount
-            if usual and previous and previous.expected_spend and spent > previous.expected_spend:
+            expected = previous.expected_spend if previous else 0
+            # Exactly two (or more) times the amount is two payments in the month, for example
+            # after the due date was moved from the 1st to the last day of the month before.
+            several = bool(expected) and spent % expected == 0
+            if usual and expected and spent > expected and not several:
                 line.amount_after = spent if spent > expense.amount else None
         line.topup_chosen = topups.get(expense.id, 0)
         if line.topup_chosen < 0:

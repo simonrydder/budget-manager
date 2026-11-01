@@ -121,6 +121,9 @@ its due date, so an expense's due date should be the day the bank draws it. The 
    the next one (`services.late_payments`); the page lists them, since the bank shows that much
    more until then.
 
+The forecast counts the moves waiting under Balance as made with the next month-end's transfers
+(`services.with_waiting_moves`), like the month-end itself, so they agree.
+
 `MonthClose.step` records how far the checklist has come; `STEPS` in `views/month_end.py` numbers
 the pages, so each page and the step bar agree. **Undo step N** lowers it by one and
 opens that step again; what was entered stays. The latest closed month-end can be **reopened**
@@ -133,7 +136,8 @@ For budget month *B*:
 
 1. **Fixed expenses below zero** after last month's spending are topped up from General Savings.
    If the payment in a due month cost more than expected, the expected amount is raised to the
-   real cost.
+   real cost, unless it cost exactly two or more times as much: that is several payments in the
+   month (a due date moved from the 1st to the last day of the month before).
 2. **Contribution per expense**: each saving period (the transfers up to a payment) uses one
    fixed amount, `(amount − planned balance at the start of the period) / transfers in the
    period`, rounded up to whole units. The transfer is the same every month, so it can be a
