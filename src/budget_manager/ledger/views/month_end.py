@@ -1,8 +1,11 @@
-"""The month-end checklist: spending, interest, income, transfers, then check and close."""
+"""The month-end checklist: income, interest, spending, transfers, then check and close.
+
+Income and interest come first: they have all arrived by the last day of the month, and the
+NemKonto's balance that day only tells what was spent from it once they are known."""
 
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from django.contrib import messages
 from django.db import transaction
@@ -12,6 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from budget_manager.engine import CloseError, YearMonth, format_amount
+from budget_manager.engine.bankdays import last_bank_day
 from budget_manager.ledger import services
 from budget_manager.ledger.models import (
     Account,
@@ -20,15 +24,16 @@ from budget_manager.ledger.models import (
     IncomeEntry,
     InterestEntry,
     MonthClose,
+    Move,
     SpendingEntry,
     Transfer,
 )
 from budget_manager.ledger.views.common import parse_month, read_amounts, save_entries, today
 
 STEPS = [
-    (1, "spending", "Spending"),
+    (1, "income", "Income"),
     (2, "interest", "Interest"),
-    (3, "income", "Income"),
+    (3, "spending", "Spending"),
     (4, "transfers", "Transfers"),
     (5, "check", "Check & close"),
 ]
@@ -74,9 +79,9 @@ def _guard(request, text: str):
 def _context(month: YearMonth, close: MonthClose, current: int, **extra):
     previous = month - 1
     labels = {
-        1: f"{previous.name} spending",
+        1: f"{month.name} income",
         2: f"{previous.name} interest",
-        3: f"{month.name} income",
+        3: f"{previous.name} spending",
         4: "Transfers",
         5: "Check & close",
     }
@@ -134,7 +139,7 @@ def _next(request, month: YearMonth, slug: str):
     if "stay" in request.POST:
         messages.success(request, "Saved.")
         return redirect(f"month-end-{slug}", month=str(month))
-    following = {"spending": "interest", "interest": "income", "income": "transfers"}
+    following = {"income": "interest", "interest": "spending", "spending": "transfers"}
     return redirect(f"month-end-{following[slug]}", month=str(month))
 
 
@@ -181,7 +186,9 @@ def spending(request, month: str):
             if expense.is_fixed and paid and expected and value is None and not before_start
             else None
         )
-        base = ledger.balance_after_close(previous)
+        # What it had after the last month-end and the moves made since (a top-up, or an
+        # overdraft the bank covered), before this month's spending.
+        base = ledger.balance_end_of(previous) + ledger.spending.get(previous, 0)
         rows.append(
             {
                 "expense": expense,
@@ -195,11 +202,14 @@ def spending(request, month: str):
         )
 
     errors = {}
+    day = services.nemkonto_day(budget, state)
     nemkonto = {
-        "start": state.nemkonto,
+        "day": day,
+        "label": f"Balance on {day.day.day} {day.day:%b}",
+        "start": day.before_spending,
         "expected": state.everyday_spending,
         "value": close.nemkonto_spent,
-        "after": state.nemkonto - (close.nemkonto_spent or 0),
+        "after": day.before_spending - (close.nemkonto_spent or 0),
         "raw": None,
         "error": None,
     }
@@ -211,7 +221,7 @@ def spending(request, month: str):
                 save_entries(SpendingEntry, "expense", previous.first_day(), values, request.user)
                 close.nemkonto_spent = spent["spent"]
                 close.save(update_fields=["nemkonto_spent"])
-            _advance(close, 2)
+            _advance(close, 4)
             return _next(request, month, "spending")
         for row in rows:
             row["raw"] = request.POST.get(f"spent-{row['expense'].id}", "")
@@ -220,7 +230,7 @@ def spending(request, month: str):
         nemkonto["error"] = nemkonto_error.get("spent")
         errors = errors or nemkonto_error
     elif request.method == "POST":
-        _advance(close, 2)
+        _advance(close, 4)
         return _next(request, month, "spending")
 
     groups: OrderedDict[Account, list] = OrderedDict()
@@ -228,6 +238,11 @@ def spending(request, month: str):
         groups[account] = []
     for row in sorted(rows, key=lambda r: (r["due"] is None, r["expense"].name.lower())):
         groups.setdefault(row["expense"].account, []).append(row)
+    overdrafts = defaultdict(list)
+    for move in budget.moves.filter(
+        kind=Move.Type.OVERDRAFT, done=True, month=month.first_day()
+    ).select_related("expense", "account"):
+        overdrafts[move.expense.account_id].append(move)
     days_early = (previous.last_day() - today()).days
     context = _context(
         month,
@@ -241,6 +256,7 @@ def spending(request, month: str):
                 "rows": [row for row in items if _asks(row)],
                 # Not due and nothing entered: folded away, to be opened when needed.
                 "quiet": [row for row in items if not _asks(row)],
+                "overdrafts": overdrafts.get(account.id, []),
             }
             for account, items in groups.items()
             if items
@@ -313,7 +329,7 @@ def income(request, month: str):
         values, errors = read_amounts(request.POST, "income-", [s.id for s in sources])
         if not errors:
             save_entries(IncomeEntry, "source", month.first_day(), values, request.user)
-            _advance(close, 4)
+            _advance(close, 2)
             return _next(request, month, "income")
     rows = [
         {
@@ -336,11 +352,24 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
     expenses = {expense.id: expense for expense in budget.expenses.select_related("account")}
     nemkonto = next(a for a in accounts.values() if a.is_nemkonto)
     done = set(close.done_accounts or [])
-    transfers = [
-        {"account": accounts[t.account_id], "plan": t, "done": t.account_id in done}
-        for t in plan.transfers.values()
-        if t.amount
-    ]
+    standing = services.standing_orders(budget)
+    transfers = []
+    for t in plan.transfers.values():
+        order = standing.get(t.account_id, 0)
+        if not t.amount and not order:
+            continue
+        rest = t.amount - order
+        transfers.append(
+            {
+                "account": accounts[t.account_id],
+                "plan": t,
+                "standing_order": order,
+                "rest": rest,
+                # What the standing order sent is all it needs.
+                "done": t.account_id in done or (bool(order) and not rest),
+                "nothing_to_do": bool(order) and not rest,
+            }
+        )
     lines = sorted(
         (
             {"expense": expenses[line.expense_id], "line": line}
@@ -386,6 +415,7 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
             for account in accounts.values()
         ],
         "open_count": sum(1 for t in transfers if not t["done"]),
+        "standing_day": last_bank_day(month - 1) if standing else None,
     }
 
 
@@ -481,6 +511,13 @@ def check(request, month: str):
         return redirect("month-end-transfers", month=str(month))
     context = _plan_context(request.budget, month, close)
     context.update(_context(month, close, 5))
+    late = services.late_payments(request.budget, month)
+    context["late_payments"] = late
+    late_by_account = defaultdict(int)
+    for item in late:
+        late_by_account[item.expense.account_id] += item.amount
+    for row in context["balances_after"]:
+        row["late"] = late_by_account.get(row["account"].id, 0)
     return render(request, "ledger/month_end/check.html", context)
 
 

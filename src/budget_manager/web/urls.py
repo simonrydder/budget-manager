@@ -44,6 +44,7 @@ urlpatterns = [
     # Moving money between month-ends
     path("balance/", balance.balance, name="balance"),
     path("balance/made/", balance.balance_made, name="balance-made"),
+    path("balance/overdraft/", balance.overdraft, name="overdraft"),
     path("balance/<int:pk>/cancel/", balance.move_cancel, name="move-cancel"),
     path("balance/<int:pk>/undo/", balance.move_undo, name="move-undo"),
     # Management

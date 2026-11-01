@@ -142,31 +142,48 @@ The **Overview** is the first page of a running budget:
 ## The month-end
 
 On the last day of the month open **Month-end** in the menu and follow the five steps. You can
-start earlier, enter what you know and come back; nothing is final until you close it.
+start earlier, enter what you know and come back; nothing is final until you close it. You can
+also do it a day or two later: your bank shows the balance after each payment, so read what the
+accounts held at the end of the last day.
 
-1. **Spending** (for example *October spending*): what each expense actually cost this month.
+1. **Income** (for example *November income*): what arrived on the NemKonto during the month for
+   next month, for example child benefit on the 20th and the salaries on the last bank day.
+2. **Interest**: interest each account received (or paid, as a negative amount). It counts as if
+   it arrived on the NemKonto, so the next transfer to that account is smaller.
+3. **Spending** (for example *October spending*): what each expense actually cost this month.
    Every row has two fields, **Spent** and **Balance after**. Type either one and the other
    follows, so you can copy whichever number your bank shows.
    - **Fixed payments** that were due are filled in with their amount. Change one if it cost
      something else.
    - **Variable bills** and **running budgets** are empty: type the real amount, or for a running
      budget what is left on it as its balance after.
-   - **Spent from the NemKonto**: what you spent with the NemKonto's card, or its balance before
-     the income arrived as its balance after.
+   - **Spent from the NemKonto**: easiest, type what the bank showed at the end of the last day
+     under **Balance on …**, before this month-end's transfers, and the app works out what was
+     spent. It knows what the NemKonto had after the last month-end, the income and interest
+     from steps 1 and 2, and the standing orders, so it does not matter on which day money came
+     in or was spent. Open *What it should hold* to see the sum.
+   - If an account went below zero and the bank moved money to it by itself, record that first
+     (see [Balance](#balance-moving-money-between-month-ends)).
    - Expenses that were not due this month are folded away under *N more, not due*. Open it if
      one of them had a payment anyway.
-2. **Interest**: interest each account received (or paid, as a negative amount). It counts as if
-   it arrived on the NemKonto, so the next transfer to that account is smaller.
-3. **Income** (for example *November income*): what arrived on the NemKonto for next month.
 4. **Transfers**: one transfer per account, from the NemKonto (or back to it). Each has a
-   **Copy** button for the amount; tick it off when you have made it in the bank. The side panel
+   **Copy** button for the amount; tick it off when you have made it in the bank. For an account
+   with a standing order, it shows only what the standing order did not cover (or what to send
+   back); if the standing order was exactly right, there is nothing to do. The side panel
    shows how the NemKonto ends up between its minimum and maximum and what that does to General
    Savings. If the NemKonto would end below zero, the page asks which expenses or savings goals to
    take the missing money from. Moves still waiting under Balance go with these transfers: each
    transfer shows its *Moves under Balance* part, and the moves are listed below them. They
    count as made when you close the month-end.
 5. **Check & close**: optionally type what the bank shows for each account to compare, then
-   **Close the month-end**.
+   **Close the month-end**. A payment due on a weekend or holiday at the very end of the month
+   is drawn on the next bank day, in the new month; the page lists those, since the bank shows
+   that much more until then.
+
+**Due dates.** A payment belongs to the month of its due date. Use the day the bank actually
+draws it: rent for November that leaves on the last bank day of October is an October payment in
+the app. A payment on the 1st is next month's, paid with the money sent at this month-end (or by
+a standing order on the last bank day, so it is there in time).
 
 **Going back.** Every step has a **Back** button, and the step bar at the top lets you jump to any
 step you have reached. **Undo step N** (at the top) marks the last finished step as not done and
@@ -184,12 +201,20 @@ Sometimes money has to move between General Savings and an expense before the ne
 | **Top up** an expense, for example one below zero | *Top up from General Savings* on the expense's edit page. |
 | **Return** money an expense no longer needs | *Move money to General Savings* on the expense's page. An ended expense returns what is left by itself. |
 | **Refund**, for example a surplus paid back by the insurance company | *Add a refund* on the Balance page. |
+| **Overdraft** the bank covered by itself, for example Food went below zero and the bank took the money from Savings | *The bank covered an overdraft* on the Balance page, or the link in month-end step 3. |
 
 Each move waits on the **Balance** page, which nets them into the bank transfers to make (to or
 from the account that holds General Savings). Make them in the bank, then press **Transfers
 made**; the balances update at once. A move can be cancelled while it waits and undone until the
 next month-end. Moves still waiting at the month-end are not made separately: they go with the
 month-end's transfers (step 4), so each account gets one transfer.
+
+An overdraft is different: the bank has already moved the money, so it counts as made at once.
+Choose the expense that went over and where the bank took the money from. From General Savings it
+is like a top-up; from the NemKonto it is not counted as everyday spending, and the month-end
+refills the NemKonto as usual. Your net bank shows which account covers an overdraft (often in the
+account's settings, and you can usually choose it). Remove it under *Made recently* if it was
+wrong.
 
 ## Expenses
 
@@ -227,6 +252,9 @@ since, with its expenses folded into one line when there are many. Type what the
 reason the app cannot know (a bank fee, a forgotten purchase), use **Correct the NemKonto
 balance** or **Correct General Savings**. Accounts can be added, renamed or removed (an account
 with expenses or history cannot be removed); exactly one account holds General Savings.
+
+If the bank sends a fixed amount from the NemKonto to an account on the last bank day of every
+month, enter it as the account's **Standing order**. The month-end then only asks for the rest.
 
 ## Forecast and History
 

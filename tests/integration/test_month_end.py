@@ -29,19 +29,20 @@ def month_end(
     client, month: str, *, spending=None, nemkonto="", interest=None, income="25.000", close=True
 ):
     base = f"/month-end/{month}/"
-    assert client.get(base + "spending/").status_code == 200
-    data = {f"spent-{expense(name).id}": value for name, value in (spending or {}).items()}
-    data["nemkonto-spent"] = nemkonto
-    response = client.post(base + "spending/", data)
-    assert response.status_code == 302, response.content
+    assert client.get(base + "income/").status_code == 200
+    salary = IncomeSource.objects.get(name="Salary")
+    response = client.post(base + "income/", {f"income-{salary.id}": income})
     assert response.url == client.at(base + "interest/")
     data = {
         f"interest-{Account.objects.get(name=name).id}": value
         for name, value in (interest or {}).items()
     }
-    assert client.post(base + "interest/", data).url == client.at(base + "income/")
-    salary = IncomeSource.objects.get(name="Salary")
-    response = client.post(base + "income/", {f"income-{salary.id}": income})
+    assert client.post(base + "interest/", data).url == client.at(base + "spending/")
+    assert client.get(base + "spending/").status_code == 200
+    data = {f"spent-{expense(name).id}": value for name, value in (spending or {}).items()}
+    data["nemkonto-spent"] = nemkonto
+    response = client.post(base + "spending/", data)
+    assert response.status_code == 302, response.content
     assert response.url == client.at(base + "transfers/")
     assert client.get(base + "transfers/").status_code == 200
     response = client.post(base + "transfers/", {"action": "continue"})
@@ -57,8 +58,8 @@ def month_end(
 
 def test_first_month_end_moves_the_surplus_to_general_savings(client, budget):
     response = client.get("/month-end/", follow=True)
-    assert response.redirect_chain[-1][0] == client.at("/month-end/2025-05/spending/")
-    assert b"Nothing to enter this time" in response.content
+    assert response.redirect_chain[-1][0] == client.at("/month-end/2025-05/income/")
+    assert b"Nothing to enter this time" in client.get("/month-end/2025-05/spending/").content
 
     month_end(client, "2025-05")
 
@@ -242,20 +243,25 @@ def test_fixed_payments_due_are_filled_in(client, budget):
 def test_a_step_can_be_undone(client, budget):
     month_end(client, "2025-05")
     rent = expense("Rent")
-    client.post("/month-end/2025-06/spending/", {f"spent-{rent.id}": "10.000"})
+    salary = IncomeSource.objects.get(name="Salary")
+    client.post("/month-end/2025-06/income/", {f"income-{salary.id}": "25.000"})
     client.post("/month-end/2025-06/interest/", {})
     close = MonthClose.objects.get(month=date(2025, 6, 1))
     assert close.step == 3
-    page = client.get("/month-end/2025-06/income/").content.decode()
+    page = client.get("/month-end/2025-06/spending/").content.decode()
     assert "Undo step 2: May interest" in page
+    client.post("/month-end/2025-06/spending/", {f"spent-{rent.id}": "10.000"})
+    close.refresh_from_db()
+    assert close.step == 4
 
     response = client.post("/month-end/2025-06/undo/")
-    assert response.url == client.at("/month-end/2025-06/interest/")
+    assert response.url == client.at("/month-end/2025-06/spending/")
     close.refresh_from_db()
-    assert close.step == 2
-    assert client.get("/month-end/").url == client.at("/month-end/2025-06/interest/")
+    assert close.step == 3
+    assert client.get("/month-end/").url == client.at("/month-end/2025-06/spending/")
     # What was entered stays.
     assert SpendingEntry.objects.get(expense=rent, month=date(2025, 5, 1)).amount == 1000000
+    client.post("/month-end/2025-06/undo/")
     client.post("/month-end/2025-06/undo/")
     close.refresh_from_db()
     assert close.step == 1

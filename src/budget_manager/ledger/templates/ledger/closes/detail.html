@@ -35,10 +35,10 @@
           <button class="tick" aria-label="{% if transfer.done %}Mark as not done{% else %}Mark as done{% endif %}">{% if transfer.done %}✓{% endif %}</button>
         </form>
         <div>
-          <div class="amt">{{ transfer.amount|absolute|money }}</div>
-          <div class="route">{% if transfer.amount < 0 %}{{ transfer.account.name }} → NemKonto{% else %}NemKonto → {{ transfer.account.name }}{% endif %}{% if transfer.done and transfer.done_by %} · done by {{ transfer.done_by.first_name|default:transfer.done_by.username }}{% endif %}</div>
+          <div class="amt">{{ transfer.rest|absolute|money }}</div>
+          <div class="route">{% if transfer.rest < 0 %}{{ transfer.account.name }} → NemKonto{% else %}NemKonto → {{ transfer.account.name }}{% endif %}{% if transfer.standing_order %} · {% if not transfer.rest %}all sent by{% elif transfer.rest < 0 %}back from{% else %}on top of{% endif %} the standing order of {{ transfer.standing_order|money }}{% endif %}{% if transfer.done and transfer.done_by %} · done by {{ transfer.done_by.first_name|default:transfer.done_by.username }}{% endif %}</div>
         </div>
-        <button type="button" class="btn small" data-copy="{{ transfer.amount|absolute|money_input }}" hidden>Copy</button>
+        <button type="button" class="btn small" data-copy="{{ transfer.rest|absolute|money_input }}" hidden>Copy</button>
       </div>
       {% empty %}
       <p class="empty">No transfers were needed.</p>

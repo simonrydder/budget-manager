@@ -76,6 +76,18 @@
       </form>
     </section>
 
+    {% if started %}
+    <section class="card">
+      <h2>The bank covered an overdraft</h2>
+      <p class="muted small">If an account went below zero and the bank moved money to it by itself, for example from {{ plan.savings.name }} to Food.</p>
+      <form method="post" action="{% url 'overdraft' %}" class="form" novalidate>
+        {% csrf_token %}
+        {% for field in overdraft_form %}{% include "ledger/_field.html" %}{% endfor %}
+        <div class="form-actions"><button class="btn">Record</button></div>
+      </form>
+    </section>
+    {% endif %}
+
     {% if recent %}
     <section class="card">
       <h2>Made recently</h2>
@@ -85,8 +97,8 @@
           <tr>
             <td class="dim nowrap">{{ move.done_at|date:"j M" }}</td>
             <td>{% if move.expense %}{{ move.expense.name }}{% else %}Refund{% if move.note %} · {{ move.note }}{% endif %}{% endif %}<br><span class="muted small">{{ move.get_kind_display }}</span></td>
-            <td class="num {{ move.to_general_savings|tone }}">{{ move.to_general_savings|signed }}</td>
-            <td class="num">{% if move.month == next_month.first_day %}<form method="post" action="{% url 'move-undo' move.id %}">{% csrf_token %}<button class="linklike small">Undo</button></form>{% endif %}</td>
+            <td class="num {{ move.to_general_savings|tone }}">{% if move.from_nemkonto %}<span class="muted small">From the NemKonto</span>{% else %}{{ move.to_general_savings|signed }}{% endif %}</td>
+            <td class="num">{% if move.month == next_month.first_day %}<form method="post" action="{% url 'move-undo' move.id %}">{% csrf_token %}<button class="linklike small">{% if move.kind == "overdraft" %}Remove{% else %}Undo{% endif %}</button></form>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
