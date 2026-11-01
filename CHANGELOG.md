@@ -4,6 +4,12 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.11.1 (2026-11-01)
+
+- An account's standing order is switched on with a tick box, and its amount starts as what the
+  account's expenses get a month (their contributions at the next month-end). Keep it, or type
+  the amount your bank sends instead.
+
 ## 1.11.0 (2026-11-01)
 
 - The month-end reads the bank as it stood at the end of the last day, so money that came and

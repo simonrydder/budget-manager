@@ -189,11 +189,50 @@ def test_check_warns_about_payments_drawn_after_a_weekend(client, budget, accoun
 
 def test_a_standing_order_is_set_on_the_account(client, budget, accounts):
     food = accounts["Food"]
-    response = client.post(
-        f"/accounts/{food.id}/edit/", {"name": "Food", "standing_order": "4.000"}
-    )
-    assert response.status_code == 302
-    food.refresh_from_db()
-    assert food.standing_order == 400000
+    url = f"/accounts/{food.id}/edit/"
+
+    def save(**data):
+        response = client.post(url, {"name": "Food", **data})
+        assert response.status_code == 302, response.content
+        food.refresh_from_db()
+        return food.standing_order
+
+    # It suggests what the account's expenses get a month: Groceries' 4.000.
+    form = client.get(url).context["form"]
+    assert not form["has_standing_order"].initial
+    assert form.fields["standing_order"].widget.attrs["data-suggested"] == "4.000,00"
+    # Ticked with no amount: the suggestion.
+    assert save(has_standing_order="on", standing_order="") == 400000
+    # Or the amount the bank sends.
+    assert save(has_standing_order="on", standing_order="3.500") == 350000
+    assert client.get(url).context["form"]["standing_order"].initial == 350000
+    # Not ticked: no standing order, whatever the amount says.
+    assert save(standing_order="3.500") == 0
+
     form = client.get(f"/accounts/{accounts['NemKonto'].id}/edit/").context["form"]
     assert "standing_order" not in form.fields
+
+
+def test_the_suggested_standing_order_before_the_budget_is_started(household, accounts):
+    Expense.objects.create(
+        budget=household,
+        name="Insurance",
+        amount=125050,
+        interval_months=12,
+        first_due=date(2027, 3, 1),
+        account=accounts["Budget"],
+        kind="fixed",
+    )
+    # 1.250,50 a year is 104,21 a month, rounded up to whole units like a contribution.
+    assert services.suggested_standing_orders(household) == {accounts["Budget"].id: 10500}
+
+
+def test_a_standing_order_needs_an_amount_when_there_is_nothing_to_suggest(client, budget):
+    savings = Account.objects.get(name="Savings")
+    Expense.objects.filter(account=savings).delete()
+    response = client.post(
+        f"/accounts/{savings.id}/edit/",
+        {"name": "Savings", "holds_general_savings": "on", "has_standing_order": "on"},
+    )
+    assert response.status_code == 200
+    assert b"Enter the amount your bank sends." in response.content
