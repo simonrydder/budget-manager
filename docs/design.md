@@ -13,11 +13,11 @@ the budget came from; the requirements are the source of truth.
 | Expenses | Defined in the app: name, amount, first due date and frequency, type, category and account. They can be dragged between categories (or accounts) on the expenses board, where each card shows what the expense takes a month, its next payment and when, a bar for how much of it is there, and whether that is on track or short against the plan (a running budget shows what is left this month). A food budget is just a running expense linked to the Food account. |
 | Expense types | **Fixed**: the same amount on its due date (rent, insurance). **Variable**: a bill on its due date whose amount varies (power, heating). **Running**: spent bit by bit through the month (food, fuel); monthly from the 1st, no due date. Only fixed expenses are topped up automatically. Expenses cannot use the NemKonto. |
 | Everyday spending | The NemKonto is also the everyday account: what it keeps after a month-end (between X and Y) is the money for everyday spending with its card. Step 3 of each month-end asks what was spent from it, or easier its balance at the end of the last day, from which the app works it out; the month-end then refills it to between X and Y. The forecast and the monthly totals expect the average of the last six month-ends that recorded it. Until there are three, the rough amount from the setup or Settings counts for the missing ones, and the first month-end after a start in the middle of a month is left out because it covers only part of that month. |
-| Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
-| Month-end routine | On the last day of a month (or a few days later, reading the bank as it stood that day): enter next month's income (it arrives during the month), the interest received, that month's actual spending, then make the transfers. |
+| Interest | Every account can receive (or pay) interest. It is entered per account at each month-end, with the income, and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
+| Month-end routine | On the last day of a month (or a few days later, reading the bank as it stood that day): enter next month's income (it arrives during the month) and the interest received, that month's actual spending, then make the transfers. |
 | Bank days | Danish bank closing days (weekends, the Easter days, Ascension Day and the Friday after, Whit Monday, 5 June, 24–26 and 31 December, 1 January) are in `engine/bankdays.py`. Standing orders leave on the last bank day; a payment due on a closing day is drawn on the next bank day. |
 | Standing orders | An account can have a standing order: a fixed amount the bank sends from the NemKonto on the last bank day of every month. Its edit page suggests the contributions its expenses get at the next month-end (`services.suggested_standing_orders`), which stay the same through a saving period. The month-end still works out the whole transfer; Transfers shows only the rest to send (or to send back), and a transfer the standing order covers in full is done by itself. |
-| Overdrafts | When an account goes below zero, the bank may move money to it from another account by itself. It is recorded under Balance as a move that is already made (`Move.Type.OVERDRAFT`), from the NemKonto or the account holding General Savings to an expense. |
+| Overdrafts | When an account goes below zero, the bank may move money to it from another account by itself. It is recorded under Balance as a move that is already made (`Move.Type.OVERDRAFT`), from the NemKonto (the default) or the account holding General Savings to the account that went below zero: to its only expense, the one chosen, or General Savings (`services.money_for`). |
 | Forecast | Uses expected amounts for everything not yet entered. |
 | Budgets | Several budgets (for example private and a company), each with its own accounts, expenses, income and month-ends. A budget is shared with the people chosen in its settings; they all see and edit the same data. Budgets can be created from scratch or copied. |
 | Setup | A five-step checklist per budget: accounts with today's balances, expenses, a summary of what they cost, income, then the transfers that start the budget. |
@@ -96,9 +96,9 @@ on 30 April, funded by the income that arrives during April. Each payment belong
 its due date, so an expense's due date should be the day the bank draws it. The checklist on
 30 April, or a few days later reading the bank as it stood at the end of 30 April:
 
-1. **May income**: what arrived on the NemKonto during April, whatever the day.
-2. **April interest**: interest per account (negative if paid).
-3. **April spending**: what each expense actually cost in April, and what was spent from the
+1. **May income**: what arrived on the NemKonto during April, whatever the day, and below it the
+   April interest per account (negative if paid; empty counts as 0).
+2. **April spending**: what each expense actually cost in April, and what was spent from the
    NemKonto itself. Fixed payments that were due in April are filled in with their expected
    amount (`row.suggested`); variable and running expenses stay empty, since only the person
    knows what they cost, and payments from before the budget was started are left out because
@@ -110,18 +110,19 @@ its due date, so an expense's due date should be the day the bank draws it. The 
    month-end plus the moves made since (an overdraft the bank covered, for example). For the
    NemKonto the balance is the one at the end of 30 April, before the month-end's own transfers
    (`services.nemkonto_day`): what it had after the last month-end, plus the income and its own
-   interest from steps 1 and 2, plus refunds that landed on it and still wait, minus the
+   interest from step 1, plus refunds that landed on it and still wait, minus the
    standing orders and the overdrafts the bank covered from it. Only totals matter, so it does
    not matter when the income came or the card was used. That is why income and interest come
    first.
-4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
+3. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
    With a standing order, only the rest is shown (`Transfer.standing_order`, `Transfer.rest`).
-5. **Check and close**: compare the balances with the bank (optional), then close. Closing
+4. **Check and close**: compare the balances with the bank (optional), then close. Closing
    freezes the month. Payments due on a closing day at the very end of the month are drawn in
    the next one (`services.late_payments`); the page lists them, since the bank shows that much
    more until then.
 
-`MonthClose.step` records how far the checklist has come. **Undo step N** lowers it by one and
+`MonthClose.step` records how far the checklist has come; `STEPS` in `views/month_end.py` numbers
+the pages, so each page and the step bar agree. **Undo step N** lowers it by one and
 opens that step again; what was entered stays. The latest closed month-end can be **reopened**
 (from its page, and right after closing from the next month-end), which deletes its frozen
 lines and transfers so it can be closed again.
@@ -162,10 +163,10 @@ move waits on the **Balance** page until its bank transfer is made:
 | **Fill** a new expense | It gets what its steady monthly amount would already have saved (600 a year due in two months: 500 now, then 50 a month). This counts towards the plan. Without it, the first payment is split over the months left (300, 300, then 50). |
 | **Top up** an expense | Chosen on its edit page, for example a variable expense that stayed below zero. Does not change the plan. |
 | **Return** money to General Savings | Chosen on the expense's page. An **ended** expense returns what is left by itself, once its last payment has been entered. |
-| **Refund** | Money that came back (for example a surplus from the insurance company) goes to General Savings. |
+| **Refund** | Money that came back (for example a surplus from the insurance company) goes to General Savings, or to an expense on the account it belongs on. `PendingMove.legs` says what arrives on each account: a refund leaves the account it arrived on. |
 
-The page nets the waiting moves into one bank transfer per account, to or from the account holding
-General Savings. **Transfers made** records them (table `Move`, with the budget month of the next
+The page nets the waiting moves into one bank transfer per account: what an account sends goes
+straight to an account that receives, the rest to or from the account holding General Savings. **Transfers made** records them (table `Move`, with the budget month of the next
 month-end) and the balances update at once. A move can be undone until the next month-end. In
 the engine a made move is an `Adjustment` on the expense: it changes the actual balance, and a
 filling also the planned balance.

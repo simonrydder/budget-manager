@@ -8,6 +8,8 @@ from django.contrib.auth.forms import UserCreationForm
 
 from budget_manager.engine import (
     FREQUENCIES,
+    CloseError,
+    Role,
     YearMonth,
     format_amount,
     format_input,
@@ -24,6 +26,7 @@ from budget_manager.ledger.models import (
 from budget_manager.ledger.services import (
     budget_started,
     first_running_month,
+    money_for,
     overdraft_sources,
 )
 
@@ -259,7 +262,86 @@ class ReleaseForm(forms.Form):
     amount = AmountField(allow_negative=False, label="Amount to move")
 
 
-class RefundForm(forms.Form):
+class DataSelect(forms.Select):
+    """A select whose options carry data attributes taken from their objects."""
+
+    def __init__(self, *args, data=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data = data
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        instance = getattr(value, "instance", None)
+        if instance is not None and self.data:
+            option["attrs"].update(self.data(instance))
+        return option
+
+
+class TargetForm(forms.Form):
+    """Money that goes to an account: to one of its expenses, or to General Savings on the
+    account holding it. The expense only has to be chosen when the account has several."""
+
+    target_label = "Goes to"
+    target_help = ""
+    target_required = True
+    first_fields = ["amount", "target", "expense"]
+
+    def __init__(self, *args, budget: Budget, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.budget = budget
+        accounts = budget.accounts.exclude(role=Role.NEMKONTO.value)
+        self.fields["target"] = forms.ModelChoiceField(
+            queryset=accounts,
+            required=self.target_required,
+            label=self.target_label,
+            help_text=self.target_help,
+            widget=DataSelect(
+                data=lambda a: {"data-holds-general-savings": ""} if a.holds_general_savings else {}
+            ),
+        )
+        today = date.today()
+        expenses = budget.expenses.select_related("account").order_by("name")
+        self.fields["expense"] = forms.ModelChoiceField(
+            queryset=expenses.exclude(end_date__lt=today),
+            required=False,
+            label="Expense",
+            empty_label="Choose…",
+            help_text="Which of the account's expenses it is for.",
+            widget=DataSelect(
+                data=lambda e: {"data-account": str(e.account_id)},
+                attrs={"data-expense-for": "id_" + self.add_prefix("target")},
+            ),
+        )
+        order = self.first_fields
+        self.order_fields(order + [name for name in self.fields if name not in order])
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if not amount:
+            raise forms.ValidationError("Enter an amount above 0.")
+        return amount
+
+    def clean(self):
+        data = super().clean()
+        target = data.get("target")
+        if target is None:
+            data["expense"] = None  # General Savings
+            return data
+        try:
+            data["expense"] = money_for(target, data.get("expense"))
+        except CloseError as error:
+            self.add_error("expense", str(error))
+        return data
+
+
+class RefundForm(TargetForm):
+    """Money that came back from outside, for example an insurance surplus."""
+
+    target_label = "Belongs on"
+    target_help = "The account it should have arrived on."
+    target_required = False
+    first_fields = ["amount", "account", "target", "expense"]
+
     amount = AmountField(allow_negative=False, label="Amount")
     account = forms.ModelChoiceField(
         queryset=Account.objects.none(),
@@ -272,52 +354,45 @@ class RefundForm(forms.Form):
     )
 
     def __init__(self, *args, budget: Budget, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, budget=budget, **kwargs)
         self.fields["account"].queryset = budget.accounts.all()
+        if not self.is_bound:
+            self.initial.setdefault(
+                "target", budget.accounts.filter(role=Role.SAVINGS.value).first()
+            )
+            self.initial.setdefault(
+                "account", budget.accounts.filter(role=Role.NEMKONTO.value).first()
+            )
 
-    def clean_amount(self):
-        amount = self.cleaned_data["amount"]
-        if not amount:
-            raise forms.ValidationError("Enter an amount above 0.")
-        return amount
 
-
-class OverdraftForm(forms.Form):
+class OverdraftForm(TargetForm):
     """The bank moved money by itself to an account that went below zero."""
 
-    expense = forms.ModelChoiceField(
-        queryset=Expense.objects.none(),
-        label="Went over",
-        help_text="The expense whose account went below zero, for example Food.",
-    )
+    target_label = "Went below zero"
+    target_help = "The account the bank moved the money to, for example Food."
+
+    amount = AmountField(allow_negative=False, label="Amount")
     source = forms.ModelChoiceField(
         queryset=Account.objects.none(),
         empty_label=None,
         label="The bank took it from",
         help_text="See which account the money came from in your bank.",
     )
-    amount = AmountField(allow_negative=False, label="Amount")
     note = forms.CharField(max_length=200, required=False, label="Note")
 
     def __init__(self, *args, budget: Budget, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["expense"].queryset = budget.expenses.select_related("account").order_by(
-            "account__sort_order", "name"
-        )
-        self.fields["expense"].label_from_instance = lambda e: f"{e.name} ({e.account.name})"
+        super().__init__(*args, budget=budget, **kwargs)
         sources = overdraft_sources(budget)
         self.fields["source"].queryset = budget.accounts.filter(pk__in=[a.pk for a in sources])
-
-    def clean_amount(self):
-        amount = self.cleaned_data["amount"]
-        if not amount:
-            raise forms.ValidationError("Enter an amount above 0.")
-        return amount
+        if not self.is_bound:
+            self.initial.setdefault(
+                "source", budget.accounts.filter(role=Role.NEMKONTO.value).first()
+            )
 
     def clean(self):
         data = super().clean()
-        expense, source = data.get("expense"), data.get("source")
-        if expense and source and expense.account_id == source.pk:
+        target, source = data.get("target"), data.get("source")
+        if target and source and target.pk == source.pk:
             self.add_error("source", "The money has to come from another account.")
         return data
 

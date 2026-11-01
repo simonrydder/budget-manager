@@ -20,8 +20,8 @@
         <tbody>
         {% for item in plan.moves %}
           <tr>
-            <td>{% if item.expense %}<a class="item" href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
-            <td class="dim">{{ item.account.name }}</td>
+            <td>{% if item.expense %}<a class="item" href="{% url 'expense-detail' item.expense.id %}">{{ item.expense.name }}</a>{% else %}General Savings{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td class="dim">{% if item.kind == "refund" %}Arrived on {{ item.account.name }}{% else %}{{ item.account.name }}{% endif %}</td>
             <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
             <td class="num">{% if item.move %}<form method="post" action="{% url 'move-cancel' item.move.id %}">{% csrf_token %}<button class="linklike small">Cancel</button></form>{% endif %}</td>
           </tr>
@@ -68,7 +68,7 @@
   <div class="stack" style="gap:16px">
     <section class="card">
       <h2>Add a refund</h2>
-      <p class="muted small">Money you got back, for example a surplus from your insurance company. It goes to General Savings.</p>
+      <p class="muted small">Money you got back, for example a surplus from your insurance company. It goes to General Savings, or to the expense it belongs to.</p>
       <form method="post" class="form" novalidate>
         {% csrf_token %}
         {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
@@ -79,7 +79,7 @@
     {% if started %}
     <section class="card">
       <h2>The bank covered an overdraft</h2>
-      <p class="muted small">If an account went below zero and the bank moved money to it by itself, for example from {{ plan.savings.name }} to Food.</p>
+      <p class="muted small">If an account went below zero and the bank moved money to it by itself, for example from the NemKonto to Food.</p>
       <form method="post" action="{% url 'overdraft' %}" class="form" novalidate>
         {% csrf_token %}
         {% for field in overdraft_form %}{% include "ledger/_field.html" %}{% endfor %}
@@ -96,8 +96,8 @@
         {% for move in recent %}
           <tr>
             <td class="dim nowrap">{{ move.done_at|date:"j M" }}</td>
-            <td>{% if move.expense %}{{ move.expense.name }}{% else %}Refund{% if move.note %} · {{ move.note }}{% endif %}{% endif %}<br><span class="muted small">{{ move.get_kind_display }}</span></td>
-            <td class="num {{ move.to_general_savings|tone }}">{% if move.from_nemkonto %}<span class="muted small">From the NemKonto</span>{% else %}{{ move.to_general_savings|signed }}{% endif %}</td>
+            <td>{% if move.expense %}{{ move.expense.name }}{% else %}General Savings{% endif %}{% if move.note %} · {{ move.note }}{% endif %}<br><span class="muted small">{{ move.get_kind_display }}{% if move.kind == "overdraft" %} from {{ move.account.name }}{% elif move.kind == "refund" %} on {{ move.account.name }}{% endif %}</span></td>
+            <td class="num {{ move.to_general_savings|tone }}">{% if move.to_general_savings %}{{ move.to_general_savings|signed }}{% else %}<span class="muted small">{{ move.to_expense|signed }}</span>{% endif %}</td>
             <td class="num">{% if move.month == next_month.first_day %}<form method="post" action="{% url 'move-undo' move.id %}">{% csrf_token %}<button class="linklike small">{% if move.kind == "overdraft" %}Remove{% else %}Undo{% endif %}</button></form>{% endif %}</td>
           </tr>
         {% endfor %}

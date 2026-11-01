@@ -43,7 +43,7 @@
         <div class="flow">
           <div><span>{% if opening_month and started_on %}When you started the budget on {{ started_on|date:"j F" }}{% else %}After the last month-end{% endif %}</span><span class="num">{{ day.after_close|money }}</span></div>
           <div><span>+ Income for {{ month.name }} (step 1)</span><span class="num">{{ day.income|money }}</span></div>
-          {% if day.interest %}<div><span>+ Interest on it (step 2)</span><span class="num">{{ day.interest|money }}</span></div>{% endif %}
+          {% if day.interest %}<div><span>+ Interest on it (step 1)</span><span class="num">{{ day.interest|money }}</span></div>{% endif %}
           {% if day.refunds %}<div><span>+ Refunds that arrived on it</span><span class="num">{{ day.refunds|money }}</span></div>{% endif %}
           {% if day.standing_orders %}<div><span>− Standing orders on {{ day.standing_day|date:"j M" }}</span><span class="num">{{ day.standing_orders|money }}</span></div>{% endif %}
           {% if day.overdrafts %}<div><span>− Overdrafts the bank covered from it</span><span class="num">{{ day.overdrafts|money }}</span></div>{% endif %}
@@ -58,7 +58,7 @@
       <header><h3>{{ group.account.name }}</h3><span class="muted small">{{ group.count }} expense{{ group.count|pluralize }}</span></header>
       {% for row in group.rows %}{% include "ledger/month_end/_spending_entry.html" %}{% endfor %}
       {% for move in group.overdrafts %}
-      <p class="muted small overdraft-note">The bank covered {{ move.amount|money }} for {{ move.expense.name }} from {{ move.account.name }}{% if move.note %} · {{ move.note }}{% endif %}. It is in <i>it had</i> above.</p>
+      <p class="muted small overdraft-note">The bank covered {{ move.amount|money }} for {% if move.expense %}{{ move.expense.name }}{% else %}General Savings{% endif %} from {{ move.account.name }}{% if move.note %} · {{ move.note }}{% endif %}.{% if move.expense %} It is in <i>it had</i> above.{% endif %}</p>
       {% endfor %}
       {% if group.quiet %}
       <details class="quiet-entries">
@@ -71,7 +71,7 @@
     <div class="card flat"><p class="empty">No expenses yet. <a href="{% url 'expense-new' %}">Add your first expense</a>.</p></div>
     {% endfor %}
     <div class="sticky-actions">
-      <a class="btn" href="{% url 'month-end-interest' month %}">Back</a>
+      <a class="btn" href="{% url 'month-end-income' month %}">Back</a>
       <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>
     </div>
   </form>

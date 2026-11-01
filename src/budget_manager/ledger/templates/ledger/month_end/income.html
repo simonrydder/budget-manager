@@ -4,7 +4,7 @@
 {% block content %}
 {% include "ledger/month_end/_steps.html" with title=month.name|add:" income" %}
 <div class="checklist">
-  <p class="lead">Enter what arrived on the NemKonto during {{ previous.name }} for {{ month.label }}, for example a salary on the last bank day and child benefit earlier in the month. It does not matter on which day each one came. An empty field counts as nothing received.</p>
+  <p class="lead">Enter what arrived on the NemKonto during {{ previous.name }} for {{ month.label }}, for example a salary on the last bank day and child benefit earlier in the month. It does not matter on which day each one came. An empty field counts as nothing received. Interest is below.</p>
   <form method="post" class="stack" style="gap:14px" novalidate>
     {% csrf_token %}
     <div class="row">
@@ -30,6 +30,23 @@
       <div class="entry"><p class="empty">No income sources yet. <a href="{% url 'income-new' %}">Add one</a>.</p></div>
       {% endfor %}
     </section>
+    <details class="entry-group"{% if interest_open %} open{% endif %}>
+      <summary><h3>{{ previous.name }} interest</h3><span class="muted small">Empty counts as 0</span></summary>
+      <p class="muted small entry-note">Interest each account received in {{ previous.name }}; use a minus for interest you paid. It counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller by the same amount.</p>
+      {% for row in interest_rows %}
+      <div class="entry">
+        <label class="name" for="interest-{{ row.account.id }}">
+          <b>{{ row.account.name }}</b>
+          <small>{% if row.account.is_nemkonto %}Adds to the money available this month{% else %}Reduces the transfer to {{ row.account.name }}{% endif %}</small>
+        </label>
+        <input type="text" class="amount{% if row.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
+               id="interest-{{ row.account.id }}" name="interest-{{ row.account.id }}" placeholder="0,00"
+               value="{% if row.raw is not None %}{{ row.raw }}{% else %}{{ row.value|money_input }}{% endif %}">
+        <span></span>
+        {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </details>
     <div class="sticky-actions">
       <span></span>
       <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>

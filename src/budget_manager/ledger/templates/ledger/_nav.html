@@ -1,6 +1,6 @@
 {% load budget %}{% if current_budget and not nav_started %}<a href="{% url 'start' %}"{% current 'setup' 'start' %}>Set up <span class="badge">Step {{ nav_setup_step }}/5</span></a>
 {% endif %}<a href="{% url 'dashboard' %}"{% current 'dashboard' %}>Overview</a>
-<a href="{% url 'month-end' %}"{% current 'month-end' 'close' %}>Month-end {% if nav_close_month %}<span class="badge">{% if nav_close_step %}Step {{ nav_close_step }}/5{% else %}{{ nav_transfer_day|date:"j M" }}{% endif %}</span>{% endif %}</a>
+<a href="{% url 'month-end' %}"{% current 'month-end' 'close' %}>Month-end {% if nav_close_month %}<span class="badge">{% if nav_close_step %}Step {{ nav_close_step }}/4{% else %}{{ nav_transfer_day|date:"j M" }}{% endif %}</span>{% endif %}</a>
 <a href="{% url 'balance' %}"{% current 'balance' 'move' %}>Balance {% if nav_waiting %}<span class="badge">{{ nav_waiting }}</span>{% endif %}</a>
 <div class="nav-sep"></div>
 <a href="{% url 'expenses' %}"{% current 'expense' 'categor' %}>Expenses</a>
