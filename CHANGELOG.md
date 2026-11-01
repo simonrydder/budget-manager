@@ -4,6 +4,17 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.12.2 (2026-11-01)
+
+- Moving a due date from the 1st to the last day of the month before gives that month two
+  payments. The month-end took them for one payment at twice the price, so it planned to raise
+  the expense's amount and set aside twice as much from then on. Exactly two (or more) times the
+  amount now counts as several payments: the extra one comes from General Savings and the amount
+  stays.
+- The forecast and the expense pages count moves waiting under Balance as made with the next
+  month-end's transfers, like the month-end itself, so a waiting top-up no longer shows a
+  different plan there.
+
 ## 1.12.1 (2026-11-01)
 
 - Tapping or clicking an amount field selects the whole number, so typing replaces it instead of

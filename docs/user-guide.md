@@ -185,7 +185,10 @@ accounts held at the end of the last day.
 **Due dates.** A payment belongs to the month of its due date. Use the day the bank actually
 draws it: rent for November that leaves on the last bank day of October is an October payment in
 the app. A payment on the 1st is next month's, paid with the money sent at this month-end (or by
-a standing order on the last bank day, so it is there in time).
+a standing order on the last bank day, so it is there in time). Moving a due date from the 1st to
+the last day of the month before gives that month two payments: enter both as spent. The month
+takes the extra payment from General Savings (or top the expense up yourself under Balance), and
+the expense keeps its amount.
 
 **Going back.** Every step has a **Back** button, and the step bar at the top lets you jump to any
 step you have reached. **Undo step N** (at the top) marks the last finished step as not done and
