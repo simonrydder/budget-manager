@@ -50,7 +50,8 @@ runs short, and shows where every account will be in the months ahead.
 | **Contribution** | What an expense gets at a month-end. It stays the same every month, so the transfers can be standing orders in the bank. |
 
 Amounts are written like `1.234,56`, without a currency. You can type `1234,56`, `1.234,56` or
-`1234`.
+`1234`. Tapping or clicking an amount selects all of it, so what you type replaces it; leave the
+field without typing and the amount stays.
 
 ## Setting up a budget
 

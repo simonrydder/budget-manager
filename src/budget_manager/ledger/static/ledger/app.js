@@ -174,6 +174,26 @@
     update();
   });
 
+  // Tapping or clicking an amount selects all of it, so typing replaces the number instead of
+  // adding to it. Leaving the field without typing keeps the number.
+  let selecting = null;
+  document.addEventListener("focusin", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.classList.contains("amount")) return;
+    if (input.readOnly || !input.value) return;
+    selecting = input;
+    input.select();
+    // Some browsers (Safari on iPhone and iPad) only keep a selection made after the tap.
+    setTimeout(() => {
+      if (document.activeElement === input) input.setSelectionRange(0, input.value.length);
+    }, 0);
+  });
+  document.addEventListener("mouseup", (event) => {
+    // The click that focused the field would otherwise put the cursor where it landed.
+    if (event.target === selecting) event.preventDefault();
+    selecting = null;
+  });
+
   // Spent and balance after: typing either one works out the other from what there was (on
   // the NemKonto, or on an expense). Without JavaScript the balance is only shown.
   document.querySelectorAll("[data-with-js]").forEach((element) => { element.hidden = false; });
