@@ -99,6 +99,10 @@ class Account(models.Model):
     start_balance = models.BigIntegerField(
         null=True, blank=True, help_text="The bank balance entered when setting up the budget."
     )
+    standing_order = models.BigIntegerField(
+        default=0,
+        help_text="Sent from the NemKonto by the bank on the last bank day of every month.",
+    )
 
     class Meta:
         ordering = ["sort_order", "id"]
@@ -401,6 +405,9 @@ class Transfer(models.Model):
     moves = models.BigIntegerField(
         default=0, help_text="Moves to or from General Savings made with this transfer."
     )
+    standing_order = models.BigIntegerField(
+        default=0, help_text="The part the account's standing order already sent."
+    )
     done = models.BooleanField(default=False)
     done_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -409,6 +416,11 @@ class Transfer(models.Model):
 
     class Meta:
         ordering = ["account__sort_order", "account_id"]
+
+    @property
+    def rest(self) -> int:
+        """What is left to transfer after the standing order (negative: back to the NemKonto)."""
+        return self.amount - self.standing_order
 
 
 class Decision(models.Model):
@@ -434,13 +446,18 @@ class Decision(models.Model):
 
 class Move(models.Model):
     """Money moved between General Savings and an expense (or a refund put into General
-    Savings) any day, not only at a month-end. It waits until the bank transfers are made."""
+    Savings) any day, not only at a month-end. It waits until the bank transfers are made.
+
+    An overdraft is different: the bank already moved the money, from ``account`` (the NemKonto
+    or the account holding General Savings) to the expense's account that went below zero. It
+    is made as soon as it is recorded."""
 
     class Type(models.TextChoices):
         FUND = "fund", "Fill from General Savings"
         TOPUP = "topup", "Top up from General Savings"
         RELEASE = "release", "Return to General Savings"
         REFUND = "refund", "Refund to General Savings"
+        OVERDRAFT = "overdraft", "Overdraft covered by the bank"
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="moves")
     kind = models.CharField(max_length=10, choices=Type.choices)
@@ -453,7 +470,8 @@ class Move(models.Model):
         blank=True,
         on_delete=models.PROTECT,
         related_name="+",
-        help_text="For a refund: the account the money arrived on.",
+        help_text="For a refund: the account the money arrived on. For an overdraft: the "
+        "account the bank took it from.",
     )
     amount = models.BigIntegerField()
     note = models.CharField(max_length=200, blank=True)
@@ -484,7 +502,7 @@ class Move(models.Model):
     @property
     def to_expense(self) -> int:
         """What the move adds to its expense (negative: taken from it)."""
-        if self.kind in (self.Type.FUND, self.Type.TOPUP):
+        if self.kind in (self.Type.FUND, self.Type.TOPUP, self.Type.OVERDRAFT):
             return self.amount
         if self.kind == self.Type.RELEASE:
             return -self.amount
@@ -494,4 +512,15 @@ class Move(models.Model):
     def to_general_savings(self) -> int:
         if self.kind == self.Type.REFUND:
             return self.amount
+        if self.from_nemkonto:
+            return 0
         return -self.to_expense
+
+    @property
+    def from_nemkonto(self) -> bool:
+        """An overdraft the bank covered from the NemKonto."""
+        return (
+            self.kind == self.Type.OVERDRAFT
+            and self.account_id is not None
+            and self.account.is_nemkonto
+        )

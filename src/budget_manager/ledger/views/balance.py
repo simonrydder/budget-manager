@@ -8,9 +8,9 @@ from django.views.decorators.http import require_POST
 
 from budget_manager.engine import CloseError, Role, format_amount
 from budget_manager.ledger import services
-from budget_manager.ledger.forms import RefundForm
+from budget_manager.ledger.forms import OverdraftForm, RefundForm
 from budget_manager.ledger.models import Move
-from budget_manager.ledger.views.common import today
+from budget_manager.ledger.views.common import next_value, safe_next, today
 
 
 def balance(request):
@@ -37,11 +37,45 @@ def balance(request):
     context = {
         "plan": plan,
         "form": form,
+        "overdraft_form": OverdraftForm(
+            budget=budget, initial={"source": _savings(budget)}, prefix="overdraft"
+        ),
         "started": services.budget_started(budget),
         "next_month": state.month,
         "recent": budget.moves.filter(done=True).select_related("expense", "account")[:20],
     }
     return render(request, "ledger/balance.html", context)
+
+
+def _savings(budget):
+    return budget.accounts.filter(role=Role.SAVINGS.value).first()
+
+
+def overdraft(request):
+    """The bank covered an account that went below zero, by itself."""
+    budget = request.budget
+    form = OverdraftForm(
+        request.POST or None,
+        budget=budget,
+        initial={"source": _savings(budget), "expense": request.GET.get("expense")},
+        prefix="overdraft",
+    )
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        try:
+            services.record_overdraft(
+                budget, data["expense"], data["source"], data["amount"], request.user, data["note"]
+            )
+        except CloseError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(
+                request,
+                f"Recorded: the bank moved {format_amount(data['amount'])} from "
+                f"{data['source'].name} to {data['expense'].account.name}.",
+            )
+            return redirect(safe_next(request, "balance"))
+    return render(request, "ledger/overdraft.html", {"form": form, "next": next_value(request)})
 
 
 @require_POST
@@ -74,5 +108,8 @@ def move_undo(request, pk: int):
     except CloseError as error:
         messages.error(request, str(error))
     else:
-        messages.success(request, "Undone. The move is waiting again.")
+        if move.kind == Move.Type.OVERDRAFT:
+            messages.success(request, "Removed.")
+        else:
+            messages.success(request, "Undone. The move is waiting again.")
     return redirect("balance")

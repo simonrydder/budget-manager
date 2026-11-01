@@ -4,7 +4,7 @@
 {% block content %}
 {% include "ledger/month_end/_steps.html" with title=month.name|add:" income" %}
 <div class="checklist">
-  <p class="lead">Enter what actually arrived on the NemKonto for {{ month.label }}, usually paid on the last working day of {{ previous.name }}. An empty field counts as nothing received.</p>
+  <p class="lead">Enter what arrived on the NemKonto during {{ previous.name }} for {{ month.label }}, for example a salary on the last bank day and child benefit earlier in the month. It does not matter on which day each one came. An empty field counts as nothing received.</p>
   <form method="post" class="stack" style="gap:14px" novalidate>
     {% csrf_token %}
     <div class="row">
@@ -31,7 +31,7 @@
       {% endfor %}
     </section>
     <div class="sticky-actions">
-      <a class="btn" href="{% url 'month-end-interest' month %}">Back</a>
+      <span></span>
       <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>
     </div>
   </form>

@@ -38,7 +38,7 @@
         {% else %}<span class="chip bad">{{ days_ago }} day{{ days_ago|pluralize }} ago</span>{% endif %}
       </p>
       <p class="muted small">
-        {% if draft %}In progress: step {{ draft.step }} of 5.{% else %}Enter last month's spending and {{ month.name }}'s income, then make the transfers.{% endif %}
+        {% if draft %}In progress: step {{ draft.step }} of 5.{% else %}Enter {{ month.name }}'s income and last month's spending, then make the transfers.{% endif %}
       </p>
       <div class="actions"><a class="btn primary" href="{% url 'month-end' %}">{% if draft %}Continue{% else %}Start{% endif %}</a></div>
     </div>

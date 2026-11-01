@@ -1,0 +1,16 @@
+{% extends "ledger/base.html" %}
+{% block title %}The bank covered an overdraft{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>The bank covered an overdraft</h1>
+  <p class="muted">When an account goes below zero, the bank may move money to it from another account by itself. Record it here so both accounts match the bank. It counts as made at once; nothing needs to be transferred.</p></div></div>
+<form method="post" action="{% url 'overdraft' %}" class="form card flat" novalidate>
+  {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  {% for field in form %}{% include "ledger/_field.html" %}{% endfor %}
+  <p class="muted small">From General Savings it is like a top-up. From the NemKonto it is not counted as everyday spending, and the month-end refills the NemKonto as usual.</p>
+  <div class="form-actions">
+    <button class="btn primary">Record</button>
+    <a class="btn" href="{% if next %}{{ next }}{% else %}{% url 'balance' %}{% endif %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

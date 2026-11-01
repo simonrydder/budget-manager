@@ -15,7 +15,11 @@ from budget_manager.ledger.models import (
     Expense,
     IncomeSource,
 )
-from budget_manager.ledger.services import budget_started, first_running_month
+from budget_manager.ledger.services import (
+    budget_started,
+    first_running_month,
+    overdraft_sources,
+)
 
 FREQUENCY_CHOICES = [(value, label) for value, label in FREQUENCIES.items()]
 
@@ -272,6 +276,46 @@ class RefundForm(forms.Form):
         return amount
 
 
+class OverdraftForm(forms.Form):
+    """The bank moved money by itself to an account that went below zero."""
+
+    expense = forms.ModelChoiceField(
+        queryset=Expense.objects.none(),
+        label="Went over",
+        help_text="The expense whose account went below zero, for example Food.",
+    )
+    source = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        empty_label=None,
+        label="The bank took it from",
+        help_text="See which account the money came from in your bank.",
+    )
+    amount = AmountField(allow_negative=False, label="Amount")
+    note = forms.CharField(max_length=200, required=False, label="Note")
+
+    def __init__(self, *args, budget: Budget, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["expense"].queryset = budget.expenses.select_related("account").order_by(
+            "account__sort_order", "name"
+        )
+        self.fields["expense"].label_from_instance = lambda e: f"{e.name} ({e.account.name})"
+        sources = overdraft_sources(budget)
+        self.fields["source"].queryset = budget.accounts.filter(pk__in=[a.pk for a in sources])
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if not amount:
+            raise forms.ValidationError("Enter an amount above 0.")
+        return amount
+
+    def clean(self):
+        data = super().clean()
+        expense, source = data.get("expense"), data.get("source")
+        if expense and source and expense.account_id == source.pk:
+            self.add_error("source", "The money has to come from another account.")
+        return data
+
+
 class IncomeSourceForm(UniqueNameInBudget, forms.ModelForm):
     noun = "an income"
 
@@ -304,6 +348,14 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
         help_text="Only one account can. Savings goals usually live here too.",
     )
 
+    standing_order = AmountField(
+        required=False,
+        allow_negative=False,
+        label="Standing order from the NemKonto",
+        help_text="If the bank sends a fixed amount from the NemKonto to this account on the "
+        "last bank day of every month. The month-end then only asks for the rest.",
+    )
+
     class Meta:
         model = Account
         fields = ["name"]
@@ -312,8 +364,18 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
             self.fields["holds_general_savings"].initial = self.instance.holds_general_savings
+            self.fields["standing_order"].initial = self.instance.standing_order or None
         if self.instance.is_nemkonto:
             del self.fields["holds_general_savings"]
+            del self.fields["standing_order"]
+
+    def clean_standing_order(self):
+        return self.cleaned_data["standing_order"] or 0
+
+    def save(self, commit=True):
+        if "standing_order" in self.cleaned_data:
+            self.instance.standing_order = self.cleaned_data["standing_order"]
+        return super().save(commit)
 
     def clean_holds_general_savings(self):
         value = self.cleaned_data["holds_general_savings"]

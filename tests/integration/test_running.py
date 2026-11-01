@@ -25,7 +25,7 @@ def test_everyday_spending_comes_out_of_the_nemkonto(client, budget, accounts):
     # Before the June month-end: the NemKonto started with 5.000 and 3.600 was spent from it.
     page = client.get("/month-end/2025-06/spending/").content.decode()
     assert "Spent from the NemKonto in May" in page
-    assert "it had 5.000,00 after the last month-end" in page
+    assert '<span>After the last month-end</span><span class="num">5.000,00</span>' in page
     assert 'data-balance-of="nemkonto-spent" data-start="500000" value="5.000,00"' in page
     month_end(client, "2025-06", nemkonto="3.600")
     june = MonthClose.objects.get(month=date(2025, 6, 1))

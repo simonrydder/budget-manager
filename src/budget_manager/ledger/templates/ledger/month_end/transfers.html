@@ -9,7 +9,7 @@
     {% if nemkonto_missing %}
     <div class="notice warning">
       <span>What was spent from the NemKonto in {{ previous.name }} is not entered, so it counts as 0 and the NemKonto would end too high.</span>
-      <small><a href="{% url 'month-end-spending' month %}">Enter it in step 1</a></small>
+      <small><a href="{% url 'month-end-spending' month %}">Enter it in step 3</a></small>
     </div>
     {% endif %}
     {% if missing_income %}
@@ -59,20 +59,27 @@
 
     <section class="stack">
       <div class="spread"><h2>Transfers on {{ transfer_day|date:"j F" }}</h2>{% if transfers %}<span class="muted small">{{ open_count }} of {{ transfers|length }} left to do</span>{% endif %}</div>
-      <p class="muted small">Tick each transfer when you have made it in your bank.</p>
+      <p class="muted small">Tick each transfer when you have made it in your bank.{% if standing_day %} Standing orders were sent on {{ standing_day|date:"j F" }}; only what they did not cover is left.{% endif %}</p>
       <div class="transfers">
         {% for item in transfers %}
         {% with t=item.plan %}
         <div class="transfer{% if item.done %} done{% endif %}">
+          {% if item.nothing_to_do %}<span class="tick" aria-hidden="true">✓</span>{% else %}
           <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tick"><input type="hidden" name="account" value="{{ item.account.id }}">
             <button class="tick" title="{% if item.done %}Mark as not done{% else %}Mark as done{% endif %}" aria-label="{% if item.done %}Mark transfer to {{ item.account.name }} as not done{% else %}Mark transfer to {{ item.account.name }} as done{% endif %}">{% if item.done %}✓{% endif %}</button>
-          </form>
+          </form>{% endif %}
           <div>
-            <div class="amt">{{ t.amount|absolute|money }}</div>
-            <div class="route">{% if t.amount < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}</div>
+            {% if item.nothing_to_do %}
+            <div class="amt">{{ t.amount|money }}</div>
+            <div class="route">The standing order to {{ item.account.name }} sent it all</div>
+            {% else %}
+            <div class="amt">{{ item.rest|absolute|money }}</div>
+            <div class="route">{% if item.rest < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}{% if item.standing_order %} · {% if item.rest < 0 %}back from{% else %}on top of{% endif %} the standing order{% endif %}</div>
+            {% endif %}
           </div>
-          <button type="button" class="btn small" data-copy="{{ t.amount|absolute|money_input }}" hidden>Copy</button>
+          {% if not item.nothing_to_do %}<button type="button" class="btn small" data-copy="{{ item.rest|absolute|money_input }}" hidden>Copy</button>{% else %}<span></span>{% endif %}
           <div class="parts">
+            {% if item.standing_order %}<span>{% if t.amount >= 0 %}Needs {{ t.amount|money }}{% else %}Sends back {{ t.amount|absolute|money }}{% endif %} · standing order {{ item.standing_order|money }} on {{ standing_day|date:"j M" }}</span>{% endif %}
             {% if t.contributions %}<span>Contributions {{ t.contributions|money }}</span>{% endif %}
             {% if t.interest %}<span>Interest already there {{ t.interest|money }}</span>{% endif %}
             {% if t.topups %}<span>Top-ups {{ t.topups|money }}</span>{% endif %}
@@ -112,7 +119,7 @@
 
     <form method="post" class="sticky-actions">
       {% csrf_token %}<input type="hidden" name="action" value="continue">
-      <a class="btn" href="{% url 'month-end-income' month %}">Back</a>
+      <a class="btn" href="{% url 'month-end-spending' month %}">Back</a>
       <button class="btn primary"{% if plan.shortfall or moves_short %} disabled{% endif %}>Continue to check & close</button>
     </form>
   </div>

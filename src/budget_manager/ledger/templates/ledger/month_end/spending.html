@@ -9,13 +9,14 @@
   <div class="card flat">
     <h2>Nothing to enter this time</h2>
     <p class="lead">This is the first month-end in the app, so there is no earlier month with spending. Next month you will enter what was spent in {{ month.name }} here.</p>
-    <form method="post">{% csrf_token %}<button class="btn primary">Continue to interest</button></form>
+    <form method="post">{% csrf_token %}<button class="btn primary">Continue to transfers</button></form>
   </div>
 {% else %}
   <p class="lead">Enter what was actually spent on each expense in {{ previous.label }}. Fixed payments that were due are filled in already; leave a field empty if nothing was spent. Payments that were due are highlighted. {{ entered }} of {{ total }} have an amount.</p>
   {% if opening_month %}<div class="notice info">You started the budget{% if started_on %} on {{ started_on|date:"j F" }}{% endif %}. The amounts already here are what you entered as spent before that; add what has been spent since.</div>{% endif %}
   {% if days_early %}<div class="notice warning">The month-end is in {{ days_early }} days. {{ previous.name }}'s spending may not be complete yet, but you can enter what you know and come back.</div>{% endif %}
   {% if errors %}<div class="notice danger">Some amounts could not be read. Check the fields marked below.</div>{% endif %}
+  <p class="muted small">Did an account go below zero and the bank move money to it by itself? <a href="{% url 'overdraft' %}?next={{ request.path|urlencode }}">Record what the bank covered</a> first, so the balances match.</p>
   <form method="post" class="stack" style="gap:14px" novalidate>
     {% csrf_token %}
     <div class="row">
@@ -23,24 +24,42 @@
     </div>
     <section class="entry-group">
       <header><h3>NemKonto</h3><span class="muted small">Everyday spending</span></header>
+      {% with day=nemkonto.day %}
       <div class="entry">
         <div class="name">
           <label for="nemkonto-spent"><b>Spent from the NemKonto in {{ previous.name }}</b></label>
-          <small>Paid with its card or from it directly · it had {{ nemkonto.start|money }} {% if opening_month and started_on %}when you started the budget on {{ started_on|date:"j F" }}{% else %}after the last month-end{% endif %}{% if nemkonto.expected %} · about {{ nemkonto.expected|money }} a month is expected{% endif %}</small>
-          <small data-with-js hidden>Balance after is what it held before the {{ month.name }} income arrived. Type either one; the other follows.</small>
+          <small>Paid with its card or from it directly{% if nemkonto.expected %} · about {{ nemkonto.expected|money }} a month is expected{% endif %}</small>
+          <small data-with-js hidden>Easiest: type what the bank showed at the end of {{ day.day|date:"j F" }} under <b>{{ nemkonto.label }}</b>, and the app works out what was spent.</small>
         </div>
         <label class="cell"><span>Spent</span>
         <input type="text" class="amount{% if nemkonto.error %} invalid{% endif %}" inputmode="decimal" autocomplete="off"
                id="nemkonto-spent" name="nemkonto-spent" placeholder="0,00"
                value="{% if nemkonto.raw is not None %}{{ nemkonto.raw }}{% else %}{{ nemkonto.value|money_input }}{% endif %}"></label>
-        {% include "ledger/_balance_after.html" with spent_id="nemkonto-spent" start=nemkonto.start balance=nemkonto.after name="the NemKonto" label="Balance after" %}
+        {% include "ledger/_balance_after.html" with spent_id="nemkonto-spent" start=nemkonto.start balance=nemkonto.after name="the NemKonto" label=nemkonto.label %}
         {% if nemkonto.error %}<span class="error">{{ nemkonto.error }}</span>{% endif %}
       </div>
+      <details class="more nemkonto-day">
+        <summary>What it should hold on {{ day.day|date:"j F" }} before spending: {{ day.before_spending|money }}</summary>
+        <div class="flow">
+          <div><span>{% if opening_month and started_on %}When you started the budget on {{ started_on|date:"j F" }}{% else %}After the last month-end{% endif %}</span><span class="num">{{ day.after_close|money }}</span></div>
+          <div><span>+ Income for {{ month.name }} (step 1)</span><span class="num">{{ day.income|money }}</span></div>
+          {% if day.interest %}<div><span>+ Interest on it (step 2)</span><span class="num">{{ day.interest|money }}</span></div>{% endif %}
+          {% if day.refunds %}<div><span>+ Refunds that arrived on it</span><span class="num">{{ day.refunds|money }}</span></div>{% endif %}
+          {% if day.standing_orders %}<div><span>− Standing orders on {{ day.standing_day|date:"j M" }}</span><span class="num">{{ day.standing_orders|money }}</span></div>{% endif %}
+          {% if day.overdrafts %}<div><span>− Overdrafts the bank covered from it</span><span class="num">{{ day.overdrafts|money }}</span></div>{% endif %}
+          <div class="total"><span>Before spending</span><span class="num">{{ day.before_spending|money }}</span></div>
+        </div>
+        <p class="muted small">It does not matter on which day each amount came or went; only the totals count. Your bank shows the balance after each payment, so you can read the one for {{ day.day|date:"j F" }} a few days later too. If you already made this month-end's transfers, use the balance just before them.</p>
+      </details>
+      {% endwith %}
     </section>
     {% for group in groups %}
     <section class="entry-group">
       <header><h3>{{ group.account.name }}</h3><span class="muted small">{{ group.count }} expense{{ group.count|pluralize }}</span></header>
       {% for row in group.rows %}{% include "ledger/month_end/_spending_entry.html" %}{% endfor %}
+      {% for move in group.overdrafts %}
+      <p class="muted small overdraft-note">The bank covered {{ move.amount|money }} for {{ move.expense.name }} from {{ move.account.name }}{% if move.note %} · {{ move.note }}{% endif %}. It is in <i>it had</i> above.</p>
+      {% endfor %}
       {% if group.quiet %}
       <details class="quiet-entries">
         <summary>{{ group.quiet|length }} more, not due in {{ previous.name }}</summary>
@@ -52,8 +71,8 @@
     <div class="card flat"><p class="empty">No expenses yet. <a href="{% url 'expense-new' %}">Add your first expense</a>.</p></div>
     {% endfor %}
     <div class="sticky-actions">
-      <button class="btn" name="stay" value="1">Save</button>
-      <button class="btn primary">Save and continue</button>
+      <a class="btn" href="{% url 'month-end-interest' month %}">Back</a>
+      <span class="actions"><button class="btn" name="stay" value="1">Save</button><button class="btn primary">Save and continue</button></span>
     </div>
   </form>
 {% endif %}

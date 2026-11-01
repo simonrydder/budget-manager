@@ -4,6 +4,26 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.11.0 (2026-11-01)
+
+- The month-end reads the bank as it stood at the end of the last day, so money that came and
+  went in between no longer needs working out by hand.
+  - The checklist starts with income and interest, then spending. A month-end in progress that
+    had passed step 1 starts again at income; what was entered is kept.
+  - What was spent from the NemKonto: type its balance at the end of the last day and the app
+    works out the spending from what it had after the last month-end, the income, its interest
+    and the standing orders. *What it should hold* shows the sum. It no longer matters on which
+    day each income arrived.
+- Standing orders: an account can have a fixed amount the bank sends from the NemKonto on the
+  last bank day (Danish bank closing days are known). The Transfers step shows only the rest to
+  send, or to send back, and a transfer the standing order covers in full is done by itself.
+- Overdrafts the bank covered by itself (an account went below zero and the bank took money from
+  Savings or the NemKonto) can be recorded under Balance, or from step 3. They count as made at
+  once, so both accounts match the bank, and one from the NemKonto is not counted as everyday
+  spending.
+- Check & close lists payments due on a weekend or holiday at the very end of the month, which
+  the bank draws in the new month.
+
 ## 1.10.0 (2026-10-13)
 
 - Moves still waiting under Balance at a month-end go with its transfers: their money is added

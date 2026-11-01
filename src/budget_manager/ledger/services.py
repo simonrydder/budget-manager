@@ -38,6 +38,7 @@ from budget_manager.ledger.models import (
     SpendingEntry,
     Transfer,
 )
+from budget_manager.engine.bankdays import drawn_on, last_bank_day
 
 
 def ym(day: date) -> YearMonth:
@@ -157,8 +158,11 @@ def build_state(budget: Budget) -> BudgetState:
 
     adjustments: dict[int, list[Adjustment]] = defaultdict(list)
     moved_to_general_savings = 0
-    for move in budget.moves.filter(done=True):
+    taken_from_nemkonto = 0
+    for move in budget.moves.filter(done=True).select_related("account"):
         moved_to_general_savings += move.to_general_savings
+        if move.from_nemkonto:
+            taken_from_nemkonto += move.amount
         if move.expense_id:
             adjustments[move.expense_id].append(
                 Adjustment(ym(move.month), move.to_expense, planned=move.kind == Move.Type.FUND)
@@ -174,7 +178,7 @@ def build_state(budget: Budget) -> BudgetState:
         for expense in budget.expenses.all()
     ]
 
-    nemkonto = budget.nemkonto_opening
+    nemkonto = budget.nemkonto_opening - taken_from_nemkonto
     general_savings = budget.general_savings_opening + moved_to_general_savings
     for close in closed:
         nemkonto += close.nemkonto_end - close.nemkonto_before
@@ -318,6 +322,152 @@ def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs
     return state, plan, inputs
 
 
+# --- The NemKonto on the last day of the month ----------------------------------------------
+
+
+@dataclass(frozen=True)
+class NemkontoDay:
+    """What the NemKonto holds at the end of the last day of the month before a month-end,
+    apart from the everyday spending from it: the money that came and went on its own since the
+    last month-end. The bank's balance that evening, before this month-end's own transfers,
+    then tells what was spent."""
+
+    day: date  # the last day of the month
+    after_close: int  # after the last month-end (or the start of the budget)
+    income: int  # income for the next month; it has all arrived by the last day
+    interest: int  # interest on the NemKonto itself
+    refunds: int  # refunds that arrived on it and are still waiting to be moved
+    standing_orders: int  # sent by the bank on the last bank day
+    standing_day: date
+    overdrafts: int  # taken by the bank to cover an account that went below zero
+
+    @property
+    def before_spending(self) -> int:
+        return (
+            self.after_close
+            + self.income
+            + self.interest
+            + self.refunds
+            - self.standing_orders
+            - self.overdrafts
+        )
+
+    def spent(self, balance: int) -> int:
+        """What was spent from it, when the bank shows ``balance``."""
+        return self.before_spending - balance
+
+
+def standing_orders(budget: Budget) -> dict[int, int]:
+    """The standing order of every account that has one."""
+    return {
+        account.pk: account.standing_order
+        for account in budget.accounts.exclude(role=Role.NEMKONTO.value)
+        if account.standing_order
+    }
+
+
+def nemkonto_day(
+    budget: Budget, state: BudgetState, inputs: CloseInputs | None = None
+) -> NemkontoDay:
+    inputs = inputs or close_inputs(budget, state.month)
+    previous = state.month - 1
+    nemkonto = state.nemkonto_account.id
+    overdrafts = sum(
+        move.amount
+        for move in budget.moves.filter(
+            kind=Move.Type.OVERDRAFT, done=True, month=state.month.first_day(), account=nemkonto
+        )
+    )
+    refunds = sum(
+        move.amount
+        for move in budget.moves.filter(kind=Move.Type.REFUND, done=False, account=nemkonto)
+    )
+    return NemkontoDay(
+        day=previous.last_day(),
+        after_close=state.nemkonto + overdrafts,
+        income=inputs.income,
+        interest=inputs.interest.get(nemkonto, 0),
+        refunds=refunds,
+        standing_orders=sum(standing_orders(budget).values()),
+        standing_day=last_bank_day(previous),
+        overdrafts=overdrafts,
+    )
+
+
+@dataclass(frozen=True)
+class LatePayment:
+    """A payment due on a closing day at the end of the month, so the bank draws it in the next
+    month: until then the account shows more than the app expects."""
+
+    expense: Expense
+    due: date
+    drawn: date
+    amount: int
+
+
+def late_payments(budget: Budget, month: YearMonth) -> list[LatePayment]:
+    """Payments of the month before ``month`` that the bank draws in ``month``."""
+    previous = month - 1
+    spent = {
+        entry.expense_id: entry.amount
+        for entry in SpendingEntry.objects.filter(
+            expense__budget=budget, month=previous.first_day()
+        )
+    }
+    result = []
+    for expense in budget.expenses.select_related("account"):
+        due = engine_expense(expense, budget.start, budget.opening).schedule.due_in(previous)
+        if due is None or expense.is_running:
+            continue
+        drawn = drawn_on(due)
+        amount = spent.get(expense.pk, 0)
+        if drawn > previous.last_day() and amount:
+            result.append(LatePayment(expense, due, drawn, amount))
+    return sorted(result, key=lambda item: (item.due, item.expense.name.lower()))
+
+
+# --- Overdrafts covered by the bank ----------------------------------------------------------
+
+
+def overdraft_sources(budget: Budget) -> list[Account]:
+    """Where the bank can take money from to cover an account below zero: the NemKonto, or
+    the account holding General Savings."""
+    return list(
+        budget.accounts.filter(role__in=[Role.NEMKONTO.value, Role.SAVINGS.value]).order_by(
+            "sort_order", "id"
+        )
+    )
+
+
+@transaction.atomic
+def record_overdraft(
+    budget: Budget, expense: Expense, source: Account, amount: int, user, note: str = ""
+) -> Move:
+    """Record that the bank moved ``amount`` from ``source`` to the account of ``expense``.
+    It is made at once: the money has already moved."""
+    if not budget_started(budget):
+        raise CloseError("Start the budget first.")
+    if amount <= 0:
+        raise CloseError("Enter an amount above 0.")
+    if source.pk not in {account.pk for account in overdraft_sources(budget)}:
+        raise CloseError("The bank can only take it from the NemKonto or General Savings.")
+    if expense.account_id == source.pk:
+        raise CloseError("The money has to come from another account.")
+    return Move.objects.create(
+        budget=budget,
+        kind=Move.Type.OVERDRAFT,
+        expense=expense,
+        account=source,
+        amount=amount,
+        note=note,
+        done=True,
+        month=next_close_month(budget).first_day(),
+        created_by=user,
+        done_by=user,
+        done_at=timezone.now(),
+    )
+
+
 def expected_income_entries(state: BudgetState, month: YearMonth) -> dict[int, int]:
     return {income.id: income.expected(month) for income in state.incomes}
 
@@ -404,11 +554,19 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
         for line in plan.lines.values()
     )
     now = timezone.now()
+    standing = standing_orders(budget)
+    # A transfer the standing order already made in full needs nothing more.
+    done |= {
+        transfer.account_id
+        for transfer in plan.transfers.values()
+        if standing.get(transfer.account_id) and transfer.amount == standing[transfer.account_id]
+    }
     Transfer.objects.bulk_create(
         Transfer(
             close=close,
             account_id=transfer.account_id,
             amount=transfer.amount,
+            standing_order=standing.get(transfer.account_id, 0),
             contributions=transfer.contributions,
             interest=transfer.interest,
             topups=transfer.topups,
@@ -421,7 +579,7 @@ def finalize_close(budget: Budget, month: YearMonth, user) -> MonthClose:
             done_at=now if transfer.account_id in done else None,
         )
         for transfer in plan.transfers.values()
-        if transfer.amount
+        if transfer.amount or standing.get(transfer.account_id)
     )
     for line in plan.lines.values():
         if line.amount_after:
@@ -930,6 +1088,9 @@ def undo_move(move: Move) -> None:
     """Put a made move back on the waiting list, while no month-end has happened since."""
     if not move.done or move.month != next_close_month(move.budget).first_day():
         raise CloseError("A month-end has happened since, so this move can no longer be undone.")
+    if move.kind == Move.Type.OVERDRAFT:
+        move.delete()  # the bank made it, so there is nothing to wait for
+        return
     move.done = False
     move.month = None
     move.done_by = None

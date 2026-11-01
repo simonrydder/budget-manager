@@ -12,9 +12,12 @@ the budget came from; the requirements are the source of truth.
 | General Savings | Not a separate bank account: it is the part of the **savings account** not set aside for a savings goal. Exactly one account holds it (Savings by default; it can be moved). |
 | Expenses | Defined in the app: name, amount, first due date and frequency, type, category and account. They can be dragged between categories (or accounts) on the expenses board, where each card shows what the expense takes a month, its next payment and when, a bar for how much of it is there, and whether that is on track or short against the plan (a running budget shows what is left this month). A food budget is just a running expense linked to the Food account. |
 | Expense types | **Fixed**: the same amount on its due date (rent, insurance). **Variable**: a bill on its due date whose amount varies (power, heating). **Running**: spent bit by bit through the month (food, fuel); monthly from the 1st, no due date. Only fixed expenses are topped up automatically. Expenses cannot use the NemKonto. |
-| Everyday spending | The NemKonto is also the everyday account: what it keeps after a month-end (between X and Y) is the money for everyday spending with its card. Step 1 of each month-end asks what was spent from it (or its balance, to work that out); the month-end then refills it to between X and Y. The forecast and the monthly totals expect the average of the last six month-ends that recorded it. Until there are three, the rough amount from the setup or Settings counts for the missing ones, and the first month-end after a start in the middle of a month is left out because it covers only part of that month. |
+| Everyday spending | The NemKonto is also the everyday account: what it keeps after a month-end (between X and Y) is the money for everyday spending with its card. Step 3 of each month-end asks what was spent from it, or easier its balance at the end of the last day, from which the app works it out; the month-end then refills it to between X and Y. The forecast and the monthly totals expect the average of the last six month-ends that recorded it. Until there are three, the rough amount from the setup or Settings counts for the missing ones, and the first month-end after a start in the middle of a month is left out because it covers only part of that month. |
 | Interest | Every account can receive (or pay) interest. It is entered per account at each month-end and counts as if it had arrived on the NemKonto, so the next transfer to that account is smaller. |
-| Month-end routine | On the last day of a month: enter that month's actual spending, the interest received, next month's income (it arrives at the end of the month), then make the transfers. |
+| Month-end routine | On the last day of a month (or a few days later, reading the bank as it stood that day): enter next month's income (it arrives during the month), the interest received, that month's actual spending, then make the transfers. |
+| Bank days | Danish bank closing days (weekends, the Easter days, Ascension Day and the Friday after, Whit Monday, 5 June, 24–26 and 31 December, 1 January) are in `engine/bankdays.py`. Standing orders leave on the last bank day; a payment due on a closing day is drawn on the next bank day. |
+| Standing orders | An account can have a standing order: a fixed amount the bank sends from the NemKonto on the last bank day of every month. The month-end still works out the whole transfer; Transfers shows only the rest to send (or to send back), and a transfer the standing order covers in full is done by itself. |
+| Overdrafts | When an account goes below zero, the bank may move money to it from another account by itself. It is recorded under Balance as a move that is already made (`Move.Type.OVERDRAFT`), from the NemKonto or the account holding General Savings to an expense. |
 | Forecast | Uses expected amounts for everything not yet entered. |
 | Budgets | Several budgets (for example private and a company), each with its own accounts, expenses, income and month-ends. A budget is shared with the people chosen in its settings; they all see and edit the same data. Budgets can be created from scratch or copied. |
 | Setup | A five-step checklist per budget: accounts with today's balances, expenses, a summary of what they cost, income, then the transfers that start the budget. |
@@ -89,9 +92,13 @@ The first month-end then asks for the rest of the current month's spending.
 ## The month-end
 
 A **budget month** is the month whose payments a transfer pays for. The transfers for May are made
-on 30 April, funded by the income that arrives at the end of April. The checklist on 30 April:
+on 30 April, funded by the income that arrives during April. Each payment belongs to the month of
+its due date, so an expense's due date should be the day the bank draws it. The checklist on
+30 April, or a few days later reading the bank as it stood at the end of 30 April:
 
-1. **April spending**: what each expense actually cost in April, and what was spent from the
+1. **May income**: what arrived on the NemKonto during April, whatever the day.
+2. **April interest**: interest per account (negative if paid).
+3. **April spending**: what each expense actually cost in April, and what was spent from the
    NemKonto itself. Fixed payments that were due in April are filled in with their expected
    amount (`row.suggested`); variable and running expenses stay empty, since only the person
    knows what they cost, and payments from before the budget was started are left out because
@@ -99,12 +106,20 @@ on 30 April, funded by the income that arrives at the end of April. The checklis
    "N more, not due". Every row, the NemKonto's too, has two linked fields: **Spent** and
    **Balance after** (`_balance_after.html`, `data-balance-of` / `data-start` in `app.js`).
    Typing either works out the other from what there was; only Spent is saved. Without
-   JavaScript the balance is only shown.
-2. **April interest**: interest per account (negative if paid).
-3. **May income**: what arrived on the NemKonto.
+   JavaScript the balance is only shown. An expense starts from what it had after the last
+   month-end plus the moves made since (an overdraft the bank covered, for example). For the
+   NemKonto the balance is the one at the end of 30 April, before the month-end's own transfers
+   (`services.nemkonto_day`): what it had after the last month-end, plus the income and its own
+   interest from steps 1 and 2, plus refunds that landed on it and still wait, minus the
+   standing orders and the overdrafts the bank covered from it. Only totals matter, so it does
+   not matter when the income came or the card was used. That is why income and interest come
+   first.
 4. **Transfers**: the app computes one net transfer per account; tick them off as they are made.
+   With a standing order, only the rest is shown (`Transfer.standing_order`, `Transfer.rest`).
 5. **Check and close**: compare the balances with the bank (optional), then close. Closing
-   freezes the month.
+   freezes the month. Payments due on a closing day at the very end of the month are drawn in
+   the next one (`services.late_payments`); the page lists them, since the bank shows that much
+   more until then.
 
 `MonthClose.step` records how far the checklist has come. **Undo step N** lowers it by one and
 opens that step again; what was entered stays. The latest closed month-end can be **reopened**

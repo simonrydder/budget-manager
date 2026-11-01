@@ -6,13 +6,18 @@
 <div class="checklist">
   <p class="lead">After making the transfers, the accounts should show these balances. Type what your bank shows to compare. This is optional; nothing you type here is saved.</p>
   {% if open_count %}<div class="notice warning">{{ open_count }} transfer{{ open_count|pluralize }} {{ open_count|pluralize:"is,are" }} not ticked off yet. <a href="{% url 'month-end-transfers' month %}">Back to transfers</a></div>{% endif %}
+  {% if late_payments %}
+  <div class="notice info">
+    <span>Due on a day the banks are closed, so probably drawn in {{ month.name }}: {% for item in late_payments %}<b>{{ item.expense.name }}</b> {{ item.amount|money }} (due {{ item.due|date:"D j M" }}, drawn {{ item.drawn|date:"D j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}. Until then the bank shows that much more on the account.</span>
+  </div>
+  {% endif %}
   <section class="entry-group">
     <header><h3>Balances after the transfers</h3><span class="muted small">Expected · in the bank</span></header>
     {% for row in balances_after %}
     <div class="entry">
       <label class="name" for="bank-{{ row.account.id }}">
         <b>{{ row.account.name }}</b>
-        <small>Expected <b class="{{ row.balance|tone }}">{{ row.balance|money }}</b> · <span id="diff-{{ row.account.id }}" class="muted"></span>
+        <small>Expected <b class="{{ row.balance|tone }}">{{ row.balance|money }}</b>{% if row.late %} ({{ row.balance|add:row.late|money }} until the payments above are drawn){% endif %} · <span id="diff-{{ row.account.id }}" class="muted"></span>
         {% if row.account.is_nemkonto %}<a id="diff-{{ row.account.id }}-fix" hidden data-base="{% url 'correction' 'nemkonto' %}?after=1&amp;next={{ request.path|urlencode }}" href="#">Record the difference</a>{% endif %}
         {% if row.account.holds_general_savings %}<a id="diff-{{ row.account.id }}-fix" hidden data-base="{% url 'correction' 'general_savings' %}?after=1&amp;next={{ request.path|urlencode }}" href="#">Record it in General Savings</a>{% endif %}
         </small>
@@ -23,7 +28,7 @@
     </div>
     {% endfor %}
   </section>
-  <p class="muted small">A difference on an expense account usually means some spending was not entered. Go back to step 1 to fix it.</p>
+  <p class="muted small">A difference on an expense account usually means some spending was not entered, or the bank covered an overdraft that is not recorded. Go back to step 3 to fix it. If you check a few days later, payments and card spending since {{ previous.last_day|date:"j F" }} are not included here.</p>
   <form method="post" action="{% url 'month-end-close' month %}" class="sticky-actions">
     {% csrf_token %}
     <a class="btn" href="{% url 'month-end-transfers' month %}">Back</a>
