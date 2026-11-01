@@ -254,7 +254,9 @@ balance** or **Correct General Savings**. Accounts can be added, renamed or remo
 with expenses or history cannot be removed); exactly one account holds General Savings.
 
 If the bank sends a fixed amount from the NemKonto to an account on the last bank day of every
-month, enter it as the account's **Standing order**. The month-end then only asks for the rest.
+month, edit the account and tick **Standing order from the NemKonto**. The amount
+starts as what the account's expenses get a month (their contributions at the next month-end);
+keep it or type what your bank sends. The month-end then only asks for the rest.
 
 ## Forecast and History
 

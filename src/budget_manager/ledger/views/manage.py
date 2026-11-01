@@ -79,7 +79,8 @@ def _save_account(form: AccountForm) -> Account:
 def account_form(request, pk: int | None = None):
     budget = request.budget
     account = get_object_or_404(Account, pk=pk, budget=budget) if pk else Account(budget=budget)
-    form = AccountForm(request.POST or None, instance=account)
+    suggested = services.suggested_standing_orders(budget).get(account.pk, 0) if account.pk else 0
+    form = AccountForm(request.POST or None, instance=account, suggested_standing_order=suggested)
     if request.method == "POST" and form.is_valid():
         previous_holder = budget.accounts.filter(role=Role.SAVINGS.value).first()
         saved = _save_account(form)

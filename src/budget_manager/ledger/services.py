@@ -366,6 +366,22 @@ def standing_orders(budget: Budget) -> dict[int, int]:
     }
 
 
+def suggested_standing_orders(budget: Budget) -> dict[int, int]:
+    """What a standing order to each account would usually be: the contributions its expenses
+    get at the next month-end. They stay the same through a saving period, which is what makes
+    a standing order possible. Before the budget is started: their monthly amounts, rounded up
+    to whole units like the contributions."""
+    if budget_started(budget):
+        _, plan, _ = plan_next_close(budget)
+        return {account_id: max(0, t.contributions) for account_id, t in plan.transfers.items()}
+    totals: dict[int, int] = defaultdict(int)
+    for expense in budget.expenses.all():
+        if expense.interval_months and not (expense.end_date and expense.end_date < date.today()):
+            monthly = -(-expense.amount // expense.interval_months)
+            totals[expense.account_id] += -(-monthly // 100) * 100
+    return dict(totals)
+
+
 def nemkonto_day(
     budget: Budget, state: BudgetState, inputs: CloseInputs | None = None
 ) -> NemkontoDay:

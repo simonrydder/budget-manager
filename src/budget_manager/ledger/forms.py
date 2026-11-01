@@ -6,7 +6,13 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
-from budget_manager.engine import FREQUENCIES, YearMonth, format_input, parse_amount
+from budget_manager.engine import (
+    FREQUENCIES,
+    YearMonth,
+    format_amount,
+    format_input,
+    parse_amount,
+)
 from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
@@ -348,33 +354,63 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
         help_text="Only one account can. Savings goals usually live here too.",
     )
 
+    has_standing_order = forms.BooleanField(
+        required=False,
+        label="Standing order from the NemKonto",
+        help_text="A fixed amount sent to this account on the last bank day of every month. "
+        "The month-end then only asks for the rest.",
+    )
     standing_order = AmountField(
         required=False,
         allow_negative=False,
-        label="Standing order from the NemKonto",
-        help_text="If the bank sends a fixed amount from the NemKonto to this account on the "
-        "last bank day of every month. The month-end then only asks for the rest.",
+        label="Standing order",
     )
 
     class Meta:
         model = Account
         fields = ["name"]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, suggested_standing_order: int = 0, **kwargs):
         super().__init__(*args, **kwargs)
+        self.suggested_standing_order = suggested_standing_order
         if self.instance.pk:
             self.fields["holds_general_savings"].initial = self.instance.holds_general_savings
-            self.fields["standing_order"].initial = self.instance.standing_order or None
         if self.instance.is_nemkonto:
             del self.fields["holds_general_savings"]
+            del self.fields["has_standing_order"]
             del self.fields["standing_order"]
+            return
+        current = self.instance.standing_order
+        self.fields["has_standing_order"].initial = bool(current)
+        self.fields["has_standing_order"].widget.attrs["data-reveals"] = "id_standing_order"
+        field = self.fields["standing_order"]
+        field.initial = current or None
+        if suggested_standing_order:
+            suggested = format_input(suggested_standing_order)
+            field.widget.attrs.update({"placeholder": suggested, "data-suggested": suggested})
+            field.help_text = (
+                "What this account's expenses get a month: "
+                f"{format_amount(suggested_standing_order)}. Leave it empty to use that, or type "
+                "the amount your bank sends."
+            )
+        else:
+            field.help_text = "The amount your bank sends."
 
-    def clean_standing_order(self):
-        return self.cleaned_data["standing_order"] or 0
+    def clean(self):
+        data = super().clean()
+        if "has_standing_order" not in self.fields:
+            return data
+        if not data.get("has_standing_order"):
+            data["standing_order"] = 0
+        elif not data.get("standing_order"):
+            if not self.suggested_standing_order:
+                self.add_error("standing_order", "Enter the amount your bank sends.")
+            data["standing_order"] = self.suggested_standing_order
+        return data
 
     def save(self, commit=True):
-        if "standing_order" in self.cleaned_data:
-            self.instance.standing_order = self.cleaned_data["standing_order"]
+        if "standing_order" in self.fields:
+            self.instance.standing_order = self.cleaned_data["standing_order"] or 0
         return super().save(commit)
 
     def clean_holds_general_savings(self):
