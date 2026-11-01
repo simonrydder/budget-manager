@@ -221,7 +221,7 @@ The [user guide](docs/user-guide.md) walks through every page. In short:
 1. **Once per budget**, follow **Set up**: today's account balances, your expenses, a summary of
    what they cost, your income, and the transfers that start the budget.
 2. **At every month-end** (the last day of the month, or a few days later) follow **Month-end**:
-   next month's income, interest, what was spent (fixed payments are filled in; for the NemKonto
+   next month's income and interest, what was spent (fixed payments are filled in; for the NemKonto
    just its balance that day), the transfers to make (only the rest when there is a standing
    order), then check and close.
 3. **Any day**, use **Balance** to move money between General Savings and your expenses, and the

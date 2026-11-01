@@ -4,6 +4,22 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.12.0 (2026-11-01)
+
+- The month-end step bar showed step 1 while on step 3 (and step 3 on step 1). Every page now
+  takes its number from the same list as the step bar.
+- Interest is entered on the income page, below the income, and an empty field counts as 0. The
+  month-end has four steps: income and interest, spending, transfers, check and close. A
+  month-end in progress continues on the same page.
+- A refund can belong on another account than the one it arrived on, for example an electricity
+  refund paid to the NemKonto that belongs on Budget. It goes to that account's expense (choose
+  which when it has several) instead of General Savings, with one transfer straight there.
+- An overdraft the bank covered is recorded on the account that went below zero instead of an
+  expense; the expense is only asked for when the account has several. The bank takes it from
+  the NemKonto unless you change it, and it can also cover General Savings.
+- Balance sends money straight from an account that sends to one that receives, instead of
+  through the account holding General Savings.
+
 ## 1.11.1 (2026-11-01)
 
 - An account's standing order is switched on with a tick box, and its amount starts as what the

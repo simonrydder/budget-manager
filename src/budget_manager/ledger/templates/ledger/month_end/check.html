@@ -28,7 +28,7 @@
     </div>
     {% endfor %}
   </section>
-  <p class="muted small">A difference on an expense account usually means some spending was not entered, or the bank covered an overdraft that is not recorded. Go back to step 3 to fix it. If you check a few days later, payments and card spending since {{ previous.last_day|date:"j F" }} are not included here.</p>
+  <p class="muted small">A difference on an expense account usually means some spending was not entered, or the bank covered an overdraft that is not recorded. Go back to step 2 to fix it. If you check a few days later, payments and card spending since {{ previous.last_day|date:"j F" }} are not included here.</p>
   <form method="post" action="{% url 'month-end-close' month %}" class="sticky-actions">
     {% csrf_token %}
     <a class="btn" href="{% url 'month-end-transfers' month %}">Back</a>

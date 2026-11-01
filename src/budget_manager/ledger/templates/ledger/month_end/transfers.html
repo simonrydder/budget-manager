@@ -9,7 +9,7 @@
     {% if nemkonto_missing %}
     <div class="notice warning">
       <span>What was spent from the NemKonto in {{ previous.name }} is not entered, so it counts as 0 and the NemKonto would end too high.</span>
-      <small><a href="{% url 'month-end-spending' month %}">Enter it in step 3</a></small>
+      <small><a href="{% url 'month-end-spending' month %}">Enter it in step 2</a></small>
     </div>
     {% endif %}
     {% if missing_income %}
@@ -106,8 +106,8 @@
         <tbody>
         {% for item in moves %}
           <tr>
-            <td>{% if item.expense %}{{ item.expense.name }}{% else %}Refund{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
-            <td class="dim">{{ item.account.name }}</td>
+            <td>{% if item.expense %}{{ item.expense.name }}{% else %}General Savings{% endif %}<br><span class="muted small">{{ item.label }}{% if item.note %} · {{ item.note }}{% endif %}</span></td>
+            <td class="dim">{% if item.kind == "refund" %}Arrived on {{ item.account.name }}{% else %}{{ item.account.name }}{% endif %}</td>
             <td class="num {{ item.to_general_savings|tone }}">{{ item.to_general_savings|signed }}</td>
           </tr>
         {% endfor %}

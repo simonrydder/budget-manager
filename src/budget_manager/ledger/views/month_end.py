@@ -1,4 +1,4 @@
-"""The month-end checklist: income, interest, spending, transfers, then check and close.
+"""The month-end checklist: income and interest, spending, transfers, then check and close.
 
 Income and interest come first: they have all arrived by the last day of the month, and the
 NemKonto's balance that day only tells what was spent from it once they are known."""
@@ -32,11 +32,12 @@ from budget_manager.ledger.views.common import parse_month, read_amounts, save_e
 
 STEPS = [
     (1, "income", "Income"),
-    (2, "interest", "Interest"),
-    (3, "spending", "Spending"),
-    (4, "transfers", "Transfers"),
-    (5, "check", "Check & close"),
+    (2, "spending", "Spending"),
+    (3, "transfers", "Transfers"),
+    (4, "check", "Check & close"),
 ]
+#: The step number of each page, so the pages never disagree with the step bar.
+STEP = {slug: number for number, slug, _ in STEPS}
 
 
 def _int(value) -> int | None:
@@ -76,14 +77,14 @@ def _guard(request, text: str):
     return month, close
 
 
-def _context(month: YearMonth, close: MonthClose, current: int, **extra):
+def _context(month: YearMonth, close: MonthClose, slug: str, **extra):
+    current = STEP[slug]
     previous = month - 1
     labels = {
-        1: f"{month.name} income",
-        2: f"{previous.name} interest",
-        3: f"{previous.name} spending",
-        4: "Transfers",
-        5: "Check & close",
+        STEP["income"]: f"{month.name} income",
+        STEP["spending"]: f"{previous.name} spending",
+        STEP["transfers"]: "Transfers",
+        STEP["check"]: "Check & close",
     }
     steps = [
         {
@@ -129,7 +130,9 @@ def undo_step(request, month: str):
     return redirect("month-end")
 
 
-def _advance(close: MonthClose, to_step: int) -> None:
+def _advance(close: MonthClose, slug: str) -> None:
+    """Mark the steps before ``slug`` as done."""
+    to_step = STEP[slug]
     if close.step < to_step:
         close.step = to_step
         close.save(update_fields=["step"])
@@ -139,8 +142,8 @@ def _next(request, month: YearMonth, slug: str):
     if "stay" in request.POST:
         messages.success(request, "Saved.")
         return redirect(f"month-end-{slug}", month=str(month))
-    following = {"income": "interest", "interest": "spending", "spending": "transfers"}
-    return redirect(f"month-end-{following[slug]}", month=str(month))
+    following = STEPS[STEP[slug]][1]
+    return redirect(f"month-end-{following}", month=str(month))
 
 
 def _asks(row: dict) -> bool:
@@ -221,7 +224,7 @@ def spending(request, month: str):
                 save_entries(SpendingEntry, "expense", previous.first_day(), values, request.user)
                 close.nemkonto_spent = spent["spent"]
                 close.save(update_fields=["nemkonto_spent"])
-            _advance(close, 4)
+            _advance(close, "transfers")
             return _next(request, month, "spending")
         for row in rows:
             row["raw"] = request.POST.get(f"spent-{row['expense'].id}", "")
@@ -230,7 +233,7 @@ def spending(request, month: str):
         nemkonto["error"] = nemkonto_error.get("spent")
         errors = errors or nemkonto_error
     elif request.method == "POST":
-        _advance(close, 4)
+        _advance(close, "transfers")
         return _next(request, month, "spending")
 
     groups: OrderedDict[Account, list] = OrderedDict()
@@ -239,15 +242,16 @@ def spending(request, month: str):
     for row in sorted(rows, key=lambda r: (r["due"] is None, r["expense"].name.lower())):
         groups.setdefault(row["expense"].account, []).append(row)
     overdrafts = defaultdict(list)
+    savings = state.savings_account.id
     for move in budget.moves.filter(
         kind=Move.Type.OVERDRAFT, done=True, month=month.first_day()
     ).select_related("expense", "account"):
-        overdrafts[move.expense.account_id].append(move)
+        overdrafts[move.expense.account_id if move.expense else savings].append(move)
     days_early = (previous.last_day() - today()).days
     context = _context(
         month,
         close,
-        1,
+        "spending",
         days_early=days_early if days_early > 3 else 0,
         groups=[
             {
@@ -273,45 +277,18 @@ def spending(request, month: str):
 
 
 def interest(request, month: str):
+    """Interest is entered with the income now; old links land there."""
+    return redirect("month-end-income", month=month)
+
+
+def income(request, month: str):
+    """Next month's income and this month's interest: what came in on its own."""
     guarded = _guard(request, month)
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
     budget = request.budget
     previous = month - 1
-    accounts = list(budget.accounts.all())
-    entries = {
-        entry.account_id: entry.amount
-        for entry in InterestEntry.objects.filter(
-            account__budget=budget, month=previous.first_day()
-        )
-    }
-    errors = {}
-    if request.method == "POST":
-        values, errors = read_amounts(request.POST, "interest-", [a.id for a in accounts])
-        if not errors:
-            values = {key: (value or None) for key, value in values.items()}
-            save_entries(InterestEntry, "account", previous.first_day(), values, request.user)
-            _advance(close, 3)
-            return _next(request, month, "interest")
-    rows = [
-        {
-            "account": account,
-            "value": entries.get(account.id),
-            "raw": request.POST.get(f"interest-{account.id}") if errors else None,
-            "error": errors.get(account.id),
-        }
-        for account in accounts
-    ]
-    return render(request, "ledger/month_end/interest.html", _context(month, close, 2, rows=rows))
-
-
-def income(request, month: str):
-    guarded = _guard(request, month)
-    if not isinstance(guarded, tuple):
-        return guarded
-    month, close = guarded
-    budget = request.budget
     state = services.build_state(budget)
     expected = services.expected_income_entries(state, month)
     entries = {
@@ -324,25 +301,59 @@ def income(request, month: str):
         for source in budget.incomes.all()
         if show_all or expected.get(source.id) or source.id in entries
     ]
-    errors = {}
+    accounts = list(budget.accounts.all())
+    interest_entries = {
+        entry.account_id: entry.amount
+        for entry in InterestEntry.objects.filter(
+            account__budget=budget, month=previous.first_day()
+        )
+    }
+    errors = interest_errors = {}
     if request.method == "POST":
         values, errors = read_amounts(request.POST, "income-", [s.id for s in sources])
-        if not errors:
-            save_entries(IncomeEntry, "source", month.first_day(), values, request.user)
-            _advance(close, 2)
+        interest, interest_errors = read_amounts(
+            request.POST, "interest-", [a.id for a in accounts]
+        )
+        if not errors and not interest_errors:
+            with transaction.atomic():
+                save_entries(IncomeEntry, "source", month.first_day(), values, request.user)
+                # No interest is the usual case, so an empty field stores nothing.
+                interest = {key: (value or None) for key, value in interest.items()}
+                save_entries(InterestEntry, "account", previous.first_day(), interest, request.user)
+            _advance(close, "spending")
             return _next(request, month, "income")
     rows = [
         {
             "source": source,
             "expected": expected.get(source.id, 0),
             "value": entries.get(source.id),
-            "raw": request.POST.get(f"income-{source.id}") if errors else None,
+            "raw": request.POST.get(f"income-{source.id}") if errors or interest_errors else None,
             "error": errors.get(source.id),
         }
         for source in sources
     ]
+    interest_rows = [
+        {
+            "account": account,
+            "value": interest_entries.get(account.id),
+            "raw": request.POST.get(f"interest-{account.id}")
+            if errors or interest_errors
+            else None,
+            "error": interest_errors.get(account.id),
+        }
+        for account in accounts
+    ]
     hidden = budget.incomes.count() - len(sources)
-    context = _context(month, close, 3, rows=rows, hidden=hidden, show_all=show_all)
+    context = _context(
+        month,
+        close,
+        "income",
+        rows=rows,
+        interest_rows=interest_rows,
+        interest_open=any(interest_entries.values()) or bool(interest_errors),
+        hidden=hidden,
+        show_all=show_all,
+    )
     return render(request, "ledger/month_end/income.html", context)
 
 
@@ -473,10 +484,10 @@ def transfers(request, month: str):
             if context["moves_short"]:
                 messages.error(request, "Cancel some of the moves under Balance first.")
                 return redirect("month-end-transfers", month=str(month))
-            _advance(close, 5)
+            _advance(close, "check")
             return redirect("month-end-check", month=str(month))
 
-    context.update(_context(month, close, 4))
+    context.update(_context(month, close, "transfers"))
     if plan.shortfall or context["inputs"].covers:
         state = context["state"]
         candidates = []
@@ -507,10 +518,10 @@ def check(request, month: str):
     if not isinstance(guarded, tuple):
         return guarded
     month, close = guarded
-    if close.step < 5:
+    if close.step < STEP["check"]:
         return redirect("month-end-transfers", month=str(month))
     context = _plan_context(request.budget, month, close)
-    context.update(_context(month, close, 5))
+    context.update(_context(month, close, "check"))
     late = services.late_payments(request.budget, month)
     context["late_payments"] = late
     late_by_account = defaultdict(int)

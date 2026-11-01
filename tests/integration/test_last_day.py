@@ -30,9 +30,9 @@ def standing(**amounts):
         Account.objects.filter(name=name).update(standing_order=amount)
 
 
-def overdraft(client, expense_name, source, amount, **extra):
+def overdraft(client, target, source, amount, **extra):
     data = {
-        "overdraft-expense": expense(expense_name).id,
+        "overdraft-target": Account.objects.get(name=target).id,
         "overdraft-source": Account.objects.get(name=source).id,
         "overdraft-amount": amount,
         **extra,
@@ -51,8 +51,10 @@ def test_nemkonto_spending_follows_from_its_balance_on_the_last_day(client, budg
     month_end(client, "2025-05")  # the NemKonto starts June's month-end with 5.000
     standing(Budget=900000, Food=400000)
     salary = IncomeSource.objects.get(name="Salary")
-    client.post("/month-end/2025-06/income/", {f"income-{salary.id}": "25.000"})
-    client.post("/month-end/2025-06/interest/", {f"interest-{accounts['NemKonto'].id}": "10"})
+    client.post(
+        "/month-end/2025-06/income/",
+        {f"income-{salary.id}": "25.000", f"interest-{accounts['NemKonto'].id}": "10"},
+    )
 
     page = client.get("/month-end/2025-06/spending/").content.decode()
     # 5.000 + 25.000 income + 10 interest - 13.000 standing orders = 17.010 before spending.
@@ -103,7 +105,7 @@ def test_an_account_with_a_standing_order_and_nothing_to_receive_sends_it_back(c
 def test_an_overdraft_covered_from_general_savings(client, budget):
     month_end(client, "2025-05")
     before = state()
-    response = overdraft(client, "Groceries", "Savings", "300")
+    response = overdraft(client, "Food", "Savings", "300")
     assert response.url == client.at("/balance/")
     after = state()
     assert after.general_savings == before.general_savings - 30000
@@ -123,7 +125,7 @@ def test_an_overdraft_covered_from_general_savings(client, budget):
 def test_an_overdraft_covered_from_the_nemkonto_is_not_everyday_spending(client, budget):
     month_end(client, "2025-05")
     before = state()
-    overdraft(client, "Groceries", "NemKonto", "200", **{"overdraft-note": "Card at the shop"})
+    overdraft(client, "Food", "NemKonto", "200", **{"overdraft-note": "Card at the shop"})
     after = state()
     assert after.nemkonto == before.nemkonto - 20000
     assert after.general_savings == before.general_savings
@@ -142,17 +144,17 @@ def test_an_overdraft_covered_from_the_nemkonto_is_not_everyday_spending(client,
 
 def test_an_overdraft_must_come_from_another_account(client, budget):
     month_end(client, "2025-05")
-    response = overdraft(client, "Holiday", "Savings", "100")
+    response = overdraft(client, "Savings", "Savings", "100")
     assert response.status_code == 200
     assert b"The money has to come from another account." in response.content
-    response = overdraft(client, "Groceries", "Budget", "100")
+    response = overdraft(client, "Food", "Budget", "100")
     assert response.status_code == 200
     assert not Move.objects.exists()
 
 
 def test_an_overdraft_goes_into_the_next_month_end(client, budget):
     month_end(client, "2025-05")
-    overdraft(client, "Groceries", "NemKonto", "200")
+    overdraft(client, "Food", "NemKonto", "200")
     month_end(client, "2025-06", spending={"Groceries": "4.200", "Rent": "10.000"}, nemkonto="0")
     june = MonthClose.objects.get(month=date(2025, 6, 1))
     assert june.nemkonto_before == 480000
@@ -236,3 +238,80 @@ def test_a_standing_order_needs_an_amount_when_there_is_nothing_to_suggest(clien
     )
     assert response.status_code == 200
     assert b"Enter the amount your bank sends." in response.content
+
+
+def refund(client, amount, arrived, target=None, expense_name=None):
+    data = {"amount": amount, "account": Account.objects.get(name=arrived).id}
+    if target:
+        data["target"] = Account.objects.get(name=target).id
+    if expense_name:
+        data["expense"] = expense(expense_name).id
+    return client.post("/balance/", data)
+
+
+def bank_moves(client):
+    plan = client.get("/balance/").context["plan"]
+    return [(m.source.name, m.target.name, m.amount) for m in plan.bank_moves]
+
+
+def test_a_refund_can_belong_on_another_account(client, budget, accounts):
+    month_end(client, "2025-05")
+    form = client.get("/balance/").context["form"]
+    assert form["account"].initial == accounts["NemKonto"]
+    assert form["target"].initial == accounts["Savings"]
+    # Paid from Budget (Rent is its only expense), but the money came back to the NemKonto.
+    response = refund(client, "350", "NemKonto", "Budget")
+    assert response.status_code == 302
+    assert bank_moves(client) == [("NemKonto", "Budget", 35000)]
+    before = state()
+    client.post("/balance/made/")
+    after = state()
+    rent = expense("Rent").id
+    assert after.general_savings == before.general_savings
+    assert after.current_expense_balances()[rent] == before.current_expense_balances()[rent] + 35000
+
+
+def test_a_refund_to_an_account_with_several_expenses_names_one(client, budget, accounts):
+    Expense.objects.create(
+        budget=budget,
+        name="Power",
+        amount=60000,
+        interval_months=1,
+        first_due=date(2025, 5, 10),
+        account=accounts["Budget"],
+        kind="variable",
+    )
+    month_end(client, "2025-05")
+    response = refund(client, "120", "Budget", "Budget")
+    assert response.status_code == 200
+    assert b"Choose which expense on Budget it is for." in response.content
+    refund(client, "120", "Budget", "Budget", "Power")
+    move = Move.objects.get(kind=Move.Type.REFUND)
+    assert (move.expense.name, move.account.name, move.to_general_savings) == ("Power", "Budget", 0)
+    # It is already on the right account: nothing to transfer.
+    assert bank_moves(client) == []
+
+
+def test_an_overdraft_starts_from_the_nemkonto_and_can_cover_general_savings(client, budget):
+    month_end(client, "2025-05")
+    form = client.get("/balance/").context["overdraft_form"]
+    assert form["source"].initial.name == "NemKonto"
+    before = state()
+    overdraft(client, "Savings", "NemKonto", "100")
+    after = state()
+    assert after.general_savings == before.general_savings + 10000
+    assert after.nemkonto == before.nemkonto - 10000
+    assert Move.objects.get().expense is None
+
+
+def test_interest_is_entered_with_the_income(client, budget, accounts):
+    month_end(client, "2025-05")
+    page = client.get("/month-end/2025-06/income/").content.decode()
+    assert "May interest" in page and "Empty counts as 0" in page
+    salary = IncomeSource.objects.get(name="Salary")
+    client.post(
+        "/month-end/2025-06/income/",
+        {f"income-{salary.id}": "25.000", f"interest-{accounts['Savings'].id}": "12,50"},
+    )
+    inputs = services.close_inputs(budget, state().month)
+    assert inputs.interest == {accounts["Savings"].id: 1250}

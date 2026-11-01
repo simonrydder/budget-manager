@@ -456,7 +456,7 @@ class Move(models.Model):
         FUND = "fund", "Fill from General Savings"
         TOPUP = "topup", "Top up from General Savings"
         RELEASE = "release", "Return to General Savings"
-        REFUND = "refund", "Refund to General Savings"
+        REFUND = "refund", "Refund"
         OVERDRAFT = "overdraft", "Overdraft covered by the bank"
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="moves")
@@ -502,18 +502,19 @@ class Move(models.Model):
     @property
     def to_expense(self) -> int:
         """What the move adds to its expense (negative: taken from it)."""
-        if self.kind in (self.Type.FUND, self.Type.TOPUP, self.Type.OVERDRAFT):
-            return self.amount
+        if self.expense_id is None:
+            return 0
         if self.kind == self.Type.RELEASE:
             return -self.amount
-        return 0
+        return self.amount
 
     @property
     def to_general_savings(self) -> int:
-        if self.kind == self.Type.REFUND:
-            return self.amount
-        if self.from_nemkonto:
-            return 0
+        """What the move adds to General Savings (negative: taken from it). Money from outside
+        (a refund) or from the NemKonto (an overdraft it covered) goes to General Savings only
+        when no expense gets it."""
+        if self.kind == self.Type.REFUND or self.from_nemkonto:
+            return 0 if self.to_expense else self.amount
         return -self.to_expense
 
     @property

@@ -31,13 +31,13 @@ def month_end(
     base = f"/month-end/{month}/"
     assert client.get(base + "income/").status_code == 200
     salary = IncomeSource.objects.get(name="Salary")
-    response = client.post(base + "income/", {f"income-{salary.id}": income})
-    assert response.url == client.at(base + "interest/")
     data = {
         f"interest-{Account.objects.get(name=name).id}": value
         for name, value in (interest or {}).items()
     }
-    assert client.post(base + "interest/", data).url == client.at(base + "spending/")
+    data[f"income-{salary.id}"] = income
+    response = client.post(base + "income/", data)
+    assert response.url == client.at(base + "spending/")
     assert client.get(base + "spending/").status_code == 200
     data = {f"spent-{expense(name).id}": value for name, value in (spending or {}).items()}
     data["nemkonto-spent"] = nemkonto
@@ -245,26 +245,40 @@ def test_a_step_can_be_undone(client, budget):
     rent = expense("Rent")
     salary = IncomeSource.objects.get(name="Salary")
     client.post("/month-end/2025-06/income/", {f"income-{salary.id}": "25.000"})
-    client.post("/month-end/2025-06/interest/", {})
     close = MonthClose.objects.get(month=date(2025, 6, 1))
-    assert close.step == 3
+    assert close.step == 2
     page = client.get("/month-end/2025-06/spending/").content.decode()
-    assert "Undo step 2: May interest" in page
+    assert "Undo step 1: June income" in page
     client.post("/month-end/2025-06/spending/", {f"spent-{rent.id}": "10.000"})
     close.refresh_from_db()
-    assert close.step == 4
+    assert close.step == 3
 
     response = client.post("/month-end/2025-06/undo/")
     assert response.url == client.at("/month-end/2025-06/spending/")
     close.refresh_from_db()
-    assert close.step == 3
+    assert close.step == 2
     assert client.get("/month-end/").url == client.at("/month-end/2025-06/spending/")
     # What was entered stays.
     assert SpendingEntry.objects.get(expense=rent, month=date(2025, 5, 1)).amount == 1000000
     client.post("/month-end/2025-06/undo/")
-    client.post("/month-end/2025-06/undo/")
     close.refresh_from_db()
     assert close.step == 1
+
+
+def test_the_step_bar_shows_the_page_it_is_on(client, budget):
+    """Every page marks its own step as the current one."""
+    month_end(client, "2025-05")
+    salary = IncomeSource.objects.get(name="Salary")
+    client.post("/month-end/2025-06/income/", {f"income-{salary.id}": "25.000"})
+    client.post("/month-end/2025-06/spending/", {"nemkonto-spent": "0"})
+    client.post("/month-end/2025-06/transfers/", {"action": "continue"})
+    pages = {"income": 1, "spending": 2, "transfers": 3, "check": 4}
+    for slug, number in pages.items():
+        page = client.get(f"/month-end/2025-06/{slug}/").content.decode()
+        current = re.search(r'class="current" aria-current="step">\s*<small>Step (\d)', page)
+        assert current and int(current.group(1)) == number, slug
+    # The old interest page is part of the income page now.
+    assert client.get("/month-end/2025-06/interest/").url == client.at("/month-end/2025-06/income/")
 
 
 def test_right_after_a_close_it_can_be_reopened(client, budget):

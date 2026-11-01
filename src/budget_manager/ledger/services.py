@@ -303,7 +303,8 @@ def plan_next_close(budget: Budget) -> tuple[BudgetState, ClosePlan, CloseInputs
     to_accounts: dict[int, int] = defaultdict(int)
     for item in inputs.moves:
         state.general_savings += item.to_general_savings
-        to_accounts[item.account.pk] += item.to_account
+        for account, amount in item.legs:
+            to_accounts[account.pk] += amount
         if item.expense:
             state.ledger(item.expense.pk).adjustments.append(
                 Adjustment(state.month, item.to_expense, planned=item.kind == Move.Type.FUND)
@@ -455,20 +456,50 @@ def overdraft_sources(budget: Budget) -> list[Account]:
     )
 
 
+def money_for(account: Account, expense: Expense | None) -> Expense | None:
+    """The expense that money arriving on ``account`` belongs to. ``None`` means General
+    Savings, which only the account holding it has. Without a choice, an account with one
+    expense gives it to that one."""
+    if expense is not None:
+        if expense.account_id != account.pk:
+            raise CloseError(f"{expense.name} is not on {account.name}.")
+        return expense
+    if account.holds_general_savings:
+        return None
+    candidates = [
+        item
+        for item in account.expenses.all()
+        if not item.end_date or item.end_date >= date.today()
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise CloseError(f"{account.name} has no expenses to put the money on.")
+    raise CloseError(f"Choose which expense on {account.name} it is for.")
+
+
 @transaction.atomic
 def record_overdraft(
-    budget: Budget, expense: Expense, source: Account, amount: int, user, note: str = ""
+    budget: Budget,
+    account: Account,
+    expense: Expense | None,
+    source: Account,
+    amount: int,
+    user,
+    note: str = "",
 ) -> Move:
-    """Record that the bank moved ``amount`` from ``source`` to the account of ``expense``.
-    It is made at once: the money has already moved."""
+    """Record that the bank moved ``amount`` from ``source`` to ``account``, which went below
+    zero (to ``expense`` on it, or General Savings). It is made at once: the money has
+    already moved."""
     if not budget_started(budget):
         raise CloseError("Start the budget first.")
     if amount <= 0:
         raise CloseError("Enter an amount above 0.")
-    if source.pk not in {account.pk for account in overdraft_sources(budget)}:
+    if source.pk not in {item.pk for item in overdraft_sources(budget)}:
         raise CloseError("The bank can only take it from the NemKonto or General Savings.")
-    if expense.account_id == source.pk:
+    if account.pk == source.pk:
         raise CloseError("The money has to come from another account.")
+    expense = money_for(account, expense)
     return Move.objects.create(
         budget=budget,
         kind=Move.Type.OVERDRAFT,
@@ -625,7 +656,7 @@ def reopen_close(close: MonthClose) -> None:
     close.status = MonthClose.Status.DRAFT
     close.closed_at = None
     close.closed_by = None
-    close.step = 4
+    close.step = 3  # Transfers
     close.save()
 
 
@@ -935,7 +966,8 @@ def apply_start(budget: Budget, plan: StartPlan, user) -> None:
 @dataclass
 class PendingMove:
     """A move waiting for its bank transfer. ``move`` is None for money left on an ended
-    expense, which is suggested automatically."""
+    expense, which is suggested automatically. ``account`` is the expense's account, or for a
+    refund the account the money arrived on."""
 
     kind: str
     amount: int
@@ -944,19 +976,28 @@ class PendingMove:
     move: Move | None = None
     note: str = ""
 
+    def _as_move(self) -> Move:
+        return Move(kind=self.kind, amount=self.amount, expense=self.expense, account=self.account)
+
     @property
     def to_expense(self) -> int:
-        return Move(kind=self.kind, amount=self.amount).to_expense
+        return self._as_move().to_expense
 
     @property
     def to_general_savings(self) -> int:
-        return Move(kind=self.kind, amount=self.amount).to_general_savings
+        return self._as_move().to_general_savings
 
     @property
-    def to_account(self) -> int:
-        """What has to arrive on its account from the account holding General Savings
-        (negative: sent from it). A refund is already on the account and leaves it."""
-        return self.to_expense if self.expense else -self.amount
+    def legs(self) -> list[tuple[Account, int]]:
+        """What has to arrive on each account from the account holding General Savings
+        (negative: sent to it). A refund is already on the account it arrived on and leaves
+        it, for General Savings or for the account of the expense it belongs to."""
+        if self.kind == Move.Type.REFUND:
+            legs = [(self.account, -self.amount)]
+            if self.expense:
+                legs.append((self.expense.account, self.amount))
+            return legs
+        return [(self.account, self.to_expense)]
 
     @property
     def label(self) -> str:
@@ -983,21 +1024,29 @@ class Balancing:
 
     @property
     def bank_moves(self) -> list[BankMove]:
-        """One transfer per account to or from the account holding General Savings."""
+        """The bank transfers that settle the moves: what an account sends goes straight to an
+        account that receives, and the rest to or from the account holding General Savings."""
         net: dict[int, int] = defaultdict(int)
         accounts = {}
         for item in self.moves:
-            if item.account.pk == self.savings.pk:
-                continue
-            accounts[item.account.pk] = item.account
-            net[item.account.pk] += item.to_account
+            for account, amount in item.legs:
+                if account.pk == self.savings.pk:
+                    continue
+                accounts[account.pk] = account
+                net[account.pk] += amount
+        order = sorted(accounts.values(), key=lambda a: (a.sort_order, a.pk))
+        senders = [[a, -net[a.pk]] for a in order if net[a.pk] < 0]
+        receivers = [[a, net[a.pk]] for a in order if net[a.pk] > 0]
         result = []
-        for account_id, amount in net.items():
-            account = accounts[account_id]
-            if amount > 0:
-                result.append(BankMove(self.savings, account, amount))
-            elif amount < 0:
-                result.append(BankMove(account, self.savings, -amount))
+        for sender in senders:
+            for receiver in receivers:
+                amount = min(sender[1], receiver[1])
+                if amount:
+                    result.append(BankMove(sender[0], receiver[0], amount))
+                    sender[1] -= amount
+                    receiver[1] -= amount
+        result += [BankMove(a, self.savings, left) for a, left in senders if left]
+        result += [BankMove(self.savings, a, left) for a, left in receivers if left]
         return sorted(result, key=lambda move: (move.source.sort_order, move.target.sort_order))
 
 
@@ -1037,7 +1086,7 @@ def balancing(budget: Budget, today: date, state: BudgetState | None = None) -> 
             ledger = state.ledger(expense.pk)
             if move.kind == Move.Type.FUND and ledger.expense.start_month == state.month:
                 amount = fund_amount(ledger, state.month)
-        account = expense.account if expense else move.account
+        account = move.account if move.kind == Move.Type.REFUND or not expense else expense.account
         items.append(PendingMove(move.kind, amount, account, expense, move, move.note))
     for ledger in state.ledgers:
         expense = expenses[ledger.expense.id]

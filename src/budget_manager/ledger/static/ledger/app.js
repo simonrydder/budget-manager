@@ -133,6 +133,33 @@
     update(false);
   });
 
+  // Money for an account (a refund, an overdraft): only its expenses can be chosen, and the
+  // choice is only shown when there is one to make. On the account holding General Savings,
+  // no expense means General Savings.
+  document.querySelectorAll("select[data-expense-for]").forEach((expense) => {
+    const account = document.getElementById(expense.dataset.expenseFor);
+    const field = expense.closest(".field");
+    const empty = expense.querySelector("option[value='']");
+    const options = [...expense.querySelectorAll("option[data-account]")];
+    if (!account || !field) return;
+    const update = () => {
+      const chosen = account.selectedOptions[0];
+      const holdsSavings = chosen && "holdsGeneralSavings" in chosen.dataset;
+      let count = 0;
+      options.forEach((option) => {
+        const match = option.dataset.account === account.value;
+        option.hidden = !match;
+        option.disabled = !match;
+        if (match) count += 1;
+      });
+      if (expense.selectedOptions[0] && expense.selectedOptions[0].disabled) expense.value = "";
+      if (empty) empty.textContent = holdsSavings ? "General Savings" : "Choose…";
+      field.hidden = !account.value || (!holdsSavings && count <= 1);
+    };
+    account.addEventListener("change", update);
+    update();
+  });
+
   // Running budgets are monthly from the 1st: hide the frequency and due date for them.
   document.querySelectorAll("form").forEach((form) => {
     const choices = form.querySelectorAll("[name=kind]");
