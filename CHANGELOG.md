@@ -4,6 +4,11 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.12.1 (2026-11-01)
+
+- Tapping or clicking an amount field selects the whole number, so typing replaces it instead of
+  having to delete it first. Leaving the field without typing keeps the number.
+
 ## 1.12.0 (2026-11-01)
 
 - The month-end step bar showed step 1 while on step 3 (and step 3 on step 1). Every page now
