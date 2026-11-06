@@ -716,6 +716,20 @@ def spending_by_month(budget: Budget, year: int) -> dict[int, dict[int, int]]:
     return result
 
 
+def nemkonto_spending_by_month(budget: Budget, year: int) -> dict[int, int]:
+    """``{month_number: amount}`` spent from the NemKonto itself in one calendar year, as
+    entered at the closed month-ends (the month-end for budget month B records month B − 1)."""
+    result = {}
+    closes = budget.closes.filter(
+        status=MonthClose.Status.CLOSED, nemkonto_spent__isnull=False
+    ).values_list("month", "nemkonto_spent")
+    for month, spent in closes:
+        spent_in = ym(month) - 1
+        if spent_in.year == year:
+            result[spent_in.month] = spent
+    return result
+
+
 def completed_spending_months(budget: Budget, year: int) -> list[int]:
     """Month numbers in ``year`` whose spending has been entered at a month-end."""
     last = last_closed(budget)
