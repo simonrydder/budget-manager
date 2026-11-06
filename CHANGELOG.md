@@ -4,6 +4,16 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.13.0 (2026-11-06)
+
+- An expense can be paid on the first or the last bank day of the month (**Paid on** on the
+  expense). The due date then only picks the first month; each payment falls on that bank day,
+  with Danish bank holidays taken into account.
+- A standing order can be sent on the first bank day of the next month instead of the last bank
+  day (**Sent on** on the account). It goes out just after the month-end, so the NemKonto's
+  balance on the last day still holds it, Transfers shows its date, and Check & close says when
+  the account gets it.
+
 ## 1.12.2 (2026-11-01)
 
 - Moving a due date from the 1st to the last day of the month before gives that month two

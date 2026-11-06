@@ -6,6 +6,11 @@
 <div class="checklist">
   <p class="lead">After making the transfers, the accounts should show these balances. Type what your bank shows to compare. This is optional; nothing you type here is saved.</p>
   {% if open_count %}<div class="notice warning">{{ open_count }} transfer{{ open_count|pluralize }} {{ open_count|pluralize:"is,are" }} not ticked off yet. <a href="{% url 'month-end-transfers' month %}">Back to transfers</a></div>{% endif %}
+  {% if later_standing_orders %}
+  <div class="notice info">
+    <span>{% for item in later_standing_orders %}The standing order of {{ item.amount|money }} to <b>{{ item.account.name }}</b> goes on {{ item.day|date:"D j M" }}{% if not forloop.last %}; {% endif %}{% endfor %}. Until then the bank shows that much more on the NemKonto and less on the account.</span>
+  </div>
+  {% endif %}
   {% if late_payments %}
   <div class="notice info">
     <span>Due on a day the banks are closed, so probably drawn in {{ month.name }}: {% for item in late_payments %}<b>{{ item.expense.name }}</b> {{ item.amount|money }} (due {{ item.due|date:"D j M" }}, drawn {{ item.drawn|date:"D j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}. Until then the bank shows that much more on the account.</span>

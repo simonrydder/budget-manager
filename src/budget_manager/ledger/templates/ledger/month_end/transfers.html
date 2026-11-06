@@ -59,7 +59,7 @@
 
     <section class="stack">
       <div class="spread"><h2>Transfers on {{ transfer_day|date:"j F" }}</h2>{% if transfers %}<span class="muted small">{{ open_count }} of {{ transfers|length }} left to do</span>{% endif %}</div>
-      <p class="muted small">Tick each transfer when you have made it in your bank.{% if standing_day %} Standing orders were sent on {{ standing_day|date:"j F" }}; only what they did not cover is left.{% endif %}</p>
+      <p class="muted small">Tick each transfer when you have made it in your bank.{% if has_standing_orders %} Standing orders send their part on the day shown; only what they do not cover is left.{% endif %}</p>
       <div class="transfers">
         {% for item in transfers %}
         {% with t=item.plan %}
@@ -71,7 +71,7 @@
           <div>
             {% if item.nothing_to_do %}
             <div class="amt">{{ t.amount|money }}</div>
-            <div class="route">The standing order to {{ item.account.name }} sent it all</div>
+            <div class="route">The standing order to {{ item.account.name }} on {{ item.standing_day|date:"j M" }} covers it all</div>
             {% else %}
             <div class="amt">{{ item.rest|absolute|money }}</div>
             <div class="route">{% if item.rest < 0 %}{{ item.account.name }} → NemKonto{% else %}NemKonto → {{ item.account.name }}{% endif %}{% if item.standing_order %} · {% if item.rest < 0 %}back from{% else %}on top of{% endif %} the standing order{% endif %}</div>
@@ -79,7 +79,7 @@
           </div>
           {% if not item.nothing_to_do %}<button type="button" class="btn small" data-copy="{{ item.rest|absolute|money_input }}" hidden>Copy</button>{% else %}<span></span>{% endif %}
           <div class="parts">
-            {% if item.standing_order %}<span>{% if t.amount >= 0 %}Needs {{ t.amount|money }}{% else %}Sends back {{ t.amount|absolute|money }}{% endif %} · standing order {{ item.standing_order|money }} on {{ standing_day|date:"j M" }}</span>{% endif %}
+            {% if item.standing_order %}<span>{% if t.amount >= 0 %}Needs {{ t.amount|money }}{% else %}Sends back {{ t.amount|absolute|money }}{% endif %} · standing order {{ item.standing_order|money }} on {{ item.standing_day|date:"j M" }}</span>{% endif %}
             {% if t.contributions %}<span>Contributions {{ t.contributions|money }}</span>{% endif %}
             {% if t.interest %}<span>Interest already there {{ t.interest|money }}</span>{% endif %}
             {% if t.topups %}<span>Top-ups {{ t.topups|money }}</span>{% endif %}

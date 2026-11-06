@@ -120,14 +120,15 @@
   // A checkbox that shows a field only when ticked, filling it with its suggested value when it
   // is empty (the standing order of an account).
   document.querySelectorAll("input[type=checkbox][data-reveals]").forEach((box) => {
-    const target = document.getElementById(box.dataset.reveals);
-    const field = target && target.closest(".field");
-    if (!field) return;
+    const targets = box.dataset.reveals.split(" ").map((id) => document.getElementById(id));
+    if (targets.some((target) => !target || !target.closest(".field"))) return;
     const update = (filling) => {
-      field.hidden = !box.checked;
-      if (filling && box.checked && !target.value && target.dataset.suggested) {
-        target.value = target.dataset.suggested;
-      }
+      targets.forEach((target) => {
+        target.closest(".field").hidden = !box.checked;
+        if (filling && box.checked && !target.value && target.dataset.suggested) {
+          target.value = target.dataset.suggested;
+        }
+      });
     };
     box.addEventListener("change", () => update(true));
     update(false);

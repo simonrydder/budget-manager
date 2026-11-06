@@ -3,11 +3,13 @@ from datetime import date
 from budget_manager.engine.bankdays import (
     drawn_on,
     easter,
+    first_bank_day,
     is_bank_day,
     last_bank_day,
     next_bank_day,
 )
 from budget_manager.engine.months import YearMonth
+from budget_manager.engine.schedule import FIRST_BANK_DAY, LAST_BANK_DAY, Schedule
 
 
 def test_easter():
@@ -38,3 +40,24 @@ def test_a_payment_on_a_closing_day_is_drawn_on_the_next_bank_day():
     assert drawn_on(date(2026, 10, 31)) == date(2026, 11, 2)
     assert drawn_on(date(2026, 11, 2)) == date(2026, 11, 2)
     assert next_bank_day(date(2026, 12, 24)) == date(2026, 12, 28)
+
+
+def test_first_bank_day():
+    assert first_bank_day(YearMonth(2026, 11)) == date(2026, 11, 2)
+    assert first_bank_day(YearMonth(2027, 1)) == date(2027, 1, 4)
+
+
+def test_a_schedule_on_the_last_bank_day():
+    schedule = Schedule(date(2026, 10, 1), 1, day=LAST_BANK_DAY)
+    assert schedule.due_in(YearMonth(2026, 10)) == date(2026, 10, 30)
+    assert schedule.due_in(YearMonth(2026, 12)) == date(2026, 12, 30)
+    assert schedule.next_due(YearMonth(2026, 9)) == date(2026, 10, 30)
+    assert schedule.previous_due(YearMonth(2026, 12)) == date(2026, 11, 30)
+    assert schedule.upcoming(date(2026, 10, 31), 2) == [date(2026, 11, 30), date(2026, 12, 30)]
+
+
+def test_a_schedule_on_the_first_bank_day_every_quarter():
+    schedule = Schedule(date(2026, 11, 1), 3, day=FIRST_BANK_DAY)
+    assert schedule.due_in(YearMonth(2026, 11)) == date(2026, 11, 2)
+    assert schedule.due_in(YearMonth(2026, 12)) is None
+    assert schedule.due_in(YearMonth(2027, 2)) == date(2027, 2, 1)

@@ -38,7 +38,8 @@ from budget_manager.ledger.models import (
     SpendingEntry,
     Transfer,
 )
-from budget_manager.engine.bankdays import drawn_on, last_bank_day
+from budget_manager.engine.bankdays import drawn_on, first_bank_day, last_bank_day
+from budget_manager.engine.schedule import FIRST_BANK_DAY
 
 
 def ym(day: date) -> YearMonth:
@@ -104,7 +105,9 @@ def engine_expense(
         kind=engine.Kind(expense.kind),
         amount=expense.amount,
         first_amount=expense.first_amount,
-        schedule=Schedule(expense.first_due, expense.interval_months, expense.end_date),
+        schedule=Schedule(
+            expense.first_due, expense.interval_months, expense.end_date, expense.due_day
+        ),
         start_month=ym(expense.start_month) if expense.start_month else start,
         starting_balance=expense.starting_balance,
         opening_month=None if expense.start_month else opening,
@@ -348,6 +351,8 @@ class NemkontoDay:
     refunds: int  # refunds that arrived on it and are still waiting to be moved
     standing_orders: int  # sent by the bank on the last bank day
     standing_day: date
+    later_standing_orders: int  # sent on the first bank day after the month-end
+    later_day: date
     overdrafts: int  # taken by the bank to cover an account that went below zero
 
     @property
@@ -364,6 +369,18 @@ class NemkontoDay:
     def spent(self, balance: int) -> int:
         """What was spent from it, when the bank shows ``balance``."""
         return self.before_spending - balance
+
+
+def standing_order_days(budget: Budget, month: YearMonth) -> dict[int, date]:
+    """The day each account's standing order is sent for the month-end of budget month
+    ``month``: the last bank day before it, or the first bank day of ``month`` just after."""
+    return {
+        account.pk: first_bank_day(month)
+        if account.standing_order_day == FIRST_BANK_DAY
+        else last_bank_day(month - 1)
+        for account in budget.accounts.exclude(role=Role.NEMKONTO.value)
+        if account.standing_order
+    }
 
 
 def standing_orders(budget: Budget) -> dict[int, int]:
@@ -407,14 +424,24 @@ def nemkonto_day(
         move.amount
         for move in budget.moves.filter(kind=Move.Type.REFUND, done=False, account=nemkonto)
     )
+    # Sent on the last bank day: gone by the end of the last day. On the first bank day of the
+    # next month: still there, it goes after the month-end like the other transfers.
+    orders = standing_orders(budget)
+    days = standing_order_days(budget, state.month)
     return NemkontoDay(
         day=previous.last_day(),
         after_close=state.nemkonto + overdrafts,
         income=inputs.income,
         interest=inputs.interest.get(nemkonto, 0),
         refunds=refunds,
-        standing_orders=sum(standing_orders(budget).values()),
+        standing_orders=sum(
+            amount for account, amount in orders.items() if days[account] <= previous.last_day()
+        ),
         standing_day=last_bank_day(previous),
+        later_standing_orders=sum(
+            amount for account, amount in orders.items() if days[account] > previous.last_day()
+        ),
+        later_day=first_bank_day(state.month),
         overdrafts=overdrafts,
     )
 

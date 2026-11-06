@@ -15,7 +15,6 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from budget_manager.engine import CloseError, YearMonth, format_amount
-from budget_manager.engine.bankdays import last_bank_day
 from budget_manager.ledger import services
 from budget_manager.ledger.models import (
     Account,
@@ -364,6 +363,7 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
     nemkonto = next(a for a in accounts.values() if a.is_nemkonto)
     done = set(close.done_accounts or [])
     standing = services.standing_orders(budget)
+    standing_days = services.standing_order_days(budget, month)
     transfers = []
     for t in plan.transfers.values():
         order = standing.get(t.account_id, 0)
@@ -375,6 +375,7 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
                 "account": accounts[t.account_id],
                 "plan": t,
                 "standing_order": order,
+                "standing_day": standing_days.get(t.account_id),
                 "rest": rest,
                 # What the standing order sent is all it needs.
                 "done": t.account_id in done or (bool(order) and not rest),
@@ -426,7 +427,14 @@ def _plan_context(budget, month: YearMonth, close: MonthClose):
             for account in accounts.values()
         ],
         "open_count": sum(1 for t in transfers if not t["done"]),
-        "standing_day": last_bank_day(month - 1) if standing else None,
+        "has_standing_orders": bool(standing),
+        # Standing orders that go after the month-end: until then the bank shows them on the
+        # NemKonto instead.
+        "later_standing_orders": [
+            {"account": accounts[account_id], "amount": standing[account_id], "day": day}
+            for account_id, day in standing_days.items()
+            if day > (month - 1).last_day()
+        ],
     }
 
 

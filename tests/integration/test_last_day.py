@@ -72,9 +72,9 @@ def test_standing_orders_leave_only_the_rest_to_transfer(client, budget):
     standing(Budget=1050000, Food=400000)
     month_end(client, "2025-05", close=False)
     page = client.get("/month-end/2025-05/transfers/").content.decode()
-    assert "The standing order to Food sent it all" in page
+    assert "The standing order to Food on 30 Apr covers it all" in page
     assert "500,00" in page and "Budget → NemKonto · back from the standing order" in page
-    assert "Standing orders were sent on 30 April" in page
+    assert "standing order 10.500,00 on 30 Apr" in page
 
     client.post("/month-end/2025-05/close/")
     close = MonthClose.objects.get(month=date(2025, 5, 1))
@@ -315,3 +315,41 @@ def test_interest_is_entered_with_the_income(client, budget, accounts):
     )
     inputs = services.close_inputs(budget, state().month)
     assert inputs.interest == {accounts["Savings"].id: 1250}
+
+
+def test_a_standing_order_on_the_first_bank_day_goes_after_the_month_end(client, budget):
+    month_end(client, "2025-05")
+    Account.objects.filter(name="Food").update(
+        standing_order=400000, standing_order_day="first_bank_day"
+    )
+    Account.objects.filter(name="Budget").update(standing_order=1000000)
+    salary = IncomeSource.objects.get(name="Salary")
+    client.post("/month-end/2025-06/income/", {f"income-{salary.id}": "25.000"})
+    day = services.nemkonto_day(budget, state())
+    # Budget's leaves on 28 May (the banks close on 30 May, the Friday after Ascension Day);
+    # Food's only on Monday 2 June, after the month-end on 31 May, so it is still there.
+    assert (day.standing_orders, day.later_standing_orders) == (1000000, 400000)
+    assert day.before_spending == 500000 + 2500000 - 1000000
+    page = client.get("/month-end/2025-06/spending/").content.decode()
+    assert "Standing orders on 2 Jun go after this, so they are not counted" in page
+    client.post("/month-end/2025-06/spending/", {"nemkonto-spent": "0"})
+    page = client.get("/month-end/2025-06/transfers/").content.decode()
+    assert "on 2 Jun covers it all" in page and "standing order 10.000,00 on 28 May" in page
+    client.post("/month-end/2025-06/transfers/", {"action": "continue"})
+    page = client.get("/month-end/2025-06/check/").content.decode()
+    assert "<b>Food</b> goes on Mon 2 Jun" in page
+
+
+def test_the_standing_order_day_is_set_on_the_account(client, budget, accounts):
+    food = accounts["Food"]
+    client.post(
+        f"/accounts/{food.id}/edit/",
+        {
+            "name": "Food",
+            "has_standing_order": "on",
+            "standing_order": "4.000",
+            "standing_order_day": "first_bank_day",
+        },
+    )
+    food.refresh_from_db()
+    assert (food.standing_order, food.standing_order_day) == (400000, "first_bank_day")
