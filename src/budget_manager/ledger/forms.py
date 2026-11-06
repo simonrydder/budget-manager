@@ -10,11 +10,13 @@ from budget_manager.engine import (
     FREQUENCIES,
     CloseError,
     Role,
+    Schedule,
     YearMonth,
     format_amount,
     format_input,
     parse_amount,
 )
+from budget_manager.engine.schedule import FIRST_BANK_DAY, LAST_BANK_DAY, ON_DATE
 from budget_manager.ledger.models import (
     Account,
     BalanceCorrection,
@@ -157,6 +159,7 @@ class ExpenseForm(forms.ModelForm):
             "amount",
             "interval_months",
             "first_due",
+            "due_day",
             "first_amount",
             "kind",
             "category",
@@ -167,11 +170,14 @@ class ExpenseForm(forms.ModelForm):
         ]
         labels = {
             "first_due": "First due date",
+            "due_day": "Paid on",
             "kind": "Type",
             "end_date": "End date",
         }
         help_texts = {
             "first_due": "For a savings goal: the date the money must be ready.",
+            "due_day": "The day the bank draws it. On a bank day, the date above only picks "
+            "the first month; each payment falls on that bank day of its month.",
             "end_date": "Optional. No payments after this date, so contributions stop.",
             "category": "You can also drag the expense between categories later.",
         }
@@ -193,6 +199,8 @@ class ExpenseForm(forms.ModelForm):
         self.fields["account"].queryset = accounts
         self.fields["account"].empty_label = None
         self.fields["first_due"].required = False
+        if "due_day" in self.fields:
+            self.fields["due_day"].required = False
         self.fields["category"].queryset = budget.categories.all()
         self.fields["category"].empty_label = "Uncategorised"
         self.fields["category"].required = False
@@ -217,6 +225,9 @@ class ExpenseForm(forms.ModelForm):
 
     def clean_starting_balance(self):
         return self.cleaned_data.get("starting_balance") or 0
+
+    def clean_due_day(self):
+        return self.cleaned_data.get("due_day") or ON_DATE
 
     def clean(self):
         data = super().clean()
@@ -243,6 +254,14 @@ class ExpenseForm(forms.ModelForm):
                 "account",
                 "Expenses cannot use the NemKonto. What is spent from it is entered at each "
                 "month-end, so choose another account.",
+            )
+        if data.get("kind") == "running":
+            data["due_day"] = ON_DATE
+        elif data.get("first_due") and data.get("due_day", ON_DATE) != ON_DATE:
+            # The first payment falls on that bank day of the chosen month.
+            first = data["first_due"]
+            data["first_due"] = Schedule(first, 1, None, data["due_day"]).date_in(
+                YearMonth.of(first)
             )
         first_due, end_date = data.get("first_due"), data.get("end_date")
         if first_due and end_date and end_date < first_due:
@@ -440,6 +459,17 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
         allow_negative=False,
         label="Standing order",
     )
+    standing_order_day = forms.ChoiceField(
+        choices=[
+            (LAST_BANK_DAY, "Last bank day of the month"),
+            (FIRST_BANK_DAY, "First bank day of the next month"),
+        ],
+        initial=LAST_BANK_DAY,
+        required=False,
+        label="Sent on",
+        help_text="On the first bank day it goes out just after the month-end, with the money "
+        "for that month.",
+    )
 
     class Meta:
         model = Account
@@ -454,10 +484,14 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
             del self.fields["holds_general_savings"]
             del self.fields["has_standing_order"]
             del self.fields["standing_order"]
+            del self.fields["standing_order_day"]
             return
         current = self.instance.standing_order
         self.fields["has_standing_order"].initial = bool(current)
-        self.fields["has_standing_order"].widget.attrs["data-reveals"] = "id_standing_order"
+        self.fields["has_standing_order"].widget.attrs["data-reveals"] = (
+            "id_standing_order id_standing_order_day"
+        )
+        self.fields["standing_order_day"].initial = self.instance.standing_order_day
         field = self.fields["standing_order"]
         field.initial = current or None
         if suggested_standing_order:
@@ -486,6 +520,9 @@ class AccountForm(UniqueNameInBudget, forms.ModelForm):
     def save(self, commit=True):
         if "standing_order" in self.fields:
             self.instance.standing_order = self.cleaned_data["standing_order"] or 0
+            self.instance.standing_order_day = (
+                self.cleaned_data.get("standing_order_day") or LAST_BANK_DAY
+            )
         return super().save(commit)
 
     def clean_holds_general_savings(self):
@@ -784,6 +821,7 @@ class QuickExpenseForm(ExpenseForm):
             "amount",
             "interval_months",
             "first_due",
+            "due_day",
             "first_amount",
             "account",
             "category",

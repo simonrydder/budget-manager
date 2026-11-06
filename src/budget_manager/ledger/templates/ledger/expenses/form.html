@@ -18,6 +18,9 @@
   </div>
   <div class="form-row" data-hide-when-running>
     {% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}
+    {% with field=form.due_day %}{% include "ledger/_field.html" %}{% endwith %}
+  </div>
+  <div class="form-row" data-hide-when-running>
     {% with field=form.first_amount %}{% include "ledger/_field.html" %}{% endwith %}
   </div>
   <div class="form-row">

@@ -5,7 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from budget_manager.engine.bankdays import first_bank_day, last_bank_day
 from budget_manager.engine.months import YearMonth
+
+#: Which day of a due month a payment falls on.
+ON_DATE = "date"  # the day of the month of ``first_due``
+FIRST_BANK_DAY = "first_bank_day"
+LAST_BANK_DAY = "last_bank_day"
+DUE_DAYS: dict[str, str] = {
+    ON_DATE: "On the date",
+    FIRST_BANK_DAY: "First bank day of the month",
+    LAST_BANK_DAY: "Last bank day of the month",
+}
 
 #: Choices offered in the app. 0 means a single payment (a one-off expense or savings goal).
 FREQUENCIES: dict[int, str] = {
@@ -30,17 +41,29 @@ class Schedule:
     """Due dates of an expense: ``first_due`` and then every ``interval_months`` (0 = once).
 
     The day of the month follows ``first_due`` and is clamped to short months, so a payment
-    on the 31st falls on 28/29 February and on 31 March again. Due dates after ``end_date``
-    are dropped.
+    on the 31st falls on 28/29 February and on 31 March again. With ``day`` set to the first or
+    last bank day, ``first_due`` only gives the first month and each payment falls on that
+    bank day of its month. Due dates after ``end_date`` are dropped.
     """
 
     first_due: date
     interval_months: int = 0
     end_date: date | None = None
+    day: str = ON_DATE
 
     def __post_init__(self) -> None:
         if self.interval_months < 0:
             raise ValueError("interval_months must be 0 (one-off) or positive")
+        if self.day not in DUE_DAYS:
+            raise ValueError(f"Unknown due day {self.day!r}")
+
+    def date_in(self, month: YearMonth) -> date:
+        """The day a payment in ``month`` falls on."""
+        if self.day == FIRST_BANK_DAY:
+            return first_bank_day(month)
+        if self.day == LAST_BANK_DAY:
+            return last_bank_day(month)
+        return month.day(self.first_due.day)
 
     @property
     def first_month(self) -> YearMonth:
@@ -55,18 +78,18 @@ class Schedule:
             return None
         if self.interval_months and offset % self.interval_months:
             return None
-        return self._valid(month.day(self.first_due.day))
+        return self._valid(self.date_in(month))
 
     def next_due(self, month: YearMonth) -> date | None:
         """The first due date in ``month`` or later."""
         offset = self.first_month.months_until(month)
         if offset <= 0:
-            return self._valid(self.first_due)
+            return self._valid(self.date_in(self.first_month))
         if self.interval_months == 0:
             return None
         steps = -(-offset // self.interval_months)
         due_month = self.first_month + steps * self.interval_months
-        return self._valid(due_month.day(self.first_due.day))
+        return self._valid(self.date_in(due_month))
 
     def previous_due(self, month: YearMonth) -> date | None:
         """The last due date in a month before ``month``."""
@@ -74,9 +97,7 @@ class Schedule:
         if offset < 0:
             return None
         steps = 0 if self.interval_months == 0 else offset // self.interval_months
-        return self._valid(
-            (self.first_month + steps * self.interval_months).day(self.first_due.day)
-        )
+        return self._valid(self.date_in(self.first_month + steps * self.interval_months))
 
     def next_due_from(self, day: date) -> date | None:
         """The first due date on or after ``day``."""

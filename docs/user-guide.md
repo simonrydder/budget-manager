@@ -184,7 +184,9 @@ accounts held at the end of the last day.
 
 **Due dates.** A payment belongs to the month of its due date. Use the day the bank actually
 draws it: rent for November that leaves on the last bank day of October is an October payment in
-the app. A payment on the 1st is next month's, paid with the money sent at this month-end (or by
+the app. For a payment on the **first or last bank day** of the month, choose that under
+**Paid on** on the expense; the due date then only picks the first month, and each payment falls
+on that bank day of its month (Danish bank holidays included). A payment on the 1st is next month's, paid with the money sent at this month-end (or by
 a standing order on the last bank day, so it is there in time). Moving a due date from the 1st to
 the last day of the month before gives that month two payments: enter both as spent. The month
 takes the extra payment from General Savings (or top the expense up yourself under Balance), and
@@ -260,10 +262,13 @@ reason the app cannot know (a bank fee, a forgotten purchase), use **Correct the
 balance** or **Correct General Savings**. Accounts can be added, renamed or removed (an account
 with expenses or history cannot be removed); exactly one account holds General Savings.
 
-If the bank sends a fixed amount from the NemKonto to an account on the last bank day of every
-month, edit the account and tick **Standing order from the NemKonto**. The amount
-starts as what the account's expenses get a month (their contributions at the next month-end);
-keep it or type what your bank sends. The month-end then only asks for the rest.
+If the bank sends a fixed amount from the NemKonto to an account every month, edit the account
+and tick **Standing order from the NemKonto**. The amount starts as what the account's expenses
+get a month (their contributions at the next month-end); keep it or type what your bank sends.
+Under **Sent on** choose the last bank day of the month (the default) or the first bank day of
+the next month. The month-end then only asks for the rest. A standing order on the first bank day
+goes out just after the month-end, so the NemKonto still holds it on the last day: step 2 does not
+subtract it, and Check & close says the account gets it that day.
 
 ## Forecast and History
 

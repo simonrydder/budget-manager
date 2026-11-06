@@ -18,6 +18,7 @@
       {% with field=form.account %}{% include "ledger/_field.html" %}{% endwith %}
       <div data-hide-when-running>{% with field=form.interval_months %}{% include "ledger/_field.html" %}{% endwith %}</div>
       <div data-hide-when-running>{% with field=form.first_due %}{% include "ledger/_field.html" %}{% endwith %}</div>
+      <div data-hide-when-running>{% with field=form.due_day %}{% include "ledger/_field.html" %}{% endwith %}</div>
       {% with field=form.category %}{% include "ledger/_field.html" %}{% endwith %}
     </div>
     <details class="more" data-hide-when-running{% if form.first_amount.value or form.first_amount.errors %} open{% endif %}>

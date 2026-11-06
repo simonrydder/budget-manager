@@ -46,6 +46,7 @@
           {% if day.interest %}<div><span>+ Interest on it (step 1)</span><span class="num">{{ day.interest|money }}</span></div>{% endif %}
           {% if day.refunds %}<div><span>+ Refunds that arrived on it</span><span class="num">{{ day.refunds|money }}</span></div>{% endif %}
           {% if day.standing_orders %}<div><span>− Standing orders on {{ day.standing_day|date:"j M" }}</span><span class="num">{{ day.standing_orders|money }}</span></div>{% endif %}
+          {% if day.later_standing_orders %}<div class="muted"><span>Standing orders on {{ day.later_day|date:"j M" }} go after this, so they are not counted</span><span class="num">{{ day.later_standing_orders|money }}</span></div>{% endif %}
           {% if day.overdrafts %}<div><span>− Overdrafts the bank covered from it</span><span class="num">{{ day.overdrafts|money }}</span></div>{% endif %}
           <div class="total"><span>Before spending</span><span class="num">{{ day.before_spending|money }}</span></div>
         </div>

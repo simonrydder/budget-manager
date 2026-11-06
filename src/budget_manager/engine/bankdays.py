@@ -60,6 +60,10 @@ def next_bank_day(day: date) -> date:
     return day
 
 
+def first_bank_day(month: YearMonth) -> date:
+    return next_bank_day(month.first_day())
+
+
 def last_bank_day(month: YearMonth) -> date:
     day = month.last_day()
     while not is_bank_day(day):

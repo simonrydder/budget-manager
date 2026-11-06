@@ -53,7 +53,9 @@ class Expense:
 
     def amount_on(self, due: date | None) -> int:
         """The amount of the payment due on ``due``."""
-        if due is not None and due == self.schedule.first_due and self.first_amount is not None:
+        # One payment a month at most, so the first payment is the one in the first month.
+        first = due is not None and YearMonth.of(due) == self.schedule.first_month
+        if first and self.first_amount is not None:
             return self.first_amount
         return self.amount
 

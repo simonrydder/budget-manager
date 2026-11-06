@@ -149,6 +149,27 @@ def test_twice_the_amount_on_one_payment_is_not_a_price_rise_but_more_is(client,
     assert expense("Rent").amount == 2100000
 
 
+def test_an_expense_paid_on_the_last_bank_day(client, budget, accounts):
+    rent = expense("Rent")
+    form = {
+        "name": "Rent",
+        "amount": "10.000",
+        "kind": "fixed",
+        "interval_months": "1",
+        "first_due": "2025-05-15",
+        "due_day": "last_bank_day",
+        "account": accounts["Budget"].id,
+    }
+    assert client.post(f"/expenses/{rent.id}/edit/", form).status_code == 302
+    rent.refresh_from_db()
+    # The date picks the month; the payment falls on its last bank day, 28 May 2025 (the
+    # banks close on the Friday after Ascension Day, and 31 May is a Saturday).
+    assert (rent.first_due, rent.due_day) == (date(2025, 5, 28), "last_bank_day")
+    month_end(client, "2025-05")
+    page = client.get("/month-end/2025-06/spending/").content.decode()
+    assert "Due 28 May" in page
+
+
 def test_only_the_latest_month_end_can_be_reopened(client, budget):
     month_end(client, "2025-05")
     month_end(client, "2025-06")

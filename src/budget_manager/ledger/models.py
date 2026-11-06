@@ -9,7 +9,8 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
-from budget_manager.engine import Kind, Role, YearMonth, frequency_label
+from budget_manager.engine import Kind, Role, Schedule, YearMonth, frequency_label
+from budget_manager.engine.schedule import DUE_DAYS, FIRST_BANK_DAY, LAST_BANK_DAY, ON_DATE
 
 
 def next_month_start() -> date:
@@ -101,7 +102,15 @@ class Account(models.Model):
     )
     standing_order = models.BigIntegerField(
         default=0,
-        help_text="Sent from the NemKonto by the bank on the last bank day of every month.",
+        help_text="Sent from the NemKonto by the bank every month, on standing_order_day.",
+    )
+    standing_order_day = models.CharField(
+        max_length=16,
+        choices=[
+            (LAST_BANK_DAY, "Last bank day of the month"),
+            (FIRST_BANK_DAY, "First bank day of the month"),
+        ],
+        default=LAST_BANK_DAY,
     )
 
     class Meta:
@@ -167,6 +176,12 @@ class Expense(models.Model):
     )
     interval_months = models.PositiveSmallIntegerField(default=1)
     first_due = models.DateField()
+    due_day = models.CharField(
+        max_length=16,
+        choices=list(DUE_DAYS.items()),
+        default=ON_DATE,
+        help_text="On the date of first_due, or the first or last bank day of each due month.",
+    )
     end_date = models.DateField(null=True, blank=True)
     starting_balance = models.BigIntegerField(default=0)
     start_month = models.DateField(
@@ -202,9 +217,17 @@ class Expense(models.Model):
 
     def amount_on(self, due: date | None) -> int:
         """The amount of the payment due on ``due``."""
-        if due is not None and due == self.first_due and self.first_amount is not None:
+        same_month = due is not None and (due.year, due.month) == (
+            self.first_due.year,
+            self.first_due.month,
+        )
+        if same_month and self.first_amount is not None:
             return self.first_amount
         return self.amount
+
+    @property
+    def schedule(self) -> Schedule:
+        return Schedule(self.first_due, self.interval_months, self.end_date, self.due_day)
 
 
 class IncomeSource(models.Model):
