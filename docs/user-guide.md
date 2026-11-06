@@ -279,7 +279,8 @@ counts as the average of the last six month-ends (or the amount from the setting
 three).
 
 **History** shows what was actually spent, per month and year, by category, expense or account,
-with the average per month and what the plan expected in the same months.
+with the average per month and what the plan expected in the same months. Everyday spending from
+the NemKonto has its own row, from what each closed month-end recorded.
 
 ## Settings, Budgets and People
 

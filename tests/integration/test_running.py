@@ -190,3 +190,23 @@ def test_spent_and_balance_after_are_both_editable(client, budget):
     assert f'data-balance-of="spent-{groceries.id}" data-start="400000" value="4.000,00"' in page
     assert f'data-balance-of="spent-{expense("Rent").id}"' in page
     assert "readonly" in page
+
+
+def test_history_shows_what_was_spent_from_the_nemkonto(client, budget):
+    budget.everyday_spending = 300000
+    budget.save()
+    month_end(client, "2025-05")
+    month_end(client, "2025-06", spending={"Rent": "10.000"}, nemkonto="3.600")
+    for by, name in [
+        ("category", "Everyday spending (NemKonto)"),
+        ("expense", None),
+        ("account", "NemKonto"),
+    ]:
+        page = client.get(f"/history/?year=2025&by={by}")
+        rows = {row["name"]: row for row in page.context["table"]}
+        row = rows[name or "Everyday spending (NemKonto)"]
+        # The June month-end recorded May's spending from the NemKonto.
+        assert row["months"][4] == 360000 and row["total"] == 360000
+        # (3.600 + 3.000 + 3.000) / 3 is the usual amount, for the one month entered.
+        assert row["expected"] == 320000
+    assert page.context["grand_total"] == 1000000 + 360000

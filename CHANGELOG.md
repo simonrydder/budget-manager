@@ -4,6 +4,12 @@ Every version merged into `prod`, newest first. The numbers follow
 [Semantic Versioning](https://semver.org/): fixes raise the last number, new features the
 middle one.
 
+## 1.13.1 (2026-11-06)
+
+- History showed only what was spent on expenses, not what was spent from the NemKonto itself.
+  It now has a row for everyday spending from the NemKonto (the NemKonto's row when grouped by
+  account), from the closed month-ends, with today's usual amount as expected.
+
 ## 1.13.0 (2026-11-06)
 
 - An expense can be paid on the first or the last bank day of the month (**Paid on** on the

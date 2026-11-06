@@ -35,7 +35,7 @@
     <tbody>
     {% for row in table %}
       <tr>
-        <td class="nowrap">{% if by == "expense" %}<a class="item" href="{% url 'expense-detail' row.object.id %}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
+        <td class="nowrap">{% if by == "expense" and row.object %}<a class="item" href="{% url 'expense-detail' row.object.id %}">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</td>
         {% for cell in row.cells %}<td class="num{% if not cell.counted %} dim{% endif %}">{% if cell.amount %}{{ cell.amount|money0 }}{% endif %}</td>{% endfor %}
         <td class="num"><b>{{ row.total|money0 }}</b></td>
         <td class="num">{% if row.average is not None %}{{ row.average|money0 }}{% endif %}</td>
@@ -52,9 +52,9 @@
     </tbody>
   </table>
   </div>
-  <p class="muted small">Amounts are rounded to whole numbers. "Expected" is what the plan expected to be paid in the months counted above. Greyed months have no complete spending yet.</p>
+  <p class="muted small">Amounts are rounded to whole numbers. "Expected" is what the plan expected to be paid in the months counted above; for everyday spending from the NemKonto, today's usual amount for each month it was entered. Greyed months have no complete spending yet.</p>
   {% else %}
-  <p class="empty">No spending entered for {{ year }} yet. Spending is entered in step 1 of each month-end.</p>
+  <p class="empty">No spending entered for {{ year }} yet. Spending is entered in step 2 of each month-end.</p>
   {% endif %}
 </section>
 {% endblock %}

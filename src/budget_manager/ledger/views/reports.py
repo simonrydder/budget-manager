@@ -125,6 +125,18 @@ def history(request):
         for number, amount in spending.get(expense.id, {}).items():
             row["months"][number - 1] += amount
         row["expected"] += expected.get(expense.id, 0)
+    # Everyday spending from the NemKonto is entered at each month-end, not on an expense. The
+    # plan expected the usual amount for it in each month it was recorded.
+    everyday = services.nemkonto_spending_by_month(budget, year)
+    if everyday:
+        nemkonto = budget.accounts.get(role="nemkonto")
+        name = nemkonto.name if by == "account" else f"Everyday spending ({nemkonto.name})"
+        row = {"name": name, "object": None, "months": [0] * 12, "expected": 0}
+        for number, amount in everyday.items():
+            row["months"][number - 1] = amount
+        expected_month = services.everyday_estimate(budget).amount
+        row["expected"] = expected_month * sum(1 for number in everyday if number in counted)
+        rows["nemkonto"] = row
     table = []
     for row in rows.values():
         row["total"] = sum(row["months"])
